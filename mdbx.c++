@@ -1673,7 +1673,7 @@ char *from_hex::write_bytes(char *__restrict const dest, size_t dest_size) const
       continue;
     }
 
-    if (MDBX_UNLIKELY(left < 1 || !isxdigit(src[0]) || !isxdigit(src[1])))
+    if (MDBX_UNLIKELY(left < 2 || !isxdigit(src[0]) || !isxdigit(src[1])))
       MDBX_CXX20_UNLIKELY throw std::domain_error("mdbx::from_hex:: invalid hexadecimal string");
 
     int8_t hi = src[0];
@@ -1705,7 +1705,7 @@ bool from_hex::is_erroneous() const noexcept {
       continue;
     }
 
-    if (MDBX_UNLIKELY(left < 1 || !isxdigit(src[0]) || !isxdigit(src[1])))
+    if (MDBX_UNLIKELY(left < 2 || !isxdigit(src[0]) || !isxdigit(src[1])))
       MDBX_CXX20_UNLIKELY return true;
 
     got = true;
