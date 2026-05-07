@@ -37191,7 +37191,7 @@ int tree_curoff_range(MDBX_cursor *begin, MDBX_cursor *end, bool end_including) 
 
     const intptr_t inner_level = tree_diff_level(&begin->subcur->cursor, &end->subcur->cursor);
     if (unlikely(inner_level < 0)) {
-      if (unlikely(level != MDBX_RESULT_TRUE))
+      if (unlikely(inner_level != MDBX_RESULT_TRUE))
         return MDBX_ENODATA;
       /* у вложенных dupsort-курсоров позиции тоже совпадают, нечего удалять */
       return end_including ? cutoff_leaf(begin, 0) : MDBX_SUCCESS;
