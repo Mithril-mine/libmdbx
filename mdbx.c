@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.1-595-ge91db90a at 2026-05-04T12:55:04+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.1-610-gcc920267 at 2026-05-09T13:03:22+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -5387,6 +5387,7 @@ __cold static int copy2fd(MDBX_txn *txn, mdbx_filehandle_t fd, MDBX_copy_flags_t
     if (flags & MDBX_CP_THROTTLE_MVCC)
       mdbx_txn_park(txn, true);
     else if (flags & MDBX_CP_DISPOSE_TXN)
+      /* coverity[CHECKED_RETURN] */
       mdbx_txn_reset(txn);
   }
 
@@ -6514,6 +6515,7 @@ int mdbx_cursor_delete_range(MDBX_cursor *begin, MDBX_cursor *end, bool end_incl
     *number_of_affected = save_items - begin->tree->items;
 
   if (begin->txn->cursors[cursor_dbi(begin)] == &couple.outer)
+    /* coverity[UNINIT] */
     couple.outer.txn->cursors[cursor_dbi(begin)] = couple.outer.next;
 
   return LOG_IFERR(rc);
@@ -6801,7 +6803,7 @@ int mdbx_dbi_close(MDBX_env *env, MDBX_dbi dbi) {
   if (unlikely(dbi >= env->n_dbi)) {
     rc = MDBX_BAD_DBI;
   bailout:
-    osal_fastmutex_release(&env->dbi_lock);
+    ENSURE(osal_fastmutex_release(&env->dbi_lock) == MDBX_SUCCESS);
     return LOG_IFERR(rc);
   }
 
@@ -10229,7 +10231,6 @@ __hot static int cursor_diff(const MDBX_cursor *const __restrict x, const MDBX_c
       r->diff = CMP2INT(x->flags & z_eof_hard, y->flags & z_eof_hard);
       return MDBX_SUCCESS;
     }
-    nkeys = page_numkeys(x->pg[r->level]);
   }
 
   while (unlikely(r->diff == 1) && likely(r->level < depth)) {
@@ -10373,11 +10374,7 @@ __hot int mdbx_estimate_move(const MDBX_cursor *cursor, MDBX_val *key, MDBX_val 
   if (unlikely(rc != MDBX_SUCCESS))
     return LOG_IFERR(rc);
 
-  cursor_cpstk(cursor, &next.outer);
-  if (cursor->tree->flags & MDBX_DUPSORT) {
-    subcur_t *mx = &container_of(cursor, cursor_couple_t, outer)->inner;
-    cursor_cpstk(&mx->cursor, &next.inner.cursor);
-  }
+  cursor_copy_position(cursor, &next.outer);
 
   MDBX_val stub_data;
   if (data == nullptr) {
@@ -10400,13 +10397,13 @@ __hot int mdbx_estimate_move(const MDBX_cursor *cursor, MDBX_val *key, MDBX_val 
     key = &stub_key;
   }
 
-  next.outer.signature = cur_signature_live;
   rc = cursor_ops(&next.outer, key, data, move_op);
   if (unlikely(rc != MDBX_SUCCESS && (rc != MDBX_NOTFOUND || !is_pointed(&next.outer))))
     return LOG_IFERR(rc);
 
   if (move_op == MDBX_LAST) {
     next.outer.flags |= z_eof_hard;
+    /* coverity[UNINIT] */
     next.inner.cursor.flags |= z_eof_hard;
   }
   return mdbx_estimate_distance(cursor, &next.outer, distance_items);
@@ -11385,7 +11382,7 @@ int mdbx_txn_commit_embark_read(MDBX_txn **ptxn, MDBX_commit_latency *latency) {
     if (likely(rc == MDBX_SUCCESS)) {
       rtxn->userctx = preserved_context;
       rtxn->signature = txn_signature;
-    } else {
+    } else if (rtxn) {
       txn_ro_free(rtxn);
       rtxn = nullptr;
     }
@@ -17020,7 +17017,7 @@ int cursor_distribute(const MDBX_cursor *begin, const MDBX_cursor *end, MDBX_cur
     return MDBX_RESULT_TRUE;
   }
 
-  MDBX_cursor *iter = nullptr;
+  MDBX_cursor *iter = (MDBX_cursor *)begin;
   for (intptr_t i = array_size; --i >= 0;) {
     if (array[i] != begin && array[i] != end) {
       iter = array[i];
@@ -19261,7 +19258,7 @@ int txn_dpl_alloc(MDBX_txn *txn) {
     return MDBX_ENOMEM;
 
   /* LY: wr.dirtylist не может быть nullptr, так как либо уже выделен, либо будет выделен в dpl_reserve(). */
-  /* coverity[var_deref_model] */
+  /* coverity[FORWARD_NULL] */
   dpl_init(txn->wr.dirtylist);
   return MDBX_SUCCESS;
 }
@@ -19509,6 +19506,8 @@ int __must_check_result txn_dpl_append(MDBX_txn *txn, pgno_t pgno, page_t *page,
   }
 
   i[1] = dp;
+  /* LY: здесь нет выхода за границу буфера, так как items[] выделяется с соответствующим запасом. */
+  /* coverity[OVERRUN] */
   ASSERT(dl->items[0].pgno == 0 && dl->items[dl->length + 1].pgno == P_INVALID);
   ASSERT(dl->sorted <= dl->length);
   return MDBX_SUCCESS;
@@ -23470,6 +23469,8 @@ static int gc_store_retired(MDBX_txn *txn, gcu_t *ctx) {
                                   ? ctx->goodchunk
                                   : (left_before | 3);
       data.iov_len = gc_chunk_bytes(chunk_hi);
+      /* Ложные предупреждения coverity возникают из-за поддержки вставки массивов значений в режиме MDBX_MULTIPLE. */
+      /* coverity[OVERRUN] */
       err = cursor_put(&ctx->cursor, &key, &data, MDBX_RESERVE);
       if (unlikely(err != MDBX_SUCCESS))
         return err;
@@ -23920,7 +23921,7 @@ static int gc_search_holes(MDBX_txn *txn, gcu_t *ctx) {
 
   dbg_dump_ids(ctx);
   const intptr_t tail_space =
-      ((ctx->gc_first > UINT16_MAX) ? UINT16_MAX : (unsigned)ctx->gc_first - 1) * ctx->goodchunk;
+      (intptr_t)(((ctx->gc_first > UINT16_MAX) ? (size_t)UINT16_MAX : (size_t)ctx->gc_first - 1) * ctx->goodchunk);
   const txnid_t reasonable_deep =
       txn->env->maxgc_per_branch +
       2 * (txn->env->gc.detent - txnid_min(rkl_lowest(&txn->wr.gc.ready4reuse), rkl_lowest(&txn->wr.gc.comeback)));
@@ -24050,6 +24051,8 @@ static inline int gc_reserve4return(MDBX_txn *txn, gcu_t *ctx, const size_t chun
   TRACE("%s: reserved +%zu...+%zu [%zu...%zu), err %d", dbg_prefix(ctx), chunk_lo, chunk_hi,
         ctx->return_reserved_lo + 1, ctx->return_reserved_hi + chunk_hi + 1, err);
   gc_prepare_stockpile4update(txn, ctx);
+  /* LY: ложные предупреждения coverity возникают из-за поддержки вставки массивов значений в режиме MDBX_MULTIPLE */
+  /* coverity[OVERRUN] */
   err = cursor_put(&ctx->cursor, &key, &data, MDBX_RESERVE | MDBX_NOOVERWRITE);
   tASSERT1(txn, pnl_check_allocated(txn->wr.repnl, txn->geo.first_unallocated - MDBX_ENABLE_REFUND));
   if (unlikely(err != MDBX_SUCCESS))
@@ -32138,7 +32141,6 @@ bool osal_safe_peek_uint32(const void *ptr, int32_t *dest) {
     }
   } __except (EXCEPTION_EXECUTE_HANDLER) {
     return false;
-    ;
   }
 #else
   static int nullfd = -1;
@@ -32148,6 +32150,10 @@ bool osal_safe_peek_uint32(const void *ptr, int32_t *dest) {
                                 | O_CLOEXEC
 #endif /* O_CLOEXEC */
     );
+    if (unlikely(nullfd < 0)) {
+      ERROR("unable open(%s), err %d", dev_null, errno);
+      return false;
+    }
   }
   if (write(nullfd, ptr, 4) == 4) {
     memcpy(dest, ptr, 4);
@@ -36718,7 +36724,7 @@ static int cutoff_leaf(MDBX_cursor *axe, unsigned alldups) {
 #ifndef NDEBUG
   DKBUF_DEBUG;
   page_t *mp;
-  MDBX_val k, v;
+  MDBX_val k = {.iov_base = nullptr, .iov_len = 0}, v = {.iov_base = nullptr, .iov_len = 0};
   MDBX_cursor *blade = nullptr;
   const char *s = nullptr;
   const char *sk = nullptr;
@@ -37215,6 +37221,7 @@ int tree_curoff_range(MDBX_cursor *begin, MDBX_cursor *end, bool end_including) 
   }
 
   intptr_t cmp = -1;
+  /* coverity[ASSERT_SIDE_EFFECT] */
   ASSERT((cmp = cursor_cmp(begin, end)) < 0 || (cmp == 0 && end_including));
   if (begin->subcur) {
     cursor_couple_t inner_trimmer;
@@ -39193,7 +39200,7 @@ static int basal_start_locked(MDBX_txn *txn, unsigned flags) {
   txn->wr.troika = meta_tap(env);
   const meta_ptr_t head = meta_recent(env, &txn->wr.troika);
   uint64_t timestamp = 0;
-  /* coverity[array_null] */
+  /* coverity[NO_EFFECT] */
   while ("workaround for https://libmdbx.dqdkfa.ru/dead-github/issues/269") {
     int err = coherency_fetch_head(txn, head, &timestamp);
     if (likely(err == MDBX_SUCCESS))
@@ -39325,6 +39332,7 @@ int txn_basal_update_tbl_roots(MDBX_txn *txn) {
         /* Может быть mod_txnid > front после коммита вложенных тразакций */
         db->mod_txnid = txn->txnid;
         MDBX_val data = {db, sizeof(tree_t)};
+        /* coverity[OVERRUN] */
         err = cursor_put(&cx.outer, &txn->env->kvs[i].name, &data, N_TREE);
         if (unlikely(err != MDBX_SUCCESS))
           break;
@@ -39945,7 +39953,7 @@ static int nested_start(MDBX_txn *const nested, MDBX_txn *parent) {
 
   cASSERT0(nested, pnl_alloclen(nested->wr.repnl) >= pnl_size(parent->wr.repnl));
   memcpy(nested->wr.repnl, parent->wr.repnl, MDBX_PNL_SIZEOF(parent->wr.repnl));
-  /* coverity[assignment_where_comparison_intended] */
+  /* coverity[ASSERT_SIDE_EFFECT] */
   tASSERT1(nested, pnl_check_allocated(nested->wr.repnl, (nested->geo.first_unallocated /* LY: intentional assignment
                                                                              here, only for assertion */
                                                           = parent->geo.first_unallocated) -
@@ -41025,6 +41033,11 @@ int txn_setup_primal(MDBX_txn *txn) {
     return err;
   }
 
+  /* LY: Проверка условия size_bytes < env->dxb_mmap.current проверяется до захвата блокировки, так как при существующей
+   * текущей транзакции допустимое конкурирующее изменение env->dxb_mmap.current в другом потоке не повлияет на
+   * дальнейшую логику. Иначе говоря, такая проверка до захвата блокировки полностью безопасна и не может создавать
+   * проблем, но при этом избавляет от затрат на захват и освобождение блокировки. */
+  /* coverity[LOCK_EVASION] */
   if (unlikely(size_bytes < env->dxb_mmap.current)) {
     /* Размер БД меньше предыдущего/текущего размера внутри процесса, можно
      * уменьшить, но всё сложнее:
@@ -41746,10 +41759,10 @@ __dll_export
         0,
         14,
         1,
-        595,
+        610,
         "", /* pre-release suffix of SemVer
-                                        0.14.1.595 */
-        {"2026-05-04T12:55:04+03:00", "72248bf301937e615612c28b65538c52e2177d58", "e91db90a8210a3d29d23db915ea628d7e47a4440", "v0.14.1-595-ge91db90a"},
+                                        0.14.1.610 */
+        {"2026-05-09T13:03:22+03:00", "d57825940d84a83c3aa491b9595a76ac5c7aceaf", "cc920267d01d836894ab0c21e51d61d495a0c088", "v0.14.1-610-gcc920267"},
         sourcery};
 
 __dll_export
