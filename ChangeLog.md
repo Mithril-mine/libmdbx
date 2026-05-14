@@ -1,197 +1,215 @@
 ChangeLog
 =========
 
-English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__change_log.html?_x_tr_sl=ru&_x_tr_tl=en) and [by Yandex](https://translated.turbopages.org/proxy_u/ru-en.en/https/libmdbx.dqdkfa.ru/md__change_log.html).
-
-The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirrors on [abf.io](https://abf.io/erthink/libmdbx) and [GitFlic](https://gitflic.ru/project/erthink/libmdbx).
+The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
 Please use the `stable` branch or the latest release for production environment through staging, but the `master` branch for development a derivative projects.
 Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.2 "Буревестник" (stormy petrel, aka Bourevestnik) запланирован на 2026-05-14
+## v0.14.2 "Буревестник" (stormy petrel, aka Bourevestnik) от 2026-05-14
 
-Продолжение развития нового куста/линейки версий с добавлением функционала, расширением API и внутренними переработками.
+Development of a new version with added major functionality, API expansion, and internal redesigns.
 
-Проект libmdbx полностью перемещен в юрисдикцию Российской Федерации.
-Пожалуйста обращайтесь на https://libmdbx.dqdkfa.ru за документацией и на https://sourcecraft.dev/dqdkfa/libmdbx за исходным кодом (он по-прежнему открыт и обеспечен первоклассной бесплатной поддержкой).
+### Important:
 
-Благодарности:
+ - Due to numerous user requests, this ChangeLog will be kept in English.
+   However, it should be noted that it was originally provided in Russian and then translated by AI during the formation of the release, because of this, there may be flaws in the text.
 
- - [Erigon](https://erigon.tech/) за спонсорство.
- - Проект "AntiPublic" за спонсорство.
- - [Артёму Воротникову](https://github.com/vorot93) за сообщение об ошибках и тестировании [призязок для Rust](https://github.com/vorot93/libmdbx-rs).
- - [Stefan de Konink](https://github.com/skinkie) for fixing [Python bindings](https://github.com/wtdcode/mdbx-py) and documentation improvement.
- - [Cosmin Apreutesei](https://github.com/capr) за сообщение об ошибках и тестирование.
+ - Since 2026 _libmdbx_ project has changed its code development and distribution model.
+   **To get acquainted with important changes and plans, we recommend reading the compact [presentation "libmdbx: successes, obstacles, goals and roadmap"](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf), which contains important explanations in the form of embedded comments.**
+
+- The upstream of _libmdbx_ project has been relocated to the jurisdiction of the Russian Federation.
+  We are confident that this will protect the project from any sanctions and ensure its accessibility to all users around the world.
+  Please use https://libmdbx.dqdkfa.ru for documentation and https://sourcecraft.dev/dqdkfa/libmdbx for the source code.
+  Nonetheless _libmdbx_ is still open source and provided with first-class free support.
+
+### Appreciations:
+
+ - [Erigon](https://erigon.tech/) for sponsorship.
+ - The "AntiPublic" project for sponsorship.
+ - [Artyom Vorotnikov](https://github.com/vorot93) for [Rust bindings](https://github.com/vorot93/libmdbx-rs), reporting bugs and testing.
+ - [Stefan de Konink](https://github.com/skinkie) for [Python bindings](https://github.com/wtdcode/mdbx-py) and documentation improvement.
+ - [Cosmin Apreutesei](https://github.com/capr) for error reporting and testing.
  - [Chloe Cano](https://github.com/Segwaz) for fuzzing, bug reporing and fixes.
  - [Weixie Cui](https://github.com/cuiweixie) for bug fixing through many pull-requests.
- - [Александру Кельчину](https://serebrium.ru/) (Компания Серебриум) за сообщения об ошибках и прототипы эксплоитов.
+ - [Alexander Kelchin](https://serebrium.ru) (the "Serebrium" Company) for error messages and prototypes of exploits.
  - [Anton Maisak](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) for new .NET bindings.
 
-Новое:
+### Backward compatibility breaks:
 
- - Реализована "Ранняя очистка GC".
+ - The typedefs of the various callbacks are now unified and includes an asterisk of indirection in `C` syntax notation.
+   Perhaps this is the most annoying change that breaks the builds and requires changing your code. However, it is necessary to restore order.
+   In most cases, the required changes are limited to removing the `*` chars after a callback type(s).
 
-   Теперь переработанные записи GC удаляются не при фиксации пишущей транзакции, а по-возможности сразу. Это открывает путь к реализации явной дефрагментации (без копирования БД) и далее к нелинейной переработке GC (что позволит устранить проблему распухания/переполнения БД из-за остановки переработке GC при длительных читающих транзакциях).
+ - The size and composition of the `MDBX_envinfo` structure has been changed, and the `mdbx_env_info_ex()` function no longer supports the old versions. This breaks the compatibility of the ABI with older versions of the library, but preserves API compatibility at the source code level.
 
-   Объём накладных расходов теперь более пропорционален объему совершаемых операций. Поэтому, в большинстве сценариев накладные расходы чуть меньше, но наоборот чуть больше при отмене вложенных транзакций.
+ - The template `mdbx::buffer<ALLOCATOR, POLICY>` is now inherited from `mdbx::slice` and `mdbx::buffer_tag`, which simplified the C++ API and the use of the meta-programming approach.
 
- - Реализована поддержка дефрагментации/уплотнения БД и добавлена утилита `mdbx_defrag` с набором опций командной строки позволяющих определять ключевые параметры и лимиты дефрагментации.
+ - When building using GNU Make and CMake now, instead of a single `config.h`, different `config-gnumake.h` and `config-cmake.h` files are generated.
 
- - Расширение API:
+ - It is forbidden to open existing tables with different flags, unless the `MDBX_DB_ACCEDE` option is explicitly set.
 
-    - в функции копирования БД добавлена опция `MDBX_CP_OVERWRITE` (перезапись целевого файла), а в утилиту `mdbx_copy` аналогичная по смыслу опция командной строки `-f` .
-    - добавлены функции `mdbx_cursor_bunch_delete()` и `mdbx_cursor_delete_range()`, выполняющие массивное удаление соседствующих элементов значительно быстрее, за счёт исключения из дерева целиком страниц и ветвей с удаляемыми элементами.
-    - добавлены функции получения/поиска данных с "кэшированием" `mdbx_cache_get()` и `mdbx_cache_get_SingleThreaded()`.
-    - добавлена функция `mdbx_txn_refresh()` для быстрого обновления читающей транзакции.
-    - добавлена функция `mdbx_txn_checkpoint()` для фиксации пишущих транзакций без освобождения блокировок.
-    - добавлена функция `mdbx_txn_commit_embark_read()` для фиксации пишущей транзакции и запуска читающей без вклинивания других изменений.
-    - добавлена функция `mdbx_txn_amend()` для изменения данных начиная со снимка данных используемого в заданной транзакции чтения.
-    - добавлена функция `mdbx_txn_rollback()` для прерывания и перезапуска транзакции с отменой всех изменений, но без освобождения блокировок.
-    - добавлена поддержка клонирования читающих транзакций посредством `mdbx_txn_clone()`.
-    - добавлена поддержка вложенных транзакций только для чтения.
-    - добавлена функция `mdbx_gc_info()` для получения информации о GC, использовании страниц, с возможностью итерирования содержимого GC.
-    - добавлена функция `mdbx_env_defrag()` для явной дефрагментации БД, а также утилита `mdbx_defrag`.
-    - добавлена опция `MDBX_opt_split_reserve` для управления заполненностью страниц дерева при их расщеплении.
-    - добавлены функции `mdbx_cursor_distance()`, `mdbx_cursor_scroll()` и `mdbx_cursor_distribute()` для упрощения многопоточного параллельного сканирования.
+ - The dumps generated by the `mdbx_dump` utility no longer output the current size of the database and `maxreaders`, so that the contents of the dump depend only on the contents of the database.
 
- - Поддержка Harmony OS (OHOS) и Haiku OS.
+ - The build option `MDBX_FORCE_ASSERTIONS` has been deprecated, and `MDBX_CHECKING` (within range of `-1`..`3`) should be used instead.
 
- - Операции с плавающей точкой больше не используются как внутри библиотеки, так и в утилитах, а из сценариев сборки удалено связывание c `libm`.
+ - The `NDEBUG` macro, which is generally accepted in C, no longer affects assert checks inside the library, but retains its traditional influence on assert checks related to argument control in the inline methods of the `C++` API.
 
- - Обеспечена возможность установки отладочных опций `MDBX_DBG_ASSERT`, `MDBX_DBG_AUDIT` и других, через переменные среды окружения. Но соответствующие отладочные возможности по-прежнему должны быть активированы во время сборки.
+### New features:
 
- - Расширен и переработан состав информации формируемой функцией `mdbx_chk_env()` и выводимой утилитой `mdbx_chk`.
+ - Implemented "Early GC Cleanup".
 
- - Основной репозиторий libmdbx перенесен с GitFlic на SourceCraft.
+   Now the recycled GC records are deleted not when the writing transaction is committed, but as soon as possible. This opens the way to the implementation of explicit defragmentation (without copying the database) and further to non-sequential GC processing (which will eliminate the problem of DB swelling/overflow due to GC processing stopping during long-term reading transactions).
 
-   Со своей стороны, я удручен необходимостью совершать такие манипуляции, ибо они создают существенные неудобства пользователям, но (к сожалению) для того есть достаточные причины:
-    - Вместо обещанной интернационализации на GitFlic осталась только русскоязычная локализация с массой технический особенностей, затрудняющих использование систем машинного перевода. Это сделало невозможным использование сервиса многими пользователями и породило ряд справедливых жалоб/упреков, в том числе от разработчиков из Китая, Бразилии, Кореи, Ирана и т.д.
-    - За три года, прошедшие с миграции на GitFlic, не исправлено несколько возмутительных ошибок в редакторе markdown, что превращало оформление релизов в раздражающую борьбу. Кроме этого из публичного пространства пропал roadmap развития. Суммарно это заставило меня отказаться от GitFlic.
+   The amount of overhead is now proportional to the volume of operations performed. Therefore, in most scenarios, the overhead is slightly less, but on the contrary, a little more when canceling nested transactions.
 
- - В статистику транзакции добавлено количество операций получения/загрузки страниц, что позволяет количественно оценивать объем работы с курсорами и эффективность различных подходов индексирования и поиска данных.
-   Сбор соответствующей статистики контролируется дополнительной опцией сборки `MDBX_ENABLE_PGET_STAT`.
+ - Database defragmentation/compaction support has been implemented and the `mdbx_defrag` utility has been added with a set of command-line options that allow you to define key parameters and defragmentation limits.
 
- - В утилиту `mdbx_load` добавлены опции командной строки `-b number`, `-L megabytes`, `-d percent` и `-G geometry` позволяющие задавать размер пакетных вставок, ограничивать объем транзакций, задавать желаемую плотность заполнения страниц и переопределять геометрию БД при загрузке данных из дампа.
+ - API Extension:
 
- - Ускорен поиск за счёт использования без-переходного алгоритма (branchless) и встраивания кода компараторов.
+    - the `MDBX_CP_OVERWRITE` option has been added to the database copy function (overwriting the target file), and the `mdbx_copy` utility has a similar command-line option `-f`.
+    - added the functions `mdbx_cursor_bunch_delete()` and `mdbx_cursor_delete_range()`, which perform massive deletion of adjacent elements much faster by excluding pages and branches with deleted items from a B-tree entirely.
+    - added data retrieval functions with "caching" the `mdbx_cache_get()` and `mdbx_cache_get_SingleThreaded()`.
+    - added the `mdbx_txn_refresh()` function to quickly refresh the reading transaction.
+    - added the `mdbx_txn_checkpoint()` function to commit write transaction without releasing locks.
+    - added the `mdbx_txn_commit_embark_read()` function to commit a writing transaction and start a reading one without interfering with other changes.
+    - added the `mdbx_txn_amend()` function to change data starting from a snapshot of the data used in a given read transaction.
+    - added the `mdbx_txn_rollback()` function to abort and restart a transaction with the cancellation of all changes, but without releasing locks.
+    - added support for cloning reading transactions using `mdbx_txn_clone()`.
+    - added support for nested read-only transactions.
+    - added the `mdbx_gc_info()` function to get information about GC, page usage, and the ability to iterate GC content.
+    - added the `mdbx_env_defrag()` function for explicit DB defragmentation, as well as the `mdbx_defrag` utility.
+    - added the `MDBX_opt_split_reserve` option to control the fullness of tree pages when splitting them.
+    - added the functions `mdbx_cursor_distance()`, `mdbx_cursor_scroll()` and `mdbx_cursor_distribute()` to simplify multithreaded parallel scanning.
 
- - Переработаны внутренние проверочные утверждения (assertions) и связанные с ними опции сборки.
-   При этом `NDEBUG` больше не влияет на проверки в основном коде движка, что устраняет причины неожиданного падения производительности из-за отсутствия определения `NDEBUG` в не-отладочных сборках пользователей.
+ - Support for Harmony OS (OHOS) and Haiku OS.
 
-   Проверки разделены на три категории (дешёвые, средние, дорогие), контролируемые посредством опции сборки `MDBX_CHECKING` принимающей значения от `-1` до `3` включительно.
-   Значение `3` соответствует максимальному количеству проверок, а `-1` отключает как все `assert()`, так и `ENSURE()` проверки.
-   По-умолчанию `MDBX_CHECKING` принимается равной опции `MDBX_DEBUG`, которая в свою очередь по умолчанию равна `0`, что соответствует обычной (не-отладочной) сборке библиотеки.
-   Таким образом, сохраняется совместимость с прежним поведением и одновременно обеспечивается точное управление отладочными проверками.
+ - Floating-point operations are no longer used both inside the library and in utilities, and linking to `libm` has been removed from build scripts.
 
-Исправления:
+ - It is possible to set debugging options `MDBX_DBG_ASSERT`, `MDBX_DBG_AUDIT` and others through environment variables. However, the corresponding debugging capabilities still need to be activated during the build.
 
- - Устранена критическая ошибка в функционале `mdbx_env_resurrect_after_fork()` при использовании SysV-семафоров.
+ - Expanded and redesigned the composition of information generated by the function `mdbx_chk_env()` and the output utility `mdbx_chk`.
 
-   Проявлялась ошибка только после порождения дочернего процесса посредством `fork()` на фоне выполняющейся пишущей транзакции, что приводило к неверной работе семафоров и далее к самым различным ошибкам, вплоть до повреждения БД.
-   Проблема существовала начиная с появления `mdbx_env_resurrect_after_fork()` и затрагивала OSX, а также POSIX-платформы при сборке с опцией `MDBX_LOCKING=5`.
+ - The main libmdbx repository has been migrated from GitFlic to SourceCraft.
 
- - Устранена проблема в API копирования БД на отличных от Linux системах POSIX, а также в некоторых случаях при расположении целевого файла на не-локальной файловой системе.
-   Проблема проявлялась в основном на OSX, возвратом ошибки `EWOULDBLOCK`/`EAGAIN` (35), что обусловлено недочётом/конфликтом блокировок `fcntl(F_SETLK)` и `flock()` в ядре ОС.
-   Переработана обработка ошибок захвата файловых блокировок в API копирования на системах POSIX.
+   For my part, I am saddened by the need to perform such manipulations, because they create significant inconvenience to users, but (unfortunately) there are sufficient reasons for this:
+    - Instead of the promised internationalization, GitFlic has only a Russian-language localization with a lot of technical features that make it difficult to use machine translation systems. This made it impossible for many users to use the service and generated a number of legitimate complaints/reproaches, including from developers from China, Brazil, Korea, Iran, etc.
+    - In the three years since migrating to GitFlic, several outrageous errors in the markdown editor have not been fixed, which turned the design of releases into an annoying struggle. In addition, the development roadmap has disappeared from the public space. In total, this forced me to abandon GitFlic.
 
- - Устранена ошибка приводившая к неожиданному возврату `MDBX_BAD_DBI` при одновременном старте нескольких транзакций внутри одного процесса после открытия БД.
+ - The number of page receiving/loading operations has been added to the transaction statistics, which makes it possible to quantify the amount of work with cursors and the effectiveness of various indexing and data retrieval approaches.
+   The collection of relevant statistics is controlled by the additional build option `MDBX_ENABLE_PGET_STAT`.
 
- - Устранена ошибка приводившая к неожиданному возврату `MDBX_DBS_FULL` при повторном открытии уже открытых таблиц и уже достигнутом лимите открытых DBI-дескрипторов.
+ - The command-line options `-b number`, `-L megabytes`, `-d percent` and `-G geometry` have been added to the `mdbx_load` utility, allowing you to set the size of batch inserts, limit the volume of transactions, set the desired page filling density and redefine the geometry of the database when loading data from a dump.
 
- - Исправлена ошибка сборки для платформы Android при явном определении `_FILE_OFFSET_BITS`.
+ - Search was accelerated by using a branchless algorithm and embedding code of  built-in/default comparators.
 
- - Поправлено либо удалено несколько неверных assert-проверок, из-за которых происходили падения отладочных сборок в специфических ситуациях.
-   Главным образом, в коде функций `txn_end()`, `txn_lock()` и `txn_unlock()` как на Windows, так и на POSIX.
+ - Redesigned internal verification statements and related build options.
+   At the same time, `NDEBUG` no longer affects checks in the main engine code, which eliminates the causes of unexpected performance drops due to the lack of a definition of `NDEBUG` in non-debugging builds of users.
 
- - Устранены несущественные предупреждения MSVC. Отключены предупреждения `C5286` и `C5287`.
+   The checks are divided into three categories (cheap, medium, expensive), controlled by the build option `MDBX_CHECKING`, which takes values from `-1` to `3` inclusive.
+   The value of `3` corresponds to the maximum number of checks, and `-1` disables both all `assert()` and `ENSURE()` checks.
+   By default, `MDBX_CHECKING` is assumed to be equal to the `MDBX_DEBUG` option, which in turn defaults to `0`, which corresponds to a regular (non-debugging) library build.
+   This way, compatibility with the previous behavior is maintained and at the same time precise control of debugging checks is ensured.
 
- - Устранено получение неожиданного `SIGBUS` из-за отложенного/ленивого выделение места в заполненной файловой системе после приращения файла БД.
-   Более подробное пояснение в комментарии коммита [`2a7f460345edbeb26a51782cbe6af3c55254ae77`](https://gitflic.ru/project/erthink/libmdbx/commit/2a7f460345edbeb26a51782cbe6af3c55254ae77).
+### Behavior change:
 
- - Исправлена assert-проверка в пути сканирования битовой карты DBI-дексрипторов приводившая к редким падениям 32-битных отладочных сборок.
+ - Re-enabled/enabled on older Linux kernels, starting with version 3.16, since now there is no reason to stop working on 3.16 while supporting 4.x kernels, and there are still projects (Isar, Isar-Community, Hive) that require such support.
 
- - Переделан поиск утилит `lib.exe` и `dlltool.exe` при сборке посредством CMake на Windows.
+ - The default value of the page merge threshold has been changed from 25% to 33%.
 
- - Устранено падение при выполнении Thread-Local-Storage конструкторов при выгрузке библиотеки и наличия экземпляров env, инициализация которых не была завершена.
+ - To reduce the likelihood of unexpected errors due to transients and delayed processing in the OS kernel during competitive closing and opening of databases by different processes, the number of repeated attempts to capture locks has been tripled. Presumably, this will also solve the problem of unexpected `EAGAIN` (11) errors on Android when restarting applications and opening the database immediately after closing.
 
- - На Windows устранена причина возврата неожиданной ошибки `ERROR_IO_PENDING` в сценариях множественного открытия одной БД в одном процессе.
+ - By default, Windows builds are now performed using the Windows 10 SDK, rather than Windows 7.
 
- - Исправлен недочёт автоподстройки параметров при установке геометрии с заданным минимальным размером страницы, из-за которого на машинах с большим количеством ОЗУ размер страницы мог увеличиваться.
+ - The error `MDBX_WANNA_RECOVERY` when opening the database in read-only mode is now returned if the database size is not a multiple of the system page size, but not a multiple of the size of the virtual memory allocation block is ignored. This eliminates the regression that occurred due to a change in behavior after using the system call `fallocate()` to prevent `SIGBUS` after incrementing the database file in a populated file system.
 
- - В CMake-скриптах устранён регресс, из-за которого инфраструктура `ctest` не использовала задаваемые параметры Valgrind, в том числе `MEMORYCHECK_SUPPRESSIONS_FILE`.
-   Теперь использование `ctest -D ExperimentalMemCheck` не приводит к множественной ложно-положительной диагностики. Однако, для использования Valgrind по-прежнему необходимо собирать библиотеку с предопределением макроса `ENABLE_MEMCHECK`.
+### Other improvements:
 
- - Устранено использование идентификатора `ERROR_UNHANDLED_ERROR`, который не определяется в новых версиях Windows SDK.
+ - The logic of not using OFD locks on POSIX platforms has been finalized.
+   Now, in addition to `EINVAL`, additional error codes are taken into account (`ENOSYS`, `ENOIMPL`, `ENOTSUP`, `ENOSUPP`, `EOPNOTSUPP`), which will allow the compiled library to work in some cases when the current kernel/container/emulator does not support the required system calls.
 
- - Исправлено не-закрытие дескрипторов DBI для таблиц, созданных во вложенных транзакциях, когда такие транзакции прерывались.
+ - The tests are supplemented with scenarios to check the added features, identified regressions and errors.
 
- - Устранены лишние операции синхронизации данных с диском при выделении страниц при почти полном заполнении БД.
+ - Support for the `--numa#` option has been added to the test framework to link a stochastic test to a NUMA node, and explicit distribution across NUMA nodes has been added to the battery/tmux script, which significantly increased efficiency when testing on NUMA machines.
 
- - В утилите `mdbx_load` устранены ошибки загрузки значений нулевой длины и обмен параметров shrink/growth в геометрии БД.
+ - The stochastic script implements a random order of running individual tests.
 
- - Исправлено падение по `SIGSEGV` в случае, когда все мета-страницы не полностью пригодны для использования.
+ - The output of a histogram of filling pages forming the tree structure and participating in split/merge/rebalance operations has been added to the database integrity verification functionality and the mdbx_chk utility.
 
- - Исправлена опечатка в условии определения изменении размера БД при откате вложенной транзакции.
+ - A workaround has been added for Android to reduce the likelihood of an `EAGAIN` system error due to a lack of system resources and transients when closing and quickly re-opening the database.
 
- - Исправлен сбор информации посредством `kstat()` для bootid на Solaris и родственных платформах.
+ - For Linux, added error prevention in the fast_commit implementation of the Ext4 file system.
 
- - Исправлена опечатка в пути обработки `ST_EXPORTED` что ломало сборку на платформах где для `fstatvfs()` определён упомянутый флаг.
+ - Support for the "Skip" and "Repeat" options has been added to debugging builds on Windows when assert checks are triggered.
 
- - Исправлено падение по `SIGSEGV` из-за попытки очистить/перезаписать повреждённую мета-страницу при открытии БД в режиме только для чтения.
+ - File locks used on the Windows platform involve waiting with timeouts, which theoretically should reduce the likelihood of `ERROR_LOCK_VIOLATION` (`33`) errors when opening a database in competitive scenarios.
 
-Изменение поведения:
+ - Redesign of the buffer implementation and other improvements in the C++ API.
 
- - Вновь включена/разрешена на старых ядрах Linux, начиная с версии 3.16, так как сейчас уже нет причин отказываться от работы на 3.16 поддерживая при этом ядра 4.x, и еще есть проекты (Isar, Isar-Community, Hive) которым требуется такая поддержка.
+ - The tests fixed several minor memory leaks and the UBSAN warning about the `memcmp(, length = 0)` call.
 
- - Изменено значение по-умолчанию порога слияния страниц с 25% до 33%.
+### Fixes:
 
- - Ошибка `MDBX_WANNA_RECOVERY` при открытии БД в режиме только-чтение теперь возвращается если размер БД не кратен размеру системной страницы, но игнорируется не кратность размеру блока выделения виртуальной памяти. Этим устраняется регресс, проявившейся вследствие изменения поведения после задействования системного вызова `fallocate()` для предотвращения `SIGBUS` после приращения файла БД в заполненной файловой системе.
+ - Almost all of these fixes were included in previous releases of the stable branch version 0.13.x. Therefore, should not assume that these fixes are related specifically to release 0.14.2.
 
- - Для уменьшения вероятности неожиданных ошибок, вследствие переходных процессах и отложенной обработки в ядре ОС при конкурентном закрытии и открытии БД разными процессами, втрое увеличено количество повторных попыток захвата блокировок. Предположительно это также решит проблему неожиданных ошибок `EAGAIN` (11) на Android при рестарте приложений и открытия БД сразу после закрытия.
+ - Fixed a critical error in the `mdbx_env_resurrect_after_fork()` functionality when using SysV semaphores.
 
- - По-умолчанию сборка для Windows теперь выполняется с использованием SDK уровня Windows 10, а не Windows 7.
+   The error appeared only after the child process was generated by `fork()` against the background of an ongoing writing transaction, which led to incorrect operation of semaphores and further to a variety of errors, up to database corruption.
+   The problem has existed since the appearance of `mdbx_env_resurrect_after_fork()` and affected OSX as well as POSIX platforms when building with the option `MDBX_LOCKING=5`.
 
- - Изменён размер и состав структуры `MDBX_envinfo`, а функция `mdbx_env_info_ex()` больше не поддерживает старые варианты. Этим нарушена совместимость ABI со старыми версиями библиотеке, но сохранена совместимость API на уровне исходного кода.
+ - Fixed a problem in the database copying API on POSIX systems other than Linux, as well as in some cases when the target file is located on a non-local file system.
+   The problem manifested itself mainly on OSX, with the return of the error `EWOULDBLOCK`/`EAGAIN` (35), due to a flaw/conflict between the locks `fcntl(F_SETLK)` and `flock()` in the OS kernel.
+   The error handling of file lock capture in the copy API on POSIX systems has been redesigned.
 
- - Шаблон `mdbx::buffer<ALLOCATOR, POLICY>` теперь наследуется от `mdbx::slice` и `mdbx::buffer_tag`, что упростило C++ API и использование подходом мета-программирования.
+ - Fixed an error that led to an unexpected return of `MDBX_BAD_DBI` when multiple transactions were started simultaneously within the same process after opening the database.
 
- - При сборке посредством GNU Make и CMake теперь, вместо одного `config.h`, генерируются разные файлы `config-gnumake.h` и `config-cmake.h`.
+ - Fixed an error that caused the unexpected return of `MDBX_DBS_FULL` when reopening already open tables and the limit of open DBI descriptors has already been reached.
 
- - Запрещено открытие существующих таблиц с отличающимися флагами, если только явно не задана опция `MDBX_DB_ACCEDE`.
+ - Fixed an assembly error for the Android platform when explicitly defining `_FILE_OFFSET_BITS`.
 
- - В формируемые утилитой `mdbx_dump` дампы теперь не выводиться текущий размер БД и `maxreaders`, чтобы содержимое дампа зависело только от содержимого БД.
+ - Fixed or deleted several incorrect assert checks, which caused debugging builds to crash in specific situations.
+   Mainly in the code of the functions `txn_end()`, `txn_lock()` and `txn_unlock()` on both Windows and POSIX.
 
- - Опция сборки `MDBX_FORCE_ASSERTIONS` объявлена устаревшей, вместо неё следует использовать `MDBX_CHECKING` (`-1`..`3`).
+ - Minor MSVC warnings have been eliminated. Warnings `C5286` and `C5287` are disabled.
 
- - Общепринятый в `C` макрос `NDEBUG` больше не влияет на assert-проверки внутри библиотеки, но сохраняет традиционное влияние на assert-проверки связанные с контролем аргументов в inline-методах `C++` API.
+ - Fixed getting unexpected `SIGBUS` due to delayed/lazy allocation of space in a populated file system after incrementing a DB file.
+   A more detailed explanation is provided in the commit comment. [`2a7f460345edbeb26a51782cbe6af3c55254ae77`](https://gitflic.ru/project/erthink/libmdbx/commit/2a7f460345edbeb26a51782cbe6af3c55254ae77).
 
-Прочие доработки:
+ - Fixed an assert check in the scan path of the DBI-descriptor bitmap, which led to rare crashes of 32-bit debug builds.
 
- - Доработана логика отказа от использования OFD-блокировок на POSIX-платформах.
-   Теперь кроме `EINVAL` учитываются дополнительные коды ошибок (`ENOSYS`, `ENOIMPL`, `ENOTSUP`, `ENOSUPP`, `EOPNOTSUPP`), что позволит работать собранной библиотеке в некоторых случаях, когда актуальное ядро/контейнер/эмулятор не поддерживает требуемых системных вызовов.
+ - Redesigned the search for utilities `lib.exe` and `dlltool.exe` when building using CMake on Windows.
 
- - Тесты дополнены сценариями для проверки добавленных возможностей, выявленных регрессов и ошибок.
+ - Fixed crashes when executing Thread-Local-Storage constructors when unloading the library and when there are env instances whose initialization has not been completed.
 
- - В тестовый фреймворк добавлена поддержка опции `--numa #` для привязки стохастического теста к NUMA-узлу, а в battery/tmux-скрипте добавлено явное распределение по NUMA-узлам, что существенно увеличило КПД при тестировании на NUMA-машинах.
+ - On Windows, the reason for the return of the unexpected error `ERROR_IO_PENDING` in scenarios of multiple opening of one database in one process has been fixed.
 
- - В стохастическом скрипте реализован случайный порядок запуска отдельных тестов.
+ - Fixed an issue with auto-tuning parameters when setting geometry with a specified minimum page size, which could cause the page size to increase on machines with a large amount of RAM.
 
- - В функционал проверки целостности БД и утилиту `mdbx_chk` добавлен вывод гистограммы заполнения страниц образующих структуру дерева и участвующих в операциях разделения/слияния/перебалансировки.
+ - In CMake scripts, regression was eliminated, due to which the `ctest` infrastructure did not use the set Valgrind parameters, including `MEMORYCHECK_SUPPRESSIONS_FILE`.
+   Now using `ctest -D ExperimentalMemCheck` does not result in multiple false-positive diagnoses. However, to use Valgrind, you still need to build a library with the predefined macro `ENABLE_MEMCHECK`.
 
- - Для Android добавлен обход (workaround) для уменьшения вероятности системной ошибки `EAGAIN` возникающей из-за нехватки системных ресурсов и переходных процессов при закрытии и быстром повтороном открытии БД.
+ - Fixed the use of the identifier `ERROR_UNHANDLED_ERROR`, which is not detected in new versions of the Windows SDK.
 
- - Для Linux добавлено предотвращение проявления ошибки в реализации fast_commit файловой системы Ext4.
+ - Fixed non-closing of DBI descriptors for tables created in nested transactions when such transactions were interrupted.
 
- - В отладочные сборки на Windows при срабатывании assert-проверок добавлена поддержка вариантов "Пропустить" и "Повторить".
+ - Eliminated unnecessary data synchronization operations with disk when allocating pages when the database is almost full.
 
- - В используемых на платформе Windows файловых блокировках задействованы ожидания с таймаутами, что теоретически должно снизить вероятность возникновения ошибок `ERROR_LOCK_VIOLATION` (`33`) при открытии БД в конкурентных сценариях.
+ - The `mdbx_load` utility has fixed errors in loading zero-length values and exchanging shrink/growth parameters in the database geometry.
 
- - Переработка реализации буферов и другие доработки в C++ API.
+ - Fixed a crash in the `SIGSEGV` software when all meta pages are not fully usable.
 
- - В тестах устранено несколько несущественных утечек памяти и предупреждение UBSAN о вызове `memcmp(, length = 0)`.
+ - Fixed a typo in the condition for determining a change in the size of the database when rolling back a nested transaction.
+
+ - Fixed information collection via `kstat()` for botid on Solaris and related platforms.
+
+ - Fixed a typo in the `ST_EXPORTED` processing path that broke the build on platforms where the mentioned flag is defined for `fstatvfs()`.
+
+ - Fixed the crash of the `SIGSEGV` software due to an attempt to clean/overwrite a corrupted meta page when opening the database in read-only mode.
 
 --------------------------------------------------------------------------------
+
+English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__change_log.html?_x_tr_sl=ru&_x_tr_tl=en) and [by Yandex](https://translated.turbopages.org/proxy_u/ru-en.en/https/libmdbx.dqdkfa.ru/md__change_log.html).
 
 ## v0.14.1 выпуск "Горналь" от 2025-05-05
 
@@ -470,6 +488,45 @@ BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3N
 
 ********************************************************************************
 
+## v0.13.12 "Аврора" (Aurora) at 2026-04-30
+
+The supporting release of a stable branch with bug fixes.
+
+Appreciations:
+
+ - [Erigon](https://erigon.tech/) for sponsorship.
+ - [Chloe Cano](https://github.com/Segwaz) for fuzzing, bug reporting and fixes.
+ - [Weixie Cui](https://github.com/cuiweixie) for bug fixing through pull-requests.
+ - [Alexander Kelchin](https://serebrium.ru/) (Serebrium Company) for bug reporting and prototypes of exploits.
+
+Fixes:
+
+ - Fixed the counting of nested trees in the `mdbx_chk` tool for a multi-values/dupsort hives (backport).
+
+ - Fixed swapping the shrink/growth parameters in a DB-geometry in the `mdbx_load` utility (backport).
+
+ - Fixed `SIGSEGV` in the case when all meta pages are not entirely usable (backport).
+
+ - Fixed information collection via `kstat()` for bootid on Solaris and related platforms (backport).
+
+ - Fixed a typo in the `ST_EXPORTED` processing path that broke the build on platforms where the mentioned flag is defined for `fstatvfs()` (backport).
+
+ - Fixed missing error handling of `NtUnmapViewOfSection()` and `munmap()` inside `osal_munmap()` (backport).
+
+ - Fixed `SIGSEGV` due to an attempt to clean/overwrite a corrupted meta page when opening the database in read-only mode (backport).
+
+ - Fixed returning a wrong/uninitialized `ms_psize` field when using `mdbx_enumerate_tables()` (backport).
+
+ - Fixed adjusting of neighbor nested cursors after a dupsort item deletion (backport).
+
+Other:
+
+ - The dumps generated by the `mdbx_dump` utility no longer contains the current size of a DB and `maxreaders` parameter, so that the contents of a dump depend only on a payload data.
+
+ - Cutoff `packages/` into the separate aside repository.
+
+--------------------------------------------------------------------------------
+
 ## v0.13.11 "A7A5" (just as Stable) at 2026-01-30
 
 The supporting release of a stable branch with bug fixes.
@@ -540,7 +597,7 @@ Other:
 
 Исправления:
 
- - Устранение предупреждения "unused function 'osal_yield()'" от новых версий CLANG при сборке амальгамированного исходного кода и при компиляции в режиме одного объектного модуля.
+ - Устранение предупреждения `unused function 'osal_yield()'` от новых версий CLANG при сборке амальгамированного исходного кода и при компиляции в режиме одного объектного модуля.
 
  - Для Linux добавлено предотвращение проявления ошибки в реализации fast_commit файловой системы Ext4.
 

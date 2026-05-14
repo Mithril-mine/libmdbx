@@ -35,7 +35,7 @@ endef
 #
 # Note that the defaults should already be correct for most platforms;
 # you should not need to change any of these. Read their descriptions
-# in README and source code (see src/options.h) if you do.
+# in the README and source code (see src/options.h) if you do.
 #
 
 # install sandbox
@@ -235,7 +235,7 @@ options:
 	@echo "## Assortment items for MDBX_BUILD_OPTIONS:"
 	@echo "##   Note that the defaults should already be correct for most platforms;"
 	@echo "##   you should not need to change any of these. Read their descriptions"
-	@echo "##   in README and source code (see mdbx.c) if you do."
+	@echo "##   in the README and source code (see mdbx.c) if you do."
 	@grep -h '#ifndef MDBX_' mdbx.c | grep -v BUILD | sort -u | sed 's/#ifndef /  /'
 
 lib libs libmdbx mdbx: libmdbx.a libmdbx.$(SO_SUFFIX)

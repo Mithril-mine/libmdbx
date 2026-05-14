@@ -22,10 +22,11 @@ TODO
 
 In development
 --------------
- - v0.14.2 milestone
+ - none
 
 Done
 ----
+ - v0.14.2 milestone
  - Ultra-fast deletion of consecutive elements by cutting off b-tree branches.
  - split ASSERT() to CHECK{0,1,2} and basal `assert()`.
  - Refine/simplify assertion-like errors handling.
