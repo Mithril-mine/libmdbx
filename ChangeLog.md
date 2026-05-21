@@ -9,6 +9,28 @@ Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
+## LTS v0.13.13 in a release engineering stage
+
+A long-term support phase with periodic releases as fixes accumulate.
+
+Appreciations:
+
+ - [Erigon](https://erigon.tech/) for sponsorship.
+ - [Weixie Cui](https://github.com/cuiweixie) for bug fixing through many pull-requests.
+ - https://github.com/box4wangjing for typos fixing.
+
+Fixes:
+
+ - Fixed minor copy&paste mistakes and other typos across codebase (backport).
+ - Fixed `mdbx::from_hex` remainder check before reading a hex digit pair (backport).
+ - Fixed Windows `writethrough_threshold` option rejecting `UINT64_MAX` default (backport).
+
+Other:
+
+ - add link to new .NET bindings (backport).
+
+--------------------------------------------------------------------------------
+
 ## v0.13.12 "Аврора" (Aurora) at 2026-04-30
 
 The supporting release of a stable branch with bug fixes.

@@ -4,7 +4,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY a575a490fc080ca11e89ff6db9f0bd38aa830959905998cac0e45274b9e6bb0e_v0_13_12_0_gf619d43d
+#define MDBX_BUILD_SOURCERY 84ad24a15999b8da547ab49b632bfa214583513b668fd1e78b95d383741cb66f_v0_13_12_6_g72749d29
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1209,9 +1209,9 @@ MDBX_INTERNAL int osal_waitstatus2errcode(DWORD result);
  * https://android.googlesource.com/platform/bionic/+/master/docs/32-bit-abi.md */
 #define MDBX_HAVE_PWRITEV 0
 #if defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS != MDBX_WORDBITS
-#error "_FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24" (_FILE_OFFSET_BITS != MDBX_WORDBITS)
+#error "_FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24"
 #elif defined(__FILE_OFFSET_BITS) && __FILE_OFFSET_BITS != MDBX_WORDBITS
-#error "__FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24" (__FILE_OFFSET_BITS != MDBX_WORDBITS)
+#error "__FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24"
 #endif
 #else
 #define MDBX_HAVE_PWRITEV 1
@@ -2087,7 +2087,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #endif
 #endif /* MDBX_CACHELINE_SIZE */
 
-/* Max length of iov-vector passed to writev() call, used for auxilary writes */
+/* Max length of iov-vector passed to writev() call, used for auxiliary writes */
 #ifndef MDBX_AUXILARY_IOV_MAX
 #define MDBX_AUXILARY_IOV_MAX 64
 #endif
@@ -2489,7 +2489,7 @@ typedef enum node_flags {
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint8_t page_type(const page_t *mp) { return mp->flags; }
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint8_t page_type_compat(const page_t *mp) {
-  /* Drop legacy P_DIRTY flag for sub-pages for compatilibity,
+  /* Drop legacy P_DIRTY flag for sub-pages for compatibility,
    * for assertions only. */
   return unlikely(mp->flags & P_SUBP) ? mp->flags & ~(P_SUBP | P_LEGACY_DIRTY) : mp->flags;
 }
@@ -11815,7 +11815,7 @@ __cold int mdbx_env_set_option(MDBX_env *env, const MDBX_option_t option, uint64
 #if defined(_WIN32) || defined(_WIN64)
     /* позволяем "установить" значение по-умолчанию и совпадающее
      * с поведением соответствующим текущей установке MDBX_NOMETASYNC */
-    if (value == /* default */ UINT64_MAX && value != ((env->flags & MDBX_NOMETASYNC) ? 0 : UINT_MAX))
+    if (value != /* default */ UINT64_MAX && value != ((env->flags & MDBX_NOMETASYNC) ? 0 : UINT_MAX))
       err = MDBX_EINVAL;
 #else
     if (value == /* default */ UINT64_MAX)
@@ -37657,10 +37657,10 @@ __dll_export
         0,
         13,
         12,
-        0,
+        6,
         "", /* pre-release suffix of SemVer
-                                        0.13.12 */
-        {"2026-04-30T16:36:24+03:00", "f5574b87cc64fa7a3a6b21ba33809258498d5f17", "f619d43dfbc36cbc9a1832503ce43f2e5223996e", "v0.13.12-0-gf619d43d"},
+                                        0.13.12.6 */
+        {"2026-05-21T09:47:13+03:00", "c846f69d29f8dad27474daf3e20f39b8fb904dea", "72749d2910bfa0459047d6e3b8397ec2da562e1e", "v0.13.12-6-g72749d29"},
         sourcery};
 
 __dll_export

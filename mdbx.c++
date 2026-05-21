@@ -2,7 +2,7 @@
 /// \author Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> \date 2015-2026
 /* clang-format off */
 
-#define MDBX_BUILD_SOURCERY a575a490fc080ca11e89ff6db9f0bd38aa830959905998cac0e45274b9e6bb0e_v0_13_12_0_gf619d43d
+#define MDBX_BUILD_SOURCERY 84ad24a15999b8da547ab49b632bfa214583513b668fd1e78b95d383741cb66f_v0_13_12_6_g72749d29
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1207,9 +1207,9 @@ MDBX_INTERNAL int osal_waitstatus2errcode(DWORD result);
  * https://android.googlesource.com/platform/bionic/+/master/docs/32-bit-abi.md */
 #define MDBX_HAVE_PWRITEV 0
 #if defined(_FILE_OFFSET_BITS) && _FILE_OFFSET_BITS != MDBX_WORDBITS
-#error "_FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24" (_FILE_OFFSET_BITS != MDBX_WORDBITS)
+#error "_FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24"
 #elif defined(__FILE_OFFSET_BITS) && __FILE_OFFSET_BITS != MDBX_WORDBITS
-#error "__FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24" (__FILE_OFFSET_BITS != MDBX_WORDBITS)
+#error "__FILE_OFFSET_BITS != MDBX_WORDBITS and __ANDROID_API__ < 24"
 #endif
 #else
 #define MDBX_HAVE_PWRITEV 1
@@ -2085,7 +2085,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #endif
 #endif /* MDBX_CACHELINE_SIZE */
 
-/* Max length of iov-vector passed to writev() call, used for auxilary writes */
+/* Max length of iov-vector passed to writev() call, used for auxiliary writes */
 #ifndef MDBX_AUXILARY_IOV_MAX
 #define MDBX_AUXILARY_IOV_MAX 64
 #endif
@@ -2487,7 +2487,7 @@ typedef enum node_flags {
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint8_t page_type(const page_t *mp) { return mp->flags; }
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint8_t page_type_compat(const page_t *mp) {
-  /* Drop legacy P_DIRTY flag for sub-pages for compatilibity,
+  /* Drop legacy P_DIRTY flag for sub-pages for compatibility,
    * for assertions only. */
   return unlikely(mp->flags & P_SUBP) ? mp->flags & ~(P_SUBP | P_LEGACY_DIRTY) : mp->flags;
 }
@@ -3938,7 +3938,7 @@ char *from_hex::write_bytes(char *__restrict const dest, size_t dest_size) const
       continue;
     }
 
-    if (MDBX_UNLIKELY(left < 1 || !isxdigit(src[0]) || !isxdigit(src[1])))
+    if (MDBX_UNLIKELY(left < 2 || !isxdigit(src[0]) || !isxdigit(src[1])))
       MDBX_CXX20_UNLIKELY throw std::domain_error("mdbx::from_hex:: invalid hexadecimal string");
 
     int8_t hi = src[0];
@@ -3970,7 +3970,7 @@ bool from_hex::is_erroneous() const noexcept {
       continue;
     }
 
-    if (MDBX_UNLIKELY(left < 1 || !isxdigit(src[0]) || !isxdigit(src[1])))
+    if (MDBX_UNLIKELY(left < 2 || !isxdigit(src[0]) || !isxdigit(src[1])))
       MDBX_CXX20_UNLIKELY return true;
 
     got = true;
