@@ -24,6 +24,7 @@ Fixes:
  - Fixed minor copy&paste mistakes and other typos across codebase (backport).
  - Fixed `mdbx::from_hex` remainder check before reading a hex digit pair (backport).
  - Fixed Windows `writethrough_threshold` option rejecting `UINT64_MAX` default (backport).
+ - Fixed assertions triggering in a specific scenarios of creating and renaming tables within nested transactions (backport).
 
 Other:
 

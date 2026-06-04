@@ -4,7 +4,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 84ad24a15999b8da547ab49b632bfa214583513b668fd1e78b95d383741cb66f_v0_13_12_6_g72749d29
+#define MDBX_BUILD_SOURCERY 88c386bbdd204c57844f5fc11aa514383ee0bc078c32896f04e27515d3213f73_v0_13_12_8_g1aac6ab7
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -18921,37 +18921,45 @@ static int dbi_open_locked(MDBX_txn *txn, unsigned user_flags, MDBX_dbi *dbi, MD
     env->n_dbi = (unsigned)slot + 1;
   eASSERT(env, slot < env->n_dbi);
 
-  int err = dbi_check(txn, slot);
+  defer_free_item_t *clone = nullptr;
+  int rc, err = dbi_check(txn, slot);
   eASSERT(env, err == MDBX_BAD_DBI);
-  if (err != MDBX_BAD_DBI)
-    return MDBX_PROBLEM;
+  if (err != MDBX_BAD_DBI) {
+    rc = MDBX_PROBLEM;
+    goto bailout;
+  }
 
   /* Find the DB info */
   MDBX_val body;
   cursor_couple_t cx;
-  int rc = cursor_init(&cx.outer, txn, MAIN_DBI);
+  rc = cursor_init(&cx.outer, txn, MAIN_DBI);
   if (unlikely(rc != MDBX_SUCCESS))
-    return rc;
+    goto bailout;
   rc = cursor_seek(&cx.outer, &name, &body, MDBX_SET).err;
   if (unlikely(rc != MDBX_SUCCESS)) {
     if (rc != MDBX_NOTFOUND || !(user_flags & MDBX_CREATE))
-      return rc;
+      goto bailout;
   } else {
     /* make sure this is actually a table */
     node_t *node = page_node(cx.outer.pg[cx.outer.top], cx.outer.ki[cx.outer.top]);
-    if (unlikely((node_flags(node) & (N_DUP | N_TREE)) != N_TREE))
-      return MDBX_INCOMPATIBLE;
+    if (unlikely((node_flags(node) & (N_DUP | N_TREE)) != N_TREE)) {
+      rc = MDBX_INCOMPATIBLE;
+      goto bailout;
+    }
     if (!MDBX_DISABLE_VALIDATION && unlikely(body.iov_len != sizeof(tree_t))) {
       ERROR("%s/%d: %s %zu", "MDBX_CORRUPTED", MDBX_CORRUPTED, "invalid table node size", body.iov_len);
-      return MDBX_CORRUPTED;
+      rc = MDBX_CORRUPTED;
+      goto bailout;
     }
     memcpy(&txn->dbs[slot], body.iov_base, sizeof(tree_t));
   }
 
   /* Done here so we cannot fail after creating a new DB */
-  defer_free_item_t *const clone = osal_malloc(dbi_namelen(name));
-  if (unlikely(!clone))
-    return MDBX_ENOMEM;
+  clone = osal_malloc(dbi_namelen(name));
+  if (unlikely(!clone)) {
+    rc = MDBX_ENOMEM;
+    goto bailout;
+  }
   memcpy(clone, name.iov_base, name.iov_len);
   name.iov_base = clone;
 
@@ -18997,12 +19005,25 @@ done:
   return MDBX_SUCCESS;
 
 bailout:
-  eASSERT(env, !txn->cursors[slot] && !env->kvs[slot].name.iov_len && !env->kvs[slot].name.iov_base);
   txn->dbi_state[slot] &= DBI_LINDO | DBI_OLDEN;
   env->dbs_flags[slot] = 0;
-  osal_free(clone);
-  if (slot + 1 == env->n_dbi)
-    txn->n_dbi = env->n_dbi = (unsigned)slot;
+  if (clone) {
+    eASSERT(env, !txn->cursors[slot] && !env->kvs[slot].name.iov_len && !env->kvs[slot].name.iov_base);
+    osal_free(clone);
+  }
+  if (slot + 1 == env->n_dbi) {
+    env->n_dbi = (unsigned)slot;
+    do {
+      txn->n_dbi = (unsigned)slot;
+#if MDBX_ENABLE_DBI_SPARSE
+      const size_t bitmap_chunk = CHAR_BIT * sizeof(txn->dbi_sparse[0]);
+      const size_t bitmap_indx = slot / bitmap_chunk;
+      const size_t bitmap_mask = (size_t)1 << slot % bitmap_chunk;
+      txn->dbi_sparse[bitmap_indx] &= ~bitmap_mask;
+#endif /* MDBX_ENABLE_DBI_SPARSE */
+      txn = txn->parent;
+    } while (txn);
+  }
   return rc;
 }
 
@@ -37657,10 +37678,10 @@ __dll_export
         0,
         13,
         12,
-        6,
+        8,
         "", /* pre-release suffix of SemVer
-                                        0.13.12.6 */
-        {"2026-05-21T09:47:13+03:00", "c846f69d29f8dad27474daf3e20f39b8fb904dea", "72749d2910bfa0459047d6e3b8397ec2da562e1e", "v0.13.12-6-g72749d29"},
+                                        0.13.12.8 */
+        {"2026-06-04T15:57:23+03:00", "608014e88691f493b8fa44950e05260c5c2512bf", "1aac6ab7a206602420329d1e896f834c3eacd451", "v0.13.12-8-g1aac6ab7"},
         sourcery};
 
 __dll_export
