@@ -7,6 +7,26 @@ Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
+## v0.14.3 at a release engineering stage
+
+The supporting release of a stable branch with bug fixes.
+
+### Important:
+
+ - Starting from v0.14.3, the 0.14.x branch gets stable status and will only receive bug fixes, but other improvements only in exceptional cases.
+   Further development will be continued under the 0.15.x branch.
+
+### Appreciations:
+
+ - [Erigon](https://erigon.tech/) for sponsorship.
+ - [Cosmin Apreutesei](https://github.com/capr) for bug reporting.
+
+### Fixes:
+
+ - Fixed assertions triggering in a specific scenarios of creating and renaming tables within nested transactions.
+
+--------------------------------------------------------------------------------
+
 ## v0.14.2 "Буревестник" (stormy petrel, aka Bourevestnik) at 2026-05-14
 
 The frontward release with new major features and internal refactoring.
