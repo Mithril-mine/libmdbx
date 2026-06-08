@@ -82,7 +82,7 @@ static bool doit(const mdbx::path &database_pathname) {
     size_t count = 0;
     cursor.fullscan([&](const mdbx::pair &) -> bool {
       count += 1;
-      return /* continue scan */ false;
+      return /* don't break but continue scanning */ false;
     });
     nested.abort();
 

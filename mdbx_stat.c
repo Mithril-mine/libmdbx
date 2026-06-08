@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-4-gf1208edf at 2026-06-04T17:58:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-8-gcfb319f8 at 2026-06-08T23:38:47+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -166,7 +166,7 @@ static void print_pages_percentage(const char *caption, size_t value, size_t bac
 int main(int argc, char *argv[]) {
   int opt, rc;
   MDBX_env *env;
-  MDBX_txn *txn;
+  MDBX_txn *txn = nullptr;
   MDBX_dbi dbi;
   MDBX_envinfo mei;
   prog = argv[0];
@@ -337,7 +337,7 @@ int main(int argc, char *argv[]) {
         printf("                    WARNING: Due Windows system limitations a "
                "file couldn't\n                    be truncated while database "
                "is opened. So, the size of\n                    database file "
-               "may by large than the database itself,\n                    "
+               "may be large than the database itself,\n                    "
                "until it will be closed or reopened in read-write mode.\n");
 #endif
     } else {

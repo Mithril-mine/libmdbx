@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-4-gf9efc660 at 2026-06-04T16:18:52+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-8-gcfb319f8 at 2026-06-08T23:38:47+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -4281,7 +4281,7 @@ protected:
 
 public:
   template <typename CALLABLE_PREDICATE>
-  bool scan(CALLABLE_PREDICATE predicate, move_operation start = first, move_operation turn = next) {
+  bool scan_until(CALLABLE_PREDICATE predicate, move_operation start = first, move_operation turn = next) {
     struct wrapper : public exception_thunk {
       static int probe(void *context, MDBX_val *key, MDBX_val *value, void *arg) noexcept {
         auto thunk = static_cast<wrapper *>(context);
@@ -4301,12 +4301,12 @@ public:
   }
 
   template <typename CALLABLE_PREDICATE> bool fullscan(CALLABLE_PREDICATE predicate, bool backward = false) {
-    return scan(std::move(predicate), backward ? last : first, backward ? previous : next);
+    return scan_until(std::move(predicate), backward ? last : first, backward ? previous : next);
   }
 
   template <typename CALLABLE_PREDICATE>
-  bool scan_from(CALLABLE_PREDICATE predicate, slice &from, move_operation start = key_greater_or_equal,
-                 move_operation turn = next) {
+  bool scan_until_from(CALLABLE_PREDICATE predicate, slice &from, move_operation start = key_greater_or_equal,
+                       move_operation turn = next) {
     struct wrapper : public exception_thunk {
       static int probe(void *context, MDBX_val *key, MDBX_val *value, void *arg) noexcept {
         auto thunk = static_cast<wrapper *>(context);
@@ -4326,8 +4326,8 @@ public:
   }
 
   template <typename CALLABLE_PREDICATE>
-  bool scan_from(CALLABLE_PREDICATE predicate, pair &from, move_operation start = pair_greater_or_equal,
-                 move_operation turn = next) {
+  bool scan_until_from(CALLABLE_PREDICATE predicate, pair &from, move_operation start = pair_greater_or_equal,
+                       move_operation turn = next) {
     struct wrapper : public exception_thunk {
       static int probe(void *context, MDBX_val *key, MDBX_val *value, void *arg) noexcept {
         auto thunk = static_cast<wrapper *>(context);
