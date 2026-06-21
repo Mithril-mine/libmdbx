@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-218-g1c249893 at 2026-06-19T00:01:12+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-224-g8f756694 at 2026-06-21T11:47:59+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -6268,8 +6268,9 @@ LIBMDBX_API int mdbx_cursor_put(MDBX_cursor *cursor, const MDBX_val *key, MDBX_v
  * return the same record after this operation.
  *
  * \param [in] cursor  A cursor handle returned by mdbx_cursor_open().
+ *
  * \param [in] flags   Options for this operation. This parameter must be set
- * to one of the values described here.
+ *                     to one of the values described here.
  *
  *  - \ref MDBX_CURRENT Delete only single entry at current cursor position.
  *  - \ref MDBX_ALLDUPS
@@ -6333,10 +6334,10 @@ LIBMDBX_API int mdbx_cursor_delete_range(MDBX_cursor *begin, MDBX_cursor *end, b
  * kinds of "dupsort" tables. If in doubt, use a deliberately large value such as `INT_MAX` or just the `42`.
  *
  * \param [in] first             Cursor pointing to the first element or NULL to using the begin of a table.
- *                               Either the `first` or the `last` must not be NULL.
+ *                               Either the "first" or the "last" can be NULL, but not both at once.
  *
  * \param [in] last              Cursor pointing to the end of the range or NULL to using the end of a table.
- *                               Either the `first` or the `last` must not be NULL.
+ *                               Either the "first" or the "last" can be NULL, but not both at once.
  *
  * \param [out] distance         The address for storing the result calculated distance.
  *
@@ -6388,6 +6389,10 @@ LIBMDBX_API int mdbx_cursor_scroll(MDBX_cursor *cursor, intptr_t amount, unsigne
 
 /** \brief Distributes cursors for multithreaded range scanning.
  * \ingroup c_cursors
+ *
+ * Places a given set of cursors as evenly as possible for subsequent scanning or parallel processing of data range by
+ * several threads. The function can accept cursors bound to different read transactions, provided that they use the
+ * same MVCC-snapshot of data.
  *
  * The value of the `deepness` parameter has a fundamental effect on the result, since it determines the level of the
  * B-tree at which the cursors distribution are performed, where zero corresponds to the root of the B-tree and

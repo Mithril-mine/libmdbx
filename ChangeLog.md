@@ -19,6 +19,7 @@ The supporting release of a stable branch with bug fixes.
 ### Appreciations:
 
  - [Cosmin Apreutesei](https://github.com/capr) for bugs reporting.
+ - [stslam](https://github.com/stslam) for Embarcadero C++ Builder support.
 
 ### Improvements:
 
@@ -28,6 +29,10 @@ The supporting release of a stable branch with bug fixes.
    Now, when tables are dropped, both ones associated handles and data remain available for other transactions running in parrallel within the current process.
 
    This improvement has been asking for a long time, but it required a lot of preparation and refactoring which are done step-by-step during a few last releases.
+
+ - Embarcadero C++ Builder now could be used to build libmdbx on Windows.
+
+ - Allowed to use cursors binded to the same table/DBI, but to different read-only transaction, in an API with multiple cursors in the parameters.
 
 ### Fixes:
 

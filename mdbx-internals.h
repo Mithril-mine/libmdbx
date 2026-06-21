@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-218-g1c249893 at 2026-06-19T00:01:12+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-224-g8f756694 at 2026-06-21T11:47:59+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY b5172e23ec4129ae0e8f9aca482b72564d1319dfb6995a7571a15fd22cb80a2f_v0_14_2_218_g1c249893
+#define MDBX_BUILD_SOURCERY c776439654ef6624f85f2df081332327857ea393cd03e90158d7805ddf2f566d_v0_14_2_224_g8f756694
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -76,7 +76,7 @@
 
 #if IS_WINDOWS
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0A00 /* Windows 10 */
+#define _WIN32_WINNT 0x0A00 /* Default Windows target: Windows 10. Keep single definition in this file. */
 #endif                      /* _WIN32_WINNT */
 
 #if !defined(_CRT_SECURE_NO_WARNINGS)
@@ -315,7 +315,7 @@
 #endif
 
 #ifdef __SANITIZE_THREAD__
-#warning "libmdbx don't compatible with ThreadSanitizer, you will get a lot of false-positive issues."
+#warning "libmdbx is not compatible with ThreadSanitizer; you will get a lot of false-positive issues."
 #endif /* __SANITIZE_THREAD__ */
 
 /*----------------------------------------------------------------------------*/
@@ -441,7 +441,7 @@ __extern_C key_t ftok(const char *, int);
 #undef CONSTEXPR_ENUM_FLAGS_OPERATIONS
 #endif /* __CODEGEARC__ */
 
-/* После подгрузки windows.h, чтобы избежать проблем со сборкой MINGW и т.п. */
+/* After including windows.h, to avoid issues with MinGW builds and similar toolchains. */
 #include <excpt.h>
 #include <io.h>
 #include <tlhelp32.h>

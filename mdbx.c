@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-218-g1c249893 at 2026-06-19T00:01:12+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-224-g8f756694 at 2026-06-21T11:47:59+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -5584,6 +5584,10 @@ __cold int mdbx_env_copyW(MDBX_env *env, const wchar_t *dest_path, MDBX_copy_fla
   return LOG_IFERR(rc);
 }
 
+static bool cursor_check_samedbi(const MDBX_cursor *left, const MDBX_cursor *right) {
+  return left->txn->front_txnid == right->txn->front_txnid && cursor_dbi(left) == cursor_dbi(right);
+}
+
 MDBX_cursor *mdbx_cursor_create(void *context) {
   cursor_couple_t *couple = osal_calloc(1, sizeof(cursor_couple_t));
   if (unlikely(!couple))
@@ -5863,8 +5867,8 @@ int mdbx_cursor_compare(const MDBX_cursor *l, const MDBX_cursor *r, bool ignore_
   if (unlikely(l->clc != r->clc)) {
     if (l->txn->env != r->txn->env)
       return (l->txn->env > r->txn->env) ? incomparable * 7 : -incomparable * 7;
-    if (l->txn->txnid != r->txn->txnid)
-      return (l->txn->txnid > r->txn->txnid) ? incomparable * 6 : -incomparable * 6;
+    if (l->txn->front_txnid != r->txn->front_txnid)
+      return (l->txn->front_txnid > r->txn->front_txnid) ? incomparable * 6 : -incomparable * 6;
     return (l->clc > r->clc) ? incomparable * 5 : -incomparable * 5;
   }
   ASSERT(cursor_dbi(l) == cursor_dbi(r));
@@ -6492,7 +6496,7 @@ int mdbx_cursor_delete_range(MDBX_cursor *begin, MDBX_cursor *end, bool end_incl
       return LOG_IFERR(MDBX_ENODATA);
   }
 
-  if (unlikely(begin && end && begin->txn != end->txn && begin->tree != end->tree))
+  if (begin && end && unlikely(!cursor_check_samedbi(begin, end)))
     return LOG_IFERR(MDBX_EINVAL);
 
   cursor_couple_t couple;
@@ -6550,7 +6554,7 @@ int mdbx_cursor_distribute(const MDBX_cursor *begin, const MDBX_cursor *end, MDB
       return LOG_IFERR(MDBX_ENODATA);
   }
 
-  if (unlikely(begin && end && begin->txn != end->txn && begin->tree != end->tree))
+  if (begin && end && unlikely(!cursor_check_samedbi(begin, end)))
     return LOG_IFERR(MDBX_EINVAL);
 
   const MDBX_cursor *ref = begin ? begin : end;
@@ -6560,7 +6564,7 @@ int mdbx_cursor_distribute(const MDBX_cursor *begin, const MDBX_cursor *end, MDB
       rc = cursor_check_pure(iter = array[i]);
       if (unlikely(rc != MDBX_SUCCESS))
         return LOG_IFERR(rc);
-      if (unlikely(iter->txn != ref->txn && iter->tree != ref->tree))
+      if (unlikely(!cursor_check_samedbi(iter, ref)))
         return LOG_IFERR(MDBX_EINVAL);
     }
   }
@@ -6624,7 +6628,7 @@ int mdbx_cursor_distance(const MDBX_cursor *begin, const MDBX_cursor *end, intpt
       return LOG_IFERR(MDBX_ENODATA);
   }
 
-  if (unlikely(begin && end && begin->txn != end->txn && begin->tree != end->tree))
+  if (begin && end && unlikely(!cursor_check_samedbi(begin, end)))
     return LOG_IFERR(MDBX_EINVAL);
 
   cursor_couple_t couple_opposite;
@@ -27130,11 +27134,11 @@ __cold const char *mdbx_dump_val(const MDBX_val *val, char *const buf, const siz
     ASSERT(len > 0 && (size_t)len < bufsize);
     (void)len;
   } else {
+    static const char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
     char *const detent = buf + bufsize - 2;
     char *ptr = buf;
     *ptr++ = '<';
     for (size_t i = 0; i < val->iov_len && ptr < detent; i++) {
-      const char hex[16] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
       *ptr++ = hex[data[i] >> 4];
       *ptr++ = hex[data[i] & 15];
     }
@@ -27318,7 +27322,7 @@ __cold const char *object2class(const void *ptr) {
   return "unknown";
 }
 
-MDBX_NORETURN static void fuckup(const char *msg, const char *func, unsigned line, const void *obj) {
+MDBX_NORETURN static void panic_internal(const char *msg, const char *func, unsigned line, const void *obj) {
   const char *obj_class = object2class(obj);
   MDBX_DTRACE5(panic, func, line, msg, obj_class, obj);
   const MDBX_panic_func panic_func = globals.panic_func;
@@ -27330,7 +27334,7 @@ MDBX_NORETURN static void fuckup(const char *msg, const char *func, unsigned lin
 }
 
 __cold __noinline void panic_at_obj(const struct MDBX_panic_point *const at, const void *obj) {
-  fuckup(at->msg, at->function, at->line, obj);
+  panic_internal(at->msg, at->function, at->line, obj);
 }
 
 __cold __noinline void panic_at(const struct MDBX_panic_point *const at) { panic_at_obj(at, nullptr); }
@@ -27340,11 +27344,13 @@ __cold __noinline void panic_at_fmt(const struct MDBX_panic_point *const at, con
   va_start(ap, obj);
   char *message = nullptr;
   const int num = osal_vasprintf(&message, at->msg, ap);
+  va_end(ap);
   const char *const const_message = unlikely(num < 1 || !message) ? "<vasprintf() failed>" : message;
-  fuckup(const_message, at->function, at->line, obj);
+  panic_internal(const_message, at->function, at->line, obj);
+  __unreachable();
 }
 
-__cold void mdbx_assert_fail(const char *msg, const char *func, unsigned line) { fuckup(msg, func, line, nullptr); }
+__cold void mdbx_assert_fail(const char *msg, const char *func, unsigned line) { panic_internal(msg, func, line, nullptr); }
 
 #endif /* MDBX_CHECKING >= 0 */
 
@@ -41874,10 +41880,10 @@ __dll_export
         0,
         14,
         2,
-        218,
+        224,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.218 */
-        {"2026-06-19T00:01:12+03:00", "fe28f9ff2a5f5e0daeb68f88de20dc61d9a1ee63", "1c249893d6c1c63e56ff497dc87f6f617a85a354", "v0.14.2-218-g1c249893"},
+                                        0.14.2.224 */
+        {"2026-06-21T11:47:59+03:00", "f9bce6f9699a701f6d98d0a4c4e5304877a0c644", "8f7566949369ece6fc0ce3c4516ee49cf1ccc0ef", "v0.14.2-224-g8f756694"},
         sourcery};
 
 __dll_export
