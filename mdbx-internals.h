@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-239-gf02137ac at 2026-06-29T13:06:03+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 72110d2158eee3796b4ead65168bb13ebe394fe640f43d8eecdfa3dc63d1435c_v0_14_2_239_gf02137ac
+#define MDBX_BUILD_SOURCERY aba439c44878aeba6fe12cadc943dfbd85a22e155678633ef76e1e4918fb500f_v0_14_2_246_ga9370ce8
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -76,7 +76,10 @@
 
 #if IS_WINDOWS
 #ifndef _WIN32_WINNT
-#define _WIN32_WINNT 0x0A00 /* Windows 10 */
+#define _WIN32_WINNT                                                                                                   \
+  0x0A00 /* 0x0A00 == _WIN32_WINNT_WIN10: Windows 10 version 1507 (RTM, build 10240) baseline;                         \
+            newer feature-update APIs must be gated separately                                                         \
+            (see Microsoft _WIN32_WINNT version mapping in SDK docs/headers). */
 #elif _WIN32_WINNT < 0x0500
 #error At least 'Windows 2000' API is required for libmdbx.
 #endif /* _WIN32_WINNT */
@@ -286,6 +289,9 @@
 /*----------------------------------------------------------------------------*/
 /* pre-requirements */
 
+/* `ULONG_MAX % 0xFFFF` must be zero for ULONG_MAX values of the form (2^n - 1),
+ * i.e. with all value bits set in conventional binary unsigned representation.
+ * This complements the integer model sanity checks above. */
 #if ((-6) & 5) != 0 || CHAR_BIT != 8 || UINT_MAX < 0xffffffff || ULONG_MAX % 0xFFFF
 #error "Sanity checking failed: Two's complement, reasonably sized integer types"
 #endif
@@ -806,7 +812,7 @@ __extern_C key_t ftok(const char *, int);
 #if (defined(__GNUC__) || __has_builtin(__builtin_expect)) && !defined(__COVERITY__)
 #define likely(cond) __builtin_expect(!!(cond), 1)
 #else
-#define likely(x) (!!(x))
+#define likely(cond) (!!(cond))
 #endif
 #endif /* likely */
 
@@ -814,7 +820,7 @@ __extern_C key_t ftok(const char *, int);
 #if (defined(__GNUC__) || __has_builtin(__builtin_expect)) && !defined(__COVERITY__)
 #define unlikely(cond) __builtin_expect(!!(cond), 0)
 #else
-#define unlikely(x) (!!(x))
+#define unlikely(cond) (!!(cond))
 #endif
 #endif /* unlikely */
 
@@ -980,8 +986,10 @@ template <typename T, size_t N> char (&__ArraySizeHelper(T (&array)[N]))[N];
 
 #define MDBX_TETRAD(a, b, c, d) ((uint32_t)(a) << 24 | (uint32_t)(b) << 16 | (uint32_t)(c) << 8 | (d))
 
+/* Build/integration contract: MDBX_STRINGIFY must be defined by prior project
+ * headers or compile-time configuration before this point. */
 #ifndef MDBX_STRINGIFY
-#error "MDBX_STRINGIFY expected to be provided/defined here."
+#error "MDBX_STRINGIFY must be defined by prior headers or build configuration before including this header."
 #endif
 #define FIXME "FIXME: " __FILE__ ", " MDBX_STRINGIFY(__LINE__)
 
