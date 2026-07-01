@@ -26,7 +26,7 @@ The supporting release of a stable branch with bug fixes.
  - Deferred invalidation of the dbi-handles of dropped tables has been implemented until the corresponding transactions are committed.
 
    Previously, libmdbx implemented the behavior historically inherited from LMDB, when handles of a dropped tables were immediately closed, regardless of the possible subsequent abortion of such transactions.
-   Now, when tables are dropped, both ones associated handles and data remain available for other transactions running in parrallel within the current process.
+   Now, when tables are dropped, both ones associated handles and data remain available for other transactions running in parallel within the current process.
 
    This improvement has been asking for a long time, but it required a lot of preparation and refactoring which are done step-by-step during a few last releases.
 
@@ -70,7 +70,7 @@ The frontward release with new major features and internal refactoring.
  - [Artyom Vorotnikov](https://github.com/vorot93) for [Rust bindings](https://github.com/vorot93/libmdbx-rs), reporting bugs and testing.
  - [Stefan de Konink](https://github.com/skinkie) for [Python bindings](https://github.com/wtdcode/mdbx-py) and documentation improvement.
  - [Cosmin Apreutesei](https://github.com/capr) for error reporting and testing.
- - [Chloe Cano](https://github.com/Segwaz) for fuzzing, bug reporing and fixes.
+ - [Chloe Cano](https://github.com/Segwaz) for fuzzing, bug reporting and fixes.
  - [Weixie Cui](https://github.com/cuiweixie) for bug fixing through many pull-requests.
  - [Alexander Kelchin](https://serebrium.ru) (the "Serebrium" Company) for error messages and prototypes of exploits.
  - [Anton Maisak](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) for new .NET bindings.
@@ -240,7 +240,7 @@ The frontward release with new major features and internal refactoring.
 
  - Fixed a typo in the condition for determining a change in the size of the database when rolling back a nested transaction.
 
- - Fixed information collection via `kstat()` for botid on Solaris and related platforms.
+ - Fixed information collection via `kstat()` for `bootid` on Solaris and related platforms.
 
  - Fixed a typo in the `ST_EXPORTED` processing path that broke the build on platforms where the mentioned flag is defined for `fstatvfs()`.
 

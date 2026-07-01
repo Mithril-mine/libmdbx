@@ -3,7 +3,6 @@ import os
 import re
 import subprocess
 from conan.tools.files import rm
-from conan.tools.scm import Git
 from conan.tools.apple import is_apple_os
 from conan.tools.cmake import CMakeToolchain, CMake, cmake_layout
 from conan import ConanFile

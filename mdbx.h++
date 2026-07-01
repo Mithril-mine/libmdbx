@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-239-gf02137ac at 2026-06-29T13:06:03+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -3100,8 +3100,6 @@ public:
   struct LIBMDBX_API_TYPE reclaiming_options {
     /// \copydoc MDBX_LIFORECLAIM
     bool lifo{false};
-    /// \copydoc MDBX_COALESCE
-    bool coalesce{false};
     MDBX_CXX11_CONSTEXPR reclaiming_options() noexcept {}
     MDBX_CXX11_CONSTEXPR
     reclaiming_options(const reclaiming_options &) noexcept = default;

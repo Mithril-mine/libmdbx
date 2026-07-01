@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-239-gf02137ac at 2026-06-29T13:06:03+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -1256,9 +1256,6 @@ typedef enum MDBX_env_flags {
    * This flag takes effect when the environment is opened and cannot be changed after. */
   MDBX_NOSTICKYTHREADS = UINT32_C(0x200000),
 
-  /** \deprecated Please use \ref MDBX_NOSTICKYTHREADS instead. */
-  MDBX_NOTLS MDBX_DEPRECATED_ENUM = MDBX_NOSTICKYTHREADS,
-
   /** Don't do readahead.
    *
    * Turn off readahead. Most operating systems perform readahead on read
@@ -1302,19 +1299,6 @@ typedef enum MDBX_env_flags {
    *
    * This flag may be changed at any time using `mdbx_env_set_flags()`. */
   MDBX_NOMEMINIT = UINT32_C(0x1000000),
-
-  /** Aims to coalesce a Garbage Collection items.
-   * \deprecated Always enabled since v0.12 and deprecated since v0.13.
-   *
-   * With `MDBX_COALESCE` flag MDBX will aims to coalesce items while recycling
-   * a Garbage Collection. Technically, when possible short lists of pages
-   * will be combined into longer ones, but to fit on one database page. As a
-   * result, there will be fewer items in Garbage Collection and a page lists
-   * are longer, which slightly increases the likelihood of returning pages to
-   * Unallocated space and reducing the database file.
-   *
-   * This flag may be changed at any time using mdbx_env_set_flags(). */
-  MDBX_COALESCE MDBX_DEPRECATED_ENUM = UINT32_C(0x2000000),
 
   /** LIFO policy for recycling a Garbage Collection items.
    *
@@ -1465,13 +1449,6 @@ typedef enum MDBX_env_flags {
    * \ref mdbx_env_set_flags() or by passing to \ref mdbx_txn_begin() for
    * particular write transaction. */
   MDBX_SAFE_NOSYNC = UINT32_C(0x10000),
-
-  /** \deprecated Please use \ref MDBX_SAFE_NOSYNC instead of `MDBX_MAPASYNC`.
-   *
-   * Since version 0.9.x the `MDBX_MAPASYNC` is deprecated and has the same
-   * effect as \ref MDBX_SAFE_NOSYNC with \ref MDBX_WRITEMAP. This just API
-   * simplification is for convenience and clarity. */
-  MDBX_MAPASYNC = MDBX_SAFE_NOSYNC,
 
   /** Don't sync anything and wipe previous steady commits.
    *
@@ -2076,13 +2053,6 @@ typedef enum MDBX_error {
   MDBX_EDEADLK = EDEADLK
 #endif /* !Windows */
 } MDBX_error_t;
-
-/** MDBX_MAP_RESIZED
- * \ingroup c_err
- * \deprecated Please review your code to use MDBX_UNABLE_EXTEND_MAPSIZE
- * instead. */
-MDBX_DEPRECATED static __inline int MDBX_MAP_RESIZED_is_deprecated(void) { return MDBX_UNABLE_EXTEND_MAPSIZE; }
-#define MDBX_MAP_RESIZED MDBX_MAP_RESIZED_is_deprecated()
 
 /** \brief Return a string describing a given error code.
  * \ingroup c_err

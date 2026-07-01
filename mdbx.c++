@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-239-gf02137ac at 2026-06-29T13:06:03+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -566,7 +566,7 @@ struct MDBX_txn {
   int32_t signature;
   uint32_t flags; /* Transaction Flags */
   size_t n_dbi;
-  size_t owner; /* thread ID that owns this transaction */
+  uintptr_t owner; /* thread ID that owns this transaction */
 
   MDBX_txn *parent; /* parent of a nested txn */
   MDBX_txn *nested; /* nested txn under this txn,
@@ -757,7 +757,10 @@ enum env_flags {
                          DEPRECATED_COALESCE | MDBX_PAGEPERTURB | MDBX_ACCEDE | MDBX_VALIDATION,
   ENV_CHANGELESS_FLAGS = MDBX_NOSUBDIR | MDBX_RDONLY | MDBX_WRITEMAP | MDBX_NOSTICKYTHREADS | MDBX_NORDAHEAD |
                          MDBX_LIFORECLAIM | MDBX_EXCLUSIVE,
-  ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS
+  ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS,
+  /* A flag for checking any non-synchronous mode. The MDBX_SAFE_NOSYNC bit is sufficient here,
+   * since it is included in MDBX_UTTERLY_NOSYNC. */
+  ENV_UNSYNC = MDBX_SAFE_NOSYNC
 };
 
 /* The database environment. */
@@ -2196,8 +2199,6 @@ __cold MDBX_env_flags_t env::operate_parameters::make_flags(bool accede, bool us
   if (mode != readonly) {
     if (options.nested_transactions)
       flags &= ~MDBX_WRITEMAP;
-    if (reclaiming.coalesce)
-      flags |= MDBX_COALESCE;
     if (reclaiming.lifo)
       flags |= MDBX_LIFORECLAIM;
     switch (durability) {
@@ -2209,7 +2210,6 @@ __cold MDBX_env_flags_t env::operate_parameters::make_flags(bool accede, bool us
       flags |= MDBX_NOMETASYNC;
       break;
     case env::durability::lazy_weak_tail:
-      static_assert(MDBX_MAPASYNC == MDBX_SAFE_NOSYNC, "WTF? Obsolete C API?");
       flags |= MDBX_SAFE_NOSYNC;
       break;
     case env::durability::whole_fragile:
@@ -2237,7 +2237,7 @@ env::durability env::operate_parameters::durability_from_flags(MDBX_env_flags_t 
 }
 
 env::reclaiming_options::reclaiming_options(MDBX_env_flags_t flags) noexcept
-    : lifo((flags & MDBX_LIFORECLAIM) ? true : false), coalesce((flags & MDBX_COALESCE) ? true : false) {}
+    : lifo((flags & MDBX_LIFORECLAIM) ? true : false) {}
 
 env::operate_options::operate_options(MDBX_env_flags_t flags) noexcept
     : no_sticky_threads(((flags & (MDBX_NOSTICKYTHREADS | MDBX_EXCLUSIVE)) == MDBX_NOSTICKYTHREADS) ? true : false),
@@ -2792,10 +2792,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::durability &it
 }
 
 __cold ::std::ostream &operator<<(::std::ostream &out, const env::reclaiming_options &it) {
-  return out << "{"                                            //
-             << "lifo: " << (it.lifo ? "yes" : "no")           //
-             << ", coalesce: " << (it.coalesce ? "yes" : "no") //
-             << "}";
+  return out << "{" << "lifo: " << (it.lifo ? "yes" : "no") << "}";
 }
 
 __cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_options &it) {

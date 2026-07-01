@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-239-gf02137ac at 2026-06-29T13:06:03+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -1004,7 +1004,7 @@ struct MDBX_txn {
   int32_t signature;
   uint32_t flags; /* Transaction Flags */
   size_t n_dbi;
-  size_t owner; /* thread ID that owns this transaction */
+  uintptr_t owner; /* thread ID that owns this transaction */
 
   MDBX_txn *parent; /* parent of a nested txn */
   MDBX_txn *nested; /* nested txn under this txn,
@@ -1195,7 +1195,10 @@ enum env_flags {
                          DEPRECATED_COALESCE | MDBX_PAGEPERTURB | MDBX_ACCEDE | MDBX_VALIDATION,
   ENV_CHANGELESS_FLAGS = MDBX_NOSUBDIR | MDBX_RDONLY | MDBX_WRITEMAP | MDBX_NOSTICKYTHREADS | MDBX_NORDAHEAD |
                          MDBX_LIFORECLAIM | MDBX_EXCLUSIVE,
-  ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS
+  ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS,
+  /* A flag for checking any non-synchronous mode. The MDBX_SAFE_NOSYNC bit is sufficient here,
+   * since it is included in MDBX_UTTERLY_NOSYNC. */
+  ENV_UNSYNC = MDBX_SAFE_NOSYNC
 };
 
 /* The database environment. */
@@ -17427,6 +17430,18 @@ static inline size_t dbi_namelen(const MDBX_val name) {
   return (name.iov_len > sizeof(defer_free_item_t)) ? name.iov_len : sizeof(defer_free_item_t);
 }
 
+static inline int dbi_open_locked_fetch_main(MDBX_txn *txn, cursor_couple_t *maindb_cx, size_t slot,
+                                             const MDBX_val *name, unsigned user_flags) {
+#if defined(ENABLE_MEMCHECK) || defined(__SANITIZE_ADDRESS__)
+  void *preserve_userctx = maindb_cx->userctx;
+#endif /* MEMCHECK || ASAN */
+  int err = tbl_fetch(txn, &maindb_cx->outer, slot, name, user_flags);
+#if defined(ENABLE_MEMCHECK) || defined(__SANITIZE_ADDRESS__)
+  maindb_cx->userctx = preserve_userctx;
+#endif /* MEMCHECK || ASAN */
+  return err;
+}
+
 static int dbi_open_locked(MDBX_txn *txn, cursor_couple_t *maindb_cx, unsigned user_flags, MDBX_cmp_func keycmp,
                            MDBX_cmp_func datacmp, MDBX_val name, const size_t fastpath_slot,
                            defer_free_item_t **defer_chain) {
@@ -17531,7 +17546,7 @@ static int dbi_open_locked(MDBX_txn *txn, cursor_couple_t *maindb_cx, unsigned u
           ASSERT(rc == MDBX_SUCCESS);
         }
       } else {
-        rc = tbl_fetch(txn, &maindb_cx->outer, slot, &name, user_flags);
+        rc = dbi_open_locked_fetch_main(txn, maindb_cx, slot, &name, user_flags);
       }
 
       if (likely(rc == MDBX_SUCCESS))
@@ -17570,13 +17585,7 @@ static int dbi_open_locked(MDBX_txn *txn, cursor_couple_t *maindb_cx, unsigned u
   }
 
   /* Find the DB info */
-#if defined(ENABLE_MEMCHECK) || defined(__SANITIZE_ADDRESS__)
-  void *preserve_userctx = maindb_cx->userctx;
-#endif /* MEMCHECK || ASAN */
-  rc = tbl_fetch(txn, &maindb_cx->outer, slot, &name, user_flags);
-#if defined(ENABLE_MEMCHECK) || defined(__SANITIZE_ADDRESS__)
-  maindb_cx->userctx = preserve_userctx;
-#endif /* MEMCHECK || ASAN */
+  rc = dbi_open_locked_fetch_main(txn, maindb_cx, slot, &name, user_flags);
   if (unlikely(rc != MDBX_SUCCESS)) {
     if (rc != MDBX_NOTFOUND || !(user_flags & MDBX_CREATE))
       goto bailout;
@@ -20145,12 +20154,13 @@ void dxb_sanitize_tail(MDBX_env *env, MDBX_txn *txn) {
     if (env->pid != osal_getpid()) {
       /* resurrect after fork */
       return;
-    } else if (env_owned_wrtxn(env)) {
-      /* inside write-txn */
-      last = meta_recent(env, &env->basal_txn->wr.troika).ptr_v->geometry.first_unallocated;
-    } else if (env->flags & MDBX_RDONLY) {
+    } else if ((env->flags & MDBX_RDONLY) != 0 || !env->basal_txn) {
       /* read-only mode, no write-txn, no wlock mutex */
       last = NUM_METAS;
+    } else if ((env->flags & MDBX_NOSTICKYTHREADS) ? (env->basal_txn->owner != 0)
+                                                   : (env->basal_txn->owner == osal_thread_self())) {
+      /* inside write-txn */
+      last = meta_recent(env, &env->basal_txn->wr.troika).ptr_v->geometry.first_unallocated;
     } else if (lck_txn_lock(env, true) == MDBX_SUCCESS) {
       /* no write-txn */
       last = NUM_METAS;
@@ -20766,7 +20776,7 @@ int dxb_sync_locked(MDBX_env *env, unsigned flags, meta_t *const pending, troika
   eASSERT0(env, (env->flags & (MDBX_RDONLY | ENV_FATAL_ERROR)) == 0);
   eASSERT0(env, pending->geometry.first_unallocated <= pending->geometry.now);
 
-  if (flags & MDBX_SAFE_NOSYNC) {
+  if (flags & ENV_UNSYNC) {
     /* Check auto-sync conditions */
     const pgno_t autosync_threshold = atomic_load32(&env->lck->autosync_threshold, mo_Relaxed);
     const uint64_t autosync_period = atomic_load64(&env->lck->autosync_period, mo_Relaxed);
@@ -20806,8 +20816,7 @@ int dxb_sync_locked(MDBX_env *env, unsigned flags, meta_t *const pending, troika
       if (prev_discarded_pgno >= discard_edge_pgno + env->madv_threshold) {
         const size_t prev_discarded_bytes = pgno_ceil2os_bytes(env, prev_discarded_pgno);
         const size_t discard_edge_bytes = pgno2bytes(env, discard_edge_pgno);
-        /* из-за выравнивания prev_discarded_bytes и discard_edge_bytes
-         * могут быть равны */
+        /* из-за выравнивания prev_discarded_bytes и discard_edge_bytes могут быть равны */
         if (prev_discarded_bytes > discard_edge_bytes) {
           NOTICE("shrink-MADV_%s %zu..%zu", "DONTNEED", discard_edge_pgno, prev_discarded_pgno);
           munlock_after(env, discard_edge_pgno, bytes_ceil2os_bytes(env, env->dxb_mmap.current));
@@ -20892,7 +20901,7 @@ int dxb_sync_locked(MDBX_env *env, unsigned flags, meta_t *const pending, troika
 
     eASSERT0(env, ((flags ^ env->flags) & MDBX_WRITEMAP) == 0);
     enum osal_syncmode_bits mode_bits = MDBX_SYNC_NONE;
-    if ((flags & MDBX_SAFE_NOSYNC) == 0) {
+    if ((flags & ENV_UNSYNC) == 0) {
       mode_bits = MDBX_SYNC_DATA;
       if (pending->geometry.first_unallocated > meta_prefer_steady(env, troika).ptr_c->geometry.now)
         mode_bits |= MDBX_SYNC_SIZE;
@@ -20907,8 +20916,8 @@ int dxb_sync_locked(MDBX_env *env, unsigned flags, meta_t *const pending, troika
       rc = dxb_fsync(env, mode_bits);
     if (unlikely(rc != MDBX_SUCCESS))
       goto fail;
-    rc = (flags & MDBX_SAFE_NOSYNC) ? MDBX_RESULT_TRUE /* carry non-steady */
-                                    : MDBX_RESULT_FALSE /* carry steady */;
+    rc = (flags & ENV_UNSYNC) ? MDBX_RESULT_TRUE /* carry non-steady */
+                              : MDBX_RESULT_FALSE /* carry steady */;
   }
   eASSERT1(env, coherency_check_meta(env, pending, true));
 
@@ -21104,12 +21113,8 @@ fail:
 }
 
 MDBX_txn *env_owned_wrtxn(const MDBX_env *env) {
-  if (likely(env->basal_txn)) {
-    const bool is_owned = (env->flags & MDBX_NOSTICKYTHREADS) ? (env->basal_txn->owner != 0)
-                                                              : (env->basal_txn->owner == osal_thread_self());
-    if (is_owned)
-      return env->txn ? env->txn : env->basal_txn;
-  }
+  if (likely(env->basal_txn) && env->basal_txn->owner == osal_thread_self())
+    return env->txn ? env->txn : env->basal_txn;
   return nullptr;
 }
 
@@ -21215,7 +21220,7 @@ retry:;
 
       int err;
       /* pre-sync to avoid latency for writer */
-      if (unsynced_pages > /* FIXME: define threshold */ 42 && (flags & MDBX_SAFE_NOSYNC) == 0) {
+      if (unsynced_pages > /* FIXME: define threshold */ 42 && (flags & ENV_UNSYNC) == 0) {
         eASSERT0(env, ((flags ^ env->flags) & MDBX_WRITEMAP) == 0);
         if (flags & MDBX_WRITEMAP) {
           /* Acquire guard to avoid collision with remap */
@@ -21266,23 +21271,26 @@ retry:;
   eASSERT0(env, !txn_owned || (flags & txn_shrink_allowed) == 0);
 
   if (!head.is_steady && unlikely(env->stuck_meta >= 0) && troika.recent != (uint8_t)env->stuck_meta) {
-    NOTICE("skip %s since wagering meta-page (%u) is mispatch the recent "
-           "meta-page (%u)",
-           "sync datafile", env->stuck_meta, troika.recent);
+    NOTICE("skip %s since wagering meta-page (%u) is mismatch the recent meta-page (%u)", "sync datafile",
+           env->stuck_meta, troika.recent);
     rc = MDBX_RESULT_TRUE;
     goto bailout;
   }
-  if (!head.is_steady || ((flags & MDBX_SAFE_NOSYNC) == 0 && unsynced_pages)) {
+  if (!head.is_steady || ((flags & ENV_UNSYNC) == 0 && unsynced_pages)) {
     DEBUG("meta-head %" PRIaPGNO ", %s, sync_pending %" PRIu64, payload2page(head.ptr_c)->pgno,
           durable_caption(head.ptr_c), unsynced_pages);
     meta_t meta = *head.ptr_c;
-    rc = dxb_sync_locked(env, flags, &meta, &env->basal_txn->wr.troika);
+    osal_memory_barrier();
+    if (unlikely(memcmp(&meta, head.ptr_c, sizeof(meta)))) {
+      ERROR("The metapage #%u is volatile and changes unexpectedly", troika.recent);
+      rc = MDBX_PROBLEM;
+    } else
+      rc = dxb_sync_locked(env, flags, &meta, &env->basal_txn->wr.troika);
     if (unlikely(rc != MDBX_SUCCESS))
       goto bailout;
   }
 
-  /* LY: sync meta-pages if MDBX_NOMETASYNC enabled
-   *     and someone was not synced above. */
+  /* LY: sync meta-pages if MDBX_NOMETASYNC enabled and someone was not synced above. */
   if (atomic_load32(&env->lck->meta_sync_txnid, mo_Relaxed) != (uint32_t)head.txnid)
     rc = meta_sync(env, head);
 
@@ -41895,10 +41903,10 @@ __dll_export
         0,
         14,
         2,
-        239,
+        246,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.239 */
-        {"2026-06-29T13:06:03+03:00", "46de10878837ece16e21df688c42184e67d02e58", "f02137acbc04acd95f1acc9b20a0a3b8e4f71867", "v0.14.2-239-gf02137ac"},
+                                        0.14.2.246 */
+        {"2026-07-01T10:29:41+03:00", "c90e3589cfe3f9b704e9d135c4e398c4b8f1a003", "a9370ce8dff10b3b719ab9257c8ed763068b1122", "v0.14.2-246-ga9370ce8"},
         sourcery};
 
 __dll_export
