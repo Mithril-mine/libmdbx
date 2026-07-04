@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-251-g06d0f3ad at 2026-07-04T12:31:19+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY aba439c44878aeba6fe12cadc943dfbd85a22e155678633ef76e1e4918fb500f_v0_14_2_246_ga9370ce8
+#define MDBX_BUILD_SOURCERY 3acf949006eff873a5f8c0550e280f0b263af6da4efe865cb31276d7cb3e9edb_v0_14_2_251_g06d0f3ad
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -2976,6 +2976,10 @@ typedef struct shared_lck {
    * lock at least one page, so therefore madvise() could return EINVAL. */
   mdbx_atomic_uint32_t mlcnt[2];
 
+  /* Threshold in un-synced-with-disk pages for preparatory call msync() and/or fdatasync() without holding a txn-lock
+   * to avoid latency spikes during mdbx_env_sync_ex() in an asynchronous out-of-transaction execution case. */
+  atomic_pgno_t presync_threshold;
+
   MDBX_ALIGNAS(MDBX_CACHELINE_SIZE) /* cacheline ----------------------------*/
 
   /* Statistics of costly ops of all (running, completed and aborted)
@@ -3018,7 +3022,7 @@ typedef struct shared_lck {
   MDBX_ALIGNAS(MDBX_CACHELINE_SIZE) /* cacheline ----------------------------*/
 
 #if MDBX_LOCKING > 0
-  /* Readeaders table lock. */
+  /* Readers table lock. */
   osal_ipclock_t rdt_lock;
 #endif /* MDBX_LOCKING > 0 */
 

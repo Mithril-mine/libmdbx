@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-251-g06d0f3ad at 2026-07-04T12:31:19+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -3352,7 +3352,7 @@ public:
 
   inline bool is_writemap() const { return (get_flags() & MDBX_WRITEMAP) != 0; }
 
-  inline bool is_readwite() const { return !is_readonly(); }
+  inline bool is_readwrite() const { return !is_readonly(); }
 
   inline bool is_nested_transactions_available() const { return (get_flags() & (MDBX_WRITEMAP | MDBX_RDONLY)) == 0; }
 

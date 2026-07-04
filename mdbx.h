@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-251-g06d0f3ad at 2026-07-04T12:31:19+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -1163,7 +1163,7 @@ typedef enum MDBX_env_flags {
   /** Using database/environment which already opened by another process(es).
    *
    * The `MDBX_ACCEDE` flag is useful to avoid \ref MDBX_INCOMPATIBLE error
-   * while opening the database/environment which is already used by another
+   * while opening a database/environment which is already used by another
    * process(es) with unknown mode/flags. In such cases, if there is a
    * difference in the specified flags (\ref MDBX_NOMETASYNC,
    * \ref MDBX_SAFE_NOSYNC, \ref MDBX_UTTERLY_NOSYNC, \ref MDBX_LIFORECLAIM
@@ -1215,7 +1215,7 @@ typedef enum MDBX_env_flags {
    * Anyway, at a minimum, it is absolutely necessary to ensure that each writing transaction is finished strictly in
    * the same thread of the operating system where it was started.
    *
-   * \note Starting from version 0.13, the `MDBX_NOSTICKYTHREADS` option completely replaces the \ref MDBX_NOTLS option.
+   * \note Starting from version 0.13, the \ref MDBX_NOSTICKYTHREADS option completely replaces the `MDBX_NOTLS` option.
    *
    * When using `MDBX_NOSTICKYTHREADS`, transactions become unrelated to system threads that created ones. Therefore,
    * the API functions do not check the correspondence between the transaction and the current execution thread. Most
@@ -1228,7 +1228,7 @@ typedef enum MDBX_env_flags {
    * particular, for this reason, on Windows, reducing the database file is not possible until the database is closed by
    * the last process working with it or until the database is subsequently opened in read-write mode.
    *
-   * \warning Regardless of \ref MDBX_NOSTICKYTHREADS and \ref MDBX_NOTLS, it is not allowed to use API objects from
+   * \warning Regardless of \ref MDBX_NOSTICKYTHREADS, it is not allowed to use API objects from
    * different execution threads at the same time! It is entirely your responsibility to ensure that API objects are not
    * used simultaneously from different execution threads!
    *
@@ -2443,7 +2443,25 @@ typedef enum MDBX_option {
    *
    * The option value is specified in units of 1/65536 of the page size: minimal 0, maximal 50% (32768),
    * default is 0. */
-  MDBX_opt_split_reserve
+  MDBX_opt_split_reserve,
+  /** \brief Sets threshold in bytes for preliminary flush/sync operation without holding a transaction lock.
+   *
+   * A preparatory data flush/sync operation could be performed if \ref mdbx_env_sync_poll() or \ref mdbx_env_sync_ex()
+   * from a thread that does not own the write transaction. Such a preliminary operation will push the bulk of the data
+   * to disk, which will significantly reduce the time to complete the final stage of flush/sync and update metadata
+   * that requires holding the lock.
+   *
+   * This option sets the volume threshold in bytes of non-synced-to disk data, when exceeded, a pre-sync/flush
+   * operation is performed. A too large threshold will increase the latency spikes, but a too small will increase
+   * number of flush/sync operations and corresponding overheads.
+   *
+   * \see mdbx_env_sync_poll()
+   * \see mdbx_env_sync_ex()
+   * \see MDBX_opt_sync_bytes
+   * \see MDBX_opt_sync_period
+   *
+   * The option value is specified in bytes: minimal 1, maximal 2147483648 (2 GiB), default is 256 KiB. */
+  MDBX_opt_presync_threshold
 } MDBX_option_t;
 
 /** \brief Sets the value of a extra runtime options for an environment.
@@ -2497,23 +2515,27 @@ LIBMDBX_API int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t opt
  * Flags set by mdbx_env_set_flags() are also used:
  *  - \ref MDBX_ENV_DEFAULTS, \ref MDBX_NOSUBDIR, \ref MDBX_RDONLY,
  *    \ref MDBX_EXCLUSIVE, \ref MDBX_WRITEMAP, \ref MDBX_NOSTICKYTHREADS,
- *    \ref MDBX_NORDAHEAD, \ref MDBX_NOMEMINIT, \ref MDBX_COALESCE,
+ *    \ref MDBX_NORDAHEAD, \ref MDBX_NOMEMINIT,
  *    \ref MDBX_LIFORECLAIM. See \ref env_flags section.
  *
  *  - \ref MDBX_SYNC_DURABLE, \ref MDBX_NOMETASYNC, \ref MDBX_SAFE_NOSYNC,
  *    \ref MDBX_UTTERLY_NOSYNC. See \ref sync_modes section.
  *
- * \note `MDB_NOLOCK` flag don't supported by MDBX,
- *       try use \ref MDBX_EXCLUSIVE as a replacement.
+ * \note The `MDB_NOTLS` option in MDBX is superseded by \ref MDBX_NOSTICKYTHREADS.
  *
- * \note MDBX don't allow to mix processes with different \ref MDBX_SAFE_NOSYNC
- *       flags on the same environment.
- *       In such case \ref MDBX_INCOMPATIBLE will be returned.
+ * \note The `MDB_NOSYNC` mode in MDBX is splitted into \ref MDBX_UTTERLY_NOSYNC and \ref MDBX_SAFE_NOSYNC,
+ *       while `MDBX_UTTERLY_NOSYNC` acts basically the same as `MDB_NOSYNC`.
  *
- * If the database is already exist and parameters specified early by
- * \ref mdbx_env_set_geometry() are incompatible (i.e. for instance, different
- * page size) then \ref mdbx_env_open() will return \ref MDBX_INCOMPATIBLE
- * error.
+ * \note The `MDB_NOLOCK` flag don't supported by MDBX, try use \ref MDBX_EXCLUSIVE as a replacement.
+ *
+ * \note MDBX don't allow to mix processes with different \ref MDBX_SAFE_NOSYNC or \ref MDBX_UTTERLY_NOSYNC
+ *       flags on the same environment. In such case \ref MDBX_INCOMPATIBLE will be returned.
+ *       You can try to combine the \ref MDBX_ACCEDE flag to opend a database/environment which is already
+ *       used by another process(es) with unknown mode/flags.
+ *
+ * If the database is already exist and parameters specified early by \ref mdbx_env_set_geometry() are incompatible
+ * (i.e. for instance, different page size) then \ref mdbx_env_open() will return \ref MDBX_INCOMPATIBLE or \ref
+ * MDBX_TOO_LARGE error.
  *
  * \param [in] mode   The UNIX permissions to set on created files.
  *                    Zero value means to open existing, but do not create.

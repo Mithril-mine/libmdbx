@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-246-ga9370ce8 at 2026-07-01T10:29:41+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-251-g06d0f3ad at 2026-07-04T12:31:19+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -1529,6 +1529,7 @@ MDBX_INTERNAL bool env_is_page_incore(MDBX_env *const env, pgno_t pgno);
 MDBX_INTERNAL void env_clear_incore_cache(const MDBX_env *const env);
 
 MDBX_INTERNAL void env_options_init(MDBX_env *env);
+MDBX_INTERNAL void lck_options_init_defaults(MDBX_env *env, lck_t *lck);
 MDBX_INTERNAL void env_options_adjust_defaults(MDBX_env *env);
 MDBX_INTERNAL void env_options_adjust_dp_limit(MDBX_env *env);
 MDBX_INTERNAL pgno_t default_dp_limit(const MDBX_env *env);
@@ -9721,6 +9722,15 @@ static uint8_t default_dp_loose_limit(const MDBX_env *env) {
   return 64;
 }
 
+static size_t default_presync_threshold_bytes(const MDBX_env *env) {
+  (void)env;
+  return 256 * 1024;
+}
+
+void lck_options_init_defaults(MDBX_env *env, lck_t *lck) {
+  lck->presync_threshold.weak = bytes_ceil2os_pgno(env, default_presync_threshold_bytes(env));
+}
+
 void env_options_init(MDBX_env *env) {
   env->options.rp_augment_limit = default_rp_augment_limit(env);
   env->options.dp_reserve_limit = default_dp_reserve_limit(env);
@@ -10086,6 +10096,17 @@ __cold int mdbx_env_set_option(MDBX_env *env, const MDBX_option_t option, uint64
       env->options.split_reserve_dot16 = (uint16_t)value;
     break;
 
+  case MDBX_opt_presync_threshold:
+    if (!env->lck)
+      err = MDBX_EPERM;
+    else if (value == /* default */ UINT64_MAX)
+      env->lck->presync_threshold.weak = bytes_ceil2os_pgno(env, default_presync_threshold_bytes(env));
+    else if (value > INT_MAX)
+      err = MDBX_EINVAL;
+    else
+      env->lck->presync_threshold.weak = min_unsigned(bytes_ceil2os_pgno(env, (size_t)value), 1);
+    break;
+
   default:
     return LOG_IFERR(MDBX_EINVAL);
   }
@@ -10194,6 +10215,10 @@ __cold int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t option, 
 
   case MDBX_opt_split_reserve:
     *pvalue = env->options.split_reserve_dot16;
+    break;
+
+  case MDBX_opt_presync_threshold:
+    *pvalue = env->lck ? pgno2bytes(env, env->lck->presync_threshold.weak) : 0;
     break;
 
   default:
@@ -21183,7 +21208,7 @@ retry:;
 
   const troika_t troika = (txn_owned || should_unlock) ? env->basal_txn->wr.troika : meta_tap(env);
   const meta_ptr_t head = meta_recent(env, &troika);
-  const uint64_t unsynced_pages = atomic_load64(&env->lck->unsynced_pages, mo_Relaxed);
+  uint64_t unsynced_pages = atomic_load64(&env->lck->unsynced_pages, mo_Relaxed);
   if (unsynced_pages == 0) {
     const uint32_t synched_meta_txnid_u32 = atomic_load32(&env->lck->meta_sync_txnid, mo_Relaxed);
     if (synched_meta_txnid_u32 == (uint32_t)head.txnid && head.is_steady)
@@ -21208,6 +21233,7 @@ retry:;
 
   const size_t autosync_threshold = atomic_load32(&env->lck->autosync_threshold, mo_Relaxed);
   const uint64_t autosync_period = atomic_load64(&env->lck->autosync_period, mo_Relaxed);
+  const size_t presync_threshold = min_unsigned(atomic_load32(&env->lck->presync_threshold, mo_Relaxed), 1);
   uint64_t eoos_timestamp;
   if (force || (autosync_threshold && unsynced_pages >= autosync_threshold) ||
       (autosync_period && (eoos_timestamp = atomic_load64(&env->lck->eoos_timestamp, mo_Relaxed)) &&
@@ -21216,11 +21242,10 @@ retry:;
 
   if (!txn_owned) {
     if (!should_unlock) {
-      unsigned wops = 0;
-
       int err;
+    retry_presync:
       /* pre-sync to avoid latency for writer */
-      if (unsynced_pages > /* FIXME: define threshold */ 42 && (flags & ENV_UNSYNC) == 0) {
+      if (unsynced_pages > presync_threshold) {
         eASSERT0(env, ((flags ^ env->flags) & MDBX_WRITEMAP) == 0);
         if (flags & MDBX_WRITEMAP) {
           /* Acquire guard to avoid collision with remap */
@@ -21245,7 +21270,6 @@ retry:;
         if (unlikely(err != MDBX_SUCCESS))
           return err;
 
-        wops = 1;
         /* pre-sync done */
         rc = MDBX_SUCCESS /* means "some data was synced" */;
       }
@@ -21254,9 +21278,14 @@ retry:;
       if (unlikely(err != MDBX_SUCCESS))
         return err;
 
+      uint64_t unsynced_pages_retry = atomic_load64(&env->lck->unsynced_pages, mo_Relaxed);
+      if (unsynced_pages_retry > unsynced_pages + presync_threshold) {
+        unsynced_pages = unsynced_pages_retry;
+        lck_txn_unlock(env);
+        goto retry_presync;
+      }
+
       should_unlock = true;
-      if (MDBX_ENABLE_PGOP_STAT)
-        env->lck->pgops.wops.weak += wops;
       env->basal_txn->wr.troika = meta_tap(env);
       eASSERT0(env, !env->txn && !env->basal_txn->nested);
       goto retry;
@@ -26888,6 +26917,7 @@ __cold static int lck_setup_locked(MDBX_env *env) {
 
   if (env->lck_mmap.fd == INVALID_HANDLE_VALUE) {
     env->lck = lckless_stub(env);
+    lck_options_init_defaults(env, env->lck);
     env->max_readers = UINT_MAX;
     DEBUG("lck-setup:%s%s%s", " lck-less", (env->flags & MDBX_RDONLY) ? " readonly" : "",
           (lck_seize_rc == MDBX_RESULT_TRUE) ? " exclusive" : " cooperative");
@@ -26966,6 +26996,7 @@ __cold static int lck_setup_locked(MDBX_env *env) {
     jitter4testing(false);
     lck->magic_and_version = MDBX_LOCK_MAGIC;
     lck->os_and_format = MDBX_LOCK_FORMAT;
+    lck_options_init_defaults(env, lck);
     lck->pgops.wops.weak = 1;
     err = osal_msync(&env->lck_mmap, (size_t)size, MDBX_SYNC_DATA | MDBX_SYNC_SIZE);
     if (unlikely(err != MDBX_SUCCESS)) {
@@ -41903,10 +41934,10 @@ __dll_export
         0,
         14,
         2,
-        246,
+        251,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.246 */
-        {"2026-07-01T10:29:41+03:00", "c90e3589cfe3f9b704e9d135c4e398c4b8f1a003", "a9370ce8dff10b3b719ab9257c8ed763068b1122", "v0.14.2-246-ga9370ce8"},
+                                        0.14.2.251 */
+        {"2026-07-04T12:31:19+03:00", "41ff7982ed05e02f145e0607377fd8c07107de56", "06d0f3adc9ada67e3eff0cb0beca2b102a59685b", "v0.14.2-251-g06d0f3ad"},
         sourcery};
 
 __dll_export
