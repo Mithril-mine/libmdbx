@@ -1244,3 +1244,6 @@ wcstombs
 wcstoul
 __C_specific_handler
 _except_handler4_common
+_except_handler4
+_except_handler3
+__chkstk

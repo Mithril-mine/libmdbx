@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-293-g43618122 at 2026-07-13T02:40:29+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-302-g904f30d7 at 2026-07-15T01:38:18+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY c66fe3bf2ba78557c9b02e51851ce8bbbccb58a96dc20c81a5bc591858a8a1f2_v0_14_2_293_g43618122
+#define MDBX_BUILD_SOURCERY 4bc165947f79cbdada0d44ea86811edd135144f521a54f120af2d442a33aacf0_v0_14_2_302_g904f30d7
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1095,6 +1095,11 @@ template <typename T, size_t N> char (&__ArraySizeHelper(T (&array)[N]))[N];
 #define MDBX_INTERNAL
 #endif /* xMDBX_ALLOY */
 
+#if MDBX_WITHOUT_MSVC_CRT && !defined(_DEBUG)
+#pragma check_stack(off)
+#pragma runtime_checks("scu", off)
+#endif /* MDBX_WITHOUT_MSVC_CRT && !_DEBUG */
+
 /*----------------------------------------------------------------------------*/
 /* Basic constants and types */
 
@@ -1203,11 +1208,6 @@ typedef struct {
 } osal_condpair_t;
 typedef CRITICAL_SECTION osal_fastmutex_t;
 
-#if !defined(_MSC_VER) && !defined(__try)
-#define __try
-#define __except(COND) if (/* (void)(COND), */ false)
-#endif /* stub for MSVC's __try/__except */
-
 #if MDBX_WITHOUT_MSVC_CRT
 
 #ifndef osal_malloc
@@ -1229,6 +1229,8 @@ static inline void *osal_realloc(void *ptr, size_t bytes) {
 #ifndef osal_free
 static inline void osal_free(void *ptr) { HeapFree(GetProcessHeap(), 0, ptr); }
 #endif /* osal_free */
+
+#define osal_alloca(size) _alloca(size)
 
 #else /* MDBX_WITHOUT_MSVC_CRT */
 
@@ -1286,6 +1288,10 @@ typedef pthread_mutex_t osal_fastmutex_t;
 #ifndef osal_strdup
 LIBMDBX_API char *osal_strdup(const char *str);
 #endif
+
+#ifndef osal_alloca
+#define osal_alloca(size) alloca(size)
+#endif /* osal_alloca */
 
 /*----------------------------------------------------------------------------*/
 /* OS abstraction layer stuff */
@@ -1623,7 +1629,7 @@ MDBX_MAYBE_UNUSED static inline bool osal_isdirsep(pathchar_t c) {
       c == '/';
 }
 
-MDBX_INTERNAL const char *osal_getenv(const char *name, bool secure);
+MDBX_INTERNAL const char *osal_getenv_singlethreaded(const char *name, bool secure);
 MDBX_INTERNAL bool osal_pathequal(const pathchar_t *l, const pathchar_t *r, size_t len);
 MDBX_INTERNAL pathchar_t *osal_fileext(const pathchar_t *pathname, size_t len);
 MDBX_INTERNAL int osal_fileexists(const pathchar_t *pathname);
@@ -1693,7 +1699,7 @@ MDBX_INTERNAL int osal_mb2w(const char *const src, wchar_t **const pdst);
 
 MDBX_INTERNAL bin128_t osal_guid(const MDBX_env *);
 
-MDBX_INTERNAL bool osal_safe_peek_uint32(const void *ptr, int32_t *dest);
+MDBX_INTERNAL bool osal_safe_peek_int32(const void *ptr, int32_t *dest);
 
 /*----------------------------------------------------------------------------*/
 
@@ -1930,7 +1936,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #error MDBX_ENABLE_DBI_LOCKFREE must be defined as 0 or 1
 #endif /* MDBX_ENABLE_DBI_LOCKFREE */
 
-/** Avoid dependence from MSVC CRT and use ntdll.dll instead. */
+/** Windows: Avoids dependence from MSVC CRT or other libraries provided by compiler, but use ntdll.dll instead. */
 #ifndef MDBX_WITHOUT_MSVC_CRT
 #if defined(MDBX_BUILD_CXX) && !MDBX_BUILD_CXX && IS_WINDOWS
 #define MDBX_WITHOUT_MSVC_CRT 1
@@ -1940,6 +1946,22 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #elif !(MDBX_WITHOUT_MSVC_CRT == 0 || MDBX_WITHOUT_MSVC_CRT == 1)
 #error MDBX_WITHOUT_MSVC_CRT must be defined as 0 or 1
 #endif /* MDBX_WITHOUT_MSVC_CRT */
+
+/** Windows: Controls a method for using structural exception handling.
+ * \details
+ * When `MDBX_NATIVE_SEH` is `1/ON` the `__try`/`__except`/`__finally` operators provided by the compiler will be used,
+ * which may lead to a dependency on MSVC CRT. When `MDBX_NATIVE_SEH` is `0/OFF` the simplified internal implementation
+ * will be used. However, this can lead to regression in specific complex scenarios and raise suspicions when using
+ * automated code analysis tools. */
+#if !defined(MDBX_NATIVE_SEH)
+#if !(defined(_MSC_VER) || defined(__try)) || (MDBX_WITHOUT_MSVC_CRT && defined(__ia32__))
+#define MDBX_NATIVE_SEH 0
+#else
+#define MDBX_NATIVE_SEH 1
+#endif
+#elif !(MDBX_NATIVE_SEH == 0 || MDBX_NATIVE_SEH == 1)
+#error MDBX_NATIVE_SEH must be defined as 0 or 1
+#endif /* MDBX_NATIVE_SEH */
 
 /** Size of buffer used during copying a environment/database file. */
 #ifndef MDBX_ENVCOPY_WRITEBUF
@@ -3070,7 +3092,6 @@ typedef struct shared_lck {
 #define PAGELIST_LIMIT (MAX_MAPSIZE32 / MDBX_MIN_PAGESIZE)
 #endif /* MDBX_WORDBITS */
 
-#define MDBX_GOLD_RATIO_DBL 1.6180339887498948482
 #define MEGABYTE ((size_t)1 << 20)
 #define GIGABYTE ((size_t)1 << 30)
 

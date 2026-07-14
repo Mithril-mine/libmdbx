@@ -42,7 +42,7 @@ The supporting release of a stable branch with bug fixes.
  - Some deprecated enums and defines were removed from API.
 
  - On Windows platform the Windows-10 API is now used by default.
-   Previous versions are still supported, but now they should be explicitly requested during library build by defining `_WIN32_WINNT`
+   Previous versions are still supported, but now they should be explicitly requested during library build by defining `_WIN32_WINNT`.
 
 ### Improvements:
 
@@ -67,6 +67,9 @@ The supporting release of a stable branch with bug fixes.
 
  - Added adjustment of the maximum size of the database and memory mapping in the modes of using Valgrind or AddressSanitizer, which greatly simplifies the use of these tools.
 
+ - For Windows, the `MDBX_WITHOUT_MSVC_CRT=ON` build mode has been significantly improved using ntdll functions to eliminate dependence on MSVC CRT.
+   Among other things, now there is a replacement for the __try/__except/__finally operators, support for Structural Exception Handling in the `SAFESEH` mode, simple substitution of _load_config_used, etc.
+
 ### Fixes:
 
  - Fixed assertions triggering in a specific scenarios of creating and renaming tables within nested transactions.
@@ -74,8 +77,6 @@ The supporting release of a stable branch with bug fixes.
  - Fixed the [issue](https://github.com/Mithril-mine/libmdbx/issues/361) of loosing a table content after abortion the nested transaction where such table was dropped.
 
  - Fixed `ERROR_LOCK_VIOLATION` during defrag on Windows in operation modes using overlapped I/O.
-
- - Fixed a lot of typos and other minors by AI suggestions.
 
  - Fixed off-by-one bugs in the `mdbx::from_base64` and `mdbx::slice::is_printable()`.
 

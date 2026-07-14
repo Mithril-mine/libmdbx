@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-293-g43618122 at 2026-07-13T02:40:29+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-302-g904f30d7 at 2026-07-15T01:38:18+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -4219,8 +4219,8 @@ __cold intptr_t mdbx_limits_txnsize_max(intptr_t pagesize) {
                     !is_powerof2((size_t)pagesize)))
     return -1;
 
-  const uint64_t pgl_limit = pagesize * (uint64_t)(PAGELIST_LIMIT / MDBX_GOLD_RATIO_DBL);
-  const uint64_t map_limit = (uint64_t)(globals.mmap_limit / MDBX_GOLD_RATIO_DBL);
+  const uint64_t pgl_limit = pagesize * (uint64_t)(PAGELIST_LIMIT / /* gold ratio */ 1.618);
+  const size_t map_limit = (globals.mmap_limit >> 10) * 633 /* gold ratio */;
   return (pgl_limit < map_limit) ? (intptr_t)pgl_limit : (intptr_t)map_limit;
 }
 
@@ -7325,7 +7325,7 @@ __cold int mdbx_env_deleteW(const wchar_t *pathname, MDBX_env_delete_mode_t mode
   }
 
 #ifdef __e2k__ /* https://bugs.mcst.ru/bugzilla/show_bug.cgi?id=6011 */
-  MDBX_env *const dummy_env = alloca(sizeof(MDBX_env));
+  MDBX_env *const dummy_env = osal_alloca(sizeof(MDBX_env));
 #else
   MDBX_env dummy_env_silo, *const dummy_env = &dummy_env_silo;
 #endif
@@ -9122,44 +9122,44 @@ LIBMDBX_API void mdbx_cache_init(MDBX_cache_entry_t *entry) { __inline_mdbx_cach
 
 static inline double key2double(const int64_t key) {
   union {
-    uint64_t u;
-    double f;
+    uint64_t u64;
+    double f64;
   } casting;
-
-  casting.u = (key < 0) ? key + UINT64_C(0x8000000000000000) : UINT64_C(0xffffFFFFffffFFFF) - key;
-  return casting.f;
+  casting.u64 = (key < 0) ? key + UINT64_C(0x8000000000000000) : UINT64_C(0xffffFFFFffffFFFF) - key;
+  STATIC_ASSERT(sizeof(casting.u64) == sizeof(casting.f64));
+  return casting.f64;
 }
 
 static inline uint64_t double2key(const double *const ptr) {
   STATIC_ASSERT(sizeof(double) == sizeof(int64_t));
-  const int64_t i = *(const int64_t *)ptr;
-  const uint64_t u = (i < 0) ? UINT64_C(0xffffFFFFffffFFFF) - i : i + UINT64_C(0x8000000000000000);
+  const int64_t i64 = *(const int64_t *)ptr;
+  const uint64_t u64 = (i64 < 0) ? UINT64_C(0xffffFFFFffffFFFF) - i64 : i64 + UINT64_C(0x8000000000000000);
   if (CHECKS1_ENABLED()) {
-    const double f = key2double(u);
-    ENSURE(memcmp(&f, ptr, sizeof(double)) == 0);
+    const double f64 = key2double(u64);
+    ENSURE(memcmp(&f64, ptr, sizeof(double)) == 0);
   }
-  return u;
+  return u64;
 }
 
 static inline float key2float(const int32_t key) {
   union {
-    uint32_t u;
-    float f;
+    uint64_t u32;
+    double f32;
   } casting;
-
-  casting.u = (key < 0) ? key + UINT32_C(0x80000000) : UINT32_C(0xffffFFFF) - key;
-  return casting.f;
+  casting.u32 = (key < 0) ? key + UINT32_C(0x80000000) : UINT32_C(0xffffFFFF) - key;
+  STATIC_ASSERT(sizeof(casting.u32) == sizeof(casting.f32));
+  return casting.f32;
 }
 
 static inline uint32_t float2key(const float *const ptr) {
   STATIC_ASSERT(sizeof(float) == sizeof(int32_t));
-  const int32_t i = *(const int32_t *)ptr;
-  const uint32_t u = (i < 0) ? UINT32_C(0xffffFFFF) - i : i + UINT32_C(0x80000000);
+  const int32_t i32 = *(const int32_t *)ptr;
+  const uint32_t u32 = (i32 < 0) ? UINT32_C(0xffffFFFF) - i32 : i32 + UINT32_C(0x80000000);
   if (CHECKS1_ENABLED()) {
-    const float f = key2float(u);
-    ENSURE(memcmp(&f, ptr, sizeof(float)) == 0);
+    const float f32 = key2float(u32);
+    ENSURE(memcmp(&f32, ptr, sizeof(float)) == 0);
   }
-  return u;
+  return u32;
 }
 
 uint64_t mdbx_key_from_double(const double ieee754_64bit) { return double2key(&ieee754_64bit); }
@@ -9179,12 +9179,12 @@ uint32_t mdbx_key_from_ptrfloat(const float *const ieee754_32bit) { return float
 
 static inline int clz64(uint64_t value) {
 #if __GNUC_PREREQ(4, 1) || __has_builtin(__builtin_clzl)
-  if (sizeof(value) == sizeof(int))
-    return __builtin_clz(value);
-  if (sizeof(value) == sizeof(long))
-    return __builtin_clzl(value);
+  if (sizeof(value) == sizeof(unsigned int))
+    return __builtin_clz((unsigned int)value);
+  if (sizeof(value) == sizeof(unsigned long))
+    return __builtin_clzl((unsigned long)value);
 #if (defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ == 8) || __has_builtin(__builtin_clzll)
-  return __builtin_clzll(value);
+  return __builtin_clzll((unsigned long long)value);
 #endif /* have(long long) && long long == uint64_t */
 #endif /* GNU C */
 
@@ -9219,7 +9219,7 @@ static inline int clz64(uint64_t value) {
 static inline uint64_t round_mantissa(const uint64_t u64, int shift) {
   ASSERT(shift < 0 && u64 > 0);
   shift = -shift;
-  const unsigned half = 1 << (shift - 1);
+  const uint64_t half = UINT64_C(1) << (shift - 1);
   const unsigned lsb = 1 & (unsigned)(u64 >> shift);
   const unsigned tie2even = 1 ^ lsb;
   return (u64 + half - tie2even) >> shift;
@@ -9241,8 +9241,8 @@ uint64_t mdbx_key_from_jsonInteger(const int64_t json_integer) {
     const uint64_t exponent = (uint64_t)IEEE754_DOUBLE_EXPONENTA_BIAS + IEEE754_DOUBLE_MANTISSA_SIZE - shift;
     ASSERT(exponent > 0 && exponent <= IEEE754_DOUBLE_EXPONENTA_MAX);
     const uint64_t key = bias + (exponent << IEEE754_DOUBLE_MANTISSA_SIZE) + (mantissa - IEEE754_DOUBLE_IMPLICIT_LEAD);
-#if !defined(_MSC_VER) || !MDBX_WITHOUT_MSVC_CRT /* Workaround for MSVC error LNK2019: unresolved external             \
-                                             symbol __except1 referenced in function __ftol3_except */
+#if !MDBX_WITHOUT_MSVC_CRT /* Workaround for MSVC error LNK2019: unresolved external symbol __except1                  \
+                               referenced in function __ftol3_except */
     ASSERT(key == mdbx_key_from_double((double)json_integer));
 #endif /* Workaround for MSVC */
     return key;
@@ -9263,8 +9263,8 @@ uint64_t mdbx_key_from_jsonInteger(const int64_t json_integer) {
     ASSERT(exponent > 0 && exponent <= IEEE754_DOUBLE_EXPONENTA_MAX);
     const uint64_t key =
         bias - 1 - (exponent << IEEE754_DOUBLE_MANTISSA_SIZE) - (mantissa - IEEE754_DOUBLE_IMPLICIT_LEAD);
-#if !defined(_MSC_VER) || !MDBX_WITHOUT_MSVC_CRT /* Workaround for MSVC error LNK2019: unresolved external             \
-                                             symbol __except1 referenced in function __ftol3_except */
+#if !MDBX_WITHOUT_MSVC_CRT /* Workaround for MSVC error LNK2019: unresolved external symbol __except1                  \
+                              referenced in function __ftol3_except */
     ASSERT(key == mdbx_key_from_double((double)json_integer));
 #endif /* Workaround for MSVC */
     return key;
@@ -11867,7 +11867,11 @@ __cold static int audit_ex_locked(MDBX_txn *txn, const size_t retired_stored, co
 #endif /* MDBX_ENABLE_DBI_SPARSE */
   }
 
-  struct audit_ctx ctx = {0, alloca(done_bitmap_size)};
+  size_t onstack_bitmap_buffer[MDBX_WORDBITS];
+  struct audit_ctx ctx = {0, (done_bitmap_size > sizeof(onstack_bitmap_buffer)) ? osal_malloc(done_bitmap_size)
+                                                                                : (void *)&onstack_bitmap_buffer};
+  if (unlikely(!ctx.done_bitmap))
+    return MDBX_ENOMEM;
   memset(ctx.done_bitmap, 0, done_bitmap_size);
   ctx.used =
       NUM_METAS + audit_db_used(dbi_dig(txn, FREE_DBI, nullptr)) + audit_db_used(dbi_dig(txn, MAIN_DBI, nullptr));
@@ -11886,6 +11890,9 @@ __cold static int audit_ex_locked(MDBX_txn *txn, const size_t retired_stored, co
               txn->txnid, dbi, (int)env->kvs[dbi].name.iov_len, (const char *)env->kvs[dbi].name.iov_base,
               dbi_state(txn, dbi));
   }
+
+  if (ctx.done_bitmap != (void *)&onstack_bitmap_buffer)
+    osal_free(ctx.done_bitmap);
 
   if (pending + gc + ctx.used == txn->geo.first_unallocated)
     return MDBX_SUCCESS;
@@ -21789,7 +21796,7 @@ static bool mincore_fetch(MDBX_env *const env, const size_t unit_begin) {
   if (MDBX_ENABLE_PGOP_STAT)
     env->lck->pgops.mincore.weak += 1;
 
-  uint8_t *const vector = alloca(pages);
+  uint8_t *const vector = osal_alloca(pages);
   if (unlikely(mincore(ptr_disp(env->dxb_mmap.base, offset), length, (void *)vector))) {
     NOTICE("mincore(+%zu, %zu), err %d", offset, length, errno);
     return false;
@@ -24785,6 +24792,21 @@ static void mdbx_fini(void);
  * automatically use DllMainCRTStartup() from CRT library, which also
  * automatically call DllMain() from our mdbx.dll */
 #pragma comment(linker, "/ENTRY:DllMain")
+
+#if defined(_M_IX86) || defined(_X86_)
+/*
+ * The following two names are automatically created by the linker for any
+ * image that has the safe exception table present.
+ */
+extern PVOID __safe_se_handler_table[]; /* base of safe handler entry table */
+extern BYTE __safe_se_handler_count;    /* absolute symbol whose address is the count of table entries */
+
+const __declspec(selectany) IMAGE_LOAD_CONFIG_DIRECTORY _load_config_used = {
+    .SEHandlerTable = (SIZE_T)__safe_se_handler_table,
+    .SEHandlerCount = (SIZE_T)&__safe_se_handler_count,
+    .Size = sizeof(_load_config_used)};
+#endif /* x86 */
+
 #endif /* MDBX_WITHOUT_MSVC_CRT */
 
 BOOL APIENTRY DllMain(HANDLE module, DWORD reason, LPVOID reserved)
@@ -24937,7 +24959,7 @@ __cold static __attribute__((__destructor__)) void mdbx_global_destructor(void) 
 struct libmdbx_globals globals;
 
 static bool getenv_bool(const char *name, bool default_value) {
-  const char *value = osal_getenv(name, false);
+  const char *value = osal_getenv_singlethreaded(name, false);
   if (value) {
     if (*value == 0 /* implied ON */)
       return true;
@@ -24973,9 +24995,9 @@ __cold static size_t mmap_limit(void) {
   STATIC_ASSERT(MAX_MAPSIZE < INTPTR_MAX);
   size_t limit = MAX_MAPSIZE;
 
-  const uint64_t asan_limit = UINT64_C(16384) * GIGABYTE;
+  const uint64_t asan_limit = UINT64_C(16383) * GIGABYTE;
   if (RUNNING_ON_ASAN && limit > asan_limit)
-    limit = asan_limit;
+    limit = (size_t)asan_limit;
 
   const size_t valgrind_limit = (MDBX_WORDBITS < 64) ? 512 * MEGABYTE : (size_t)(32 * GIGABYTE);
   if (mdbx_running_on_Valgrind() && limit > valgrind_limit)
@@ -25224,6 +25246,7 @@ __dll_export
 #endif /* MacOS */
 #if IS_WINDOWS
     " WITHOUT_MSVC_CRT=" MDBX_STRINGIFY(MDBX_WITHOUT_MSVC_CRT)
+    " NATIVE_SEH=" MDBX_STRINGIFY(MDBX_NATIVE_SEH)
     " BUILD_SHARED_LIBRARY=" MDBX_STRINGIFY(MDBX_BUILD_SHARED_LIBRARY)
 #if !MDBX_BUILD_SHARED_LIBRARY
     " MANUAL_MODULE_HANDLER=" MDBX_STRINGIFY(MDBX_MANUAL_MODULE_HANDLER)
@@ -26518,13 +26541,9 @@ int lck_txn_lock(MDBX_env *env, bool dontwait) {
     if (!TryEnterCriticalSection(&env->dxb_event_cs))
       return MDBX_BUSY;
   } else {
-    __try {
-      EnterCriticalSection(&env->dxb_event_cs);
-    } __except ((GetExceptionCode() == 0xC0000194 /* STATUS_POSSIBLE_DEADLOCK / EXCEPTION_POSSIBLE_DEADLOCK */)
-                    ? EXCEPTION_EXECUTE_HANDLER
-                    : EXCEPTION_CONTINUE_SEARCH) {
-      return MDBX_EDEADLK;
-    }
+    int err = osal_fastmutex_acquire(&env->dxb_event_cs);
+    if (unlikely(err != MDBX_SUCCESS))
+      return err;
   }
 
   eASSERT0(env, !env->basal_txn || !env->basal_txn->owner);
@@ -26571,17 +26590,11 @@ void lck_txn_unlock(MDBX_env *env) {
 #define LCK_UPPER LCK_UP_OFFSET, LCK_UP_LEN
 
 int lck_rdt_lock(MDBX_env *env) {
-  int rc;
   imports.srwl_AcquireShared(&env->remap_lock);
 
-  __try {
-    EnterCriticalSection(&env->lck_event_cs);
-  } __except ((GetExceptionCode() == 0xC0000194 /* STATUS_POSSIBLE_DEADLOCK / EXCEPTION_POSSIBLE_DEADLOCK */)
-                  ? EXCEPTION_EXECUTE_HANDLER
-                  : EXCEPTION_CONTINUE_SEARCH) {
-    rc = MDBX_EDEADLK;
+  int rc = osal_fastmutex_acquire(&env->lck_event_cs);
+  if (unlikely(rc != MDBX_SUCCESS))
     goto bailout;
-  }
 
   if (env->lck_mmap.fd == INVALID_HANDLE_VALUE)
     goto done; /* readonly database in readonly filesystem */
@@ -27500,7 +27513,7 @@ __cold const char *object2class(const void *ptr) {
     return "null";
 
   int32_t snap_signature = 0;
-  if (!osal_safe_peek_uint32(ptr, &snap_signature))
+  if (!osal_safe_peek_int32(ptr, &snap_signature))
     return "bad";
 
   switch (snap_signature) {
@@ -29079,7 +29092,9 @@ typedef struct _FILE_PROVIDER_EXTERNAL_INFO_V1 {
 #define ERROR_NOT_CAPABLE 775L
 #endif
 
-#endif /* _WIN32 || _WIN64 */
+#else  /* Windows */
+static const char dev_null[] = "/dev/null";
+#endif /* !Windows */
 
 /*----------------------------------------------------------------------------*/
 
@@ -29382,20 +29397,150 @@ int osal_fastmutex_destroy(osal_fastmutex_t *fastmutex) {
 #endif
 }
 
+#if IS_WINDOWS
+
+#if MDBX_NATIVE_SEH
+#define SEH_TRY(catch)                                                                                                 \
+  const size_t _seh_filter = (catch);                                                                                  \
+  __try
+#define SEH_CATCH                                                                                                      \
+  __except ((GetExceptionCode() == _seh_filter ||                                                                      \
+             (_seh_filter == EXCEPTION_ACCESS_VIOLATION && GetExceptionCode() == EXCEPTION_IN_PAGE_ERROR))             \
+                ? EXCEPTION_EXECUTE_HANDLER                                                                            \
+                : EXCEPTION_CONTINUE_SEARCH)
+#else
+typedef struct seh_simple_context {
+  EXCEPTION_REGISTRATION_RECORD Registration;
+  size_t filter;
+  void *recovery; /* address of recovery/handling/finalization code */
+} seh_ctx_t;
+
+EXCEPTION_DISPOSITION NTAPI
+#ifdef _Function_class_
+_Function_class_(EXCEPTION_ROUTINE)
+#endif /* _Function_class_ */
+    mdbx_simple_SEH(_Inout_ struct _EXCEPTION_RECORD *pExceptionRecord, _In_ PVOID EstablisherFrame,
+                    _Inout_ struct _CONTEXT *pContextRecord, _In_ PVOID DispatcherContext) {
+  (void)DispatcherContext;
+  (void)EstablisherFrame;
+  if (pExceptionRecord->ExceptionCode) {
+    NT_TIB *const TIB = (NT_TIB *)NtCurrentTeb();
+    seh_ctx_t *seh = (seh_ctx_t *)TIB->ExceptionList;
+    do {
+      if (seh->Registration.Handler == mdbx_simple_SEH &&
+          (seh->filter == pExceptionRecord->ExceptionCode ||
+           (seh->filter == EXCEPTION_ACCESS_VIOLATION && pExceptionRecord->ExceptionCode == EXCEPTION_IN_PAGE_ERROR))) {
+#ifdef _WIN64
+        pContextRecord->Rip = (uintptr_t)seh->recovery;
+#else
+        pContextRecord->Eip = (uintptr_t)seh->recovery;
+#endif
+        seh->recovery = 0;
+        return ExceptionContinueExecution;
+      }
+      seh = (seh_ctx_t *)seh->Registration.Next;
+    } while (seh);
+  }
+  return ExceptionContinueSearch;
+}
+
+#if defined(_MSC_VER) && !defined(__clang__)
+#define _SEH_SETUP_RECOVERY(CTX, LABEL) __asm { mov [CTX.recovery], offset LABEL }
+#else
+#define _SEH_SETUP_RECOVERY(CTX, LABEL) CTX.recovery = &&LABEL;
+#endif
+
+#define SEH_TRY(catch)                                                                                                 \
+  seh_ctx_t _seh_ctx;                                                                                                  \
+  NT_TIB *const _TIB = (NT_TIB *)NtCurrentTeb();                                                                       \
+  _seh_ctx.Registration.Handler = mdbx_simple_SEH;                                                                     \
+  _seh_ctx.filter = (catch);                                                                                           \
+  _SEH_SETUP_RECOVERY(_seh_ctx, _seh_recovery)                                                                         \
+  _seh_ctx.Registration.Next = _TIB->ExceptionList;                                                                    \
+  _TIB->ExceptionList = &_seh_ctx.Registration;
+
+#define SEH_CATCH                                                                                                      \
+  _seh_recovery:                                                                                                       \
+  if (_TIB->ExceptionList == &_seh_ctx.Registration)                                                                   \
+    _TIB->ExceptionList = _seh_ctx.Registration.Next;                                                                  \
+  if (!_seh_ctx.recovery)
+
+#endif /* !MDBX_NATIVE_SEH */
+#endif /* IS_WINDOWS */
+
+#if IS_WINDOWS && !MDBX_NATIVE_SEH
+#ifdef __clang__
+/* FIXME: TODO */
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4740) /* flow in or out of inline asm code suppresses global optimization */
+#elif defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wpedantic"
+#endif
+#endif /* IS_WINDOWS && !MDBX_NATIVE_SEH */
 int osal_fastmutex_acquire(osal_fastmutex_t *fastmutex) {
 #if IS_WINDOWS
-  __try {
-    EnterCriticalSection(fastmutex);
-  } __except ((GetExceptionCode() == 0xC0000194 /* STATUS_POSSIBLE_DEADLOCK / EXCEPTION_POSSIBLE_DEADLOCK */)
-                  ? EXCEPTION_EXECUTE_HANDLER
-                  : EXCEPTION_CONTINUE_SEARCH) {
-    return MDBX_EDEADLK;
-  }
+  SEH_TRY(0xC0000194 /* STATUS_POSSIBLE_DEADLOCK / EXCEPTION_POSSIBLE_DEADLOCK */) { EnterCriticalSection(fastmutex); }
+  SEH_CATCH { return MDBX_EDEADLK; }
   return MDBX_SUCCESS;
 #else
+  /* !IS_WINDOWS */
   return osal_pthread_mutex_lock(fastmutex);
 #endif
 }
+
+bool osal_safe_peek_int32(const void *ptr, int32_t *dest) {
+  bool done = false;
+  *dest = 0;
+
+#if IS_WINDOWS
+  SEH_TRY(EXCEPTION_ACCESS_VIOLATION) {
+    if (IsBadReadPtr(ptr, 4) == 0) {
+      memcpy(dest, ptr, 4);
+      done = true;
+    }
+  }
+  SEH_CATCH { return false; }
+#else
+  static volatile int nullfd = -1;
+  int fd = nullfd; /* we sure int read is atomic */
+  if (fd < 0) {
+    static pthread_mutex_t nullfd_mutex = PTHREAD_MUTEX_INITIALIZER;
+    pthread_mutex_lock(&nullfd_mutex);
+    fd = nullfd;
+    if (fd < 0) {
+      fd = open(dev_null, O_WRONLY
+#ifdef O_CLOEXEC
+                              | O_CLOEXEC
+#endif /* O_CLOEXEC */
+      );
+      if (unlikely(fd < 0)) {
+        pthread_mutex_unlock(&nullfd_mutex);
+        ERROR("unable open(%s), err %d", dev_null, errno);
+        return false;
+      }
+      nullfd = fd; /* we sure int write is atomic */
+    }
+    pthread_mutex_unlock(&nullfd_mutex);
+  }
+  if (write(fd, ptr, 4) == 4) {
+    memcpy(dest, ptr, 4);
+    done = true;
+  }
+#endif
+  return done;
+}
+
+#if IS_WINDOWS && !MDBX_NATIVE_SEH
+#ifdef __clang__
+/* FIXME: TODO */
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#elif defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif
+#endif /* IS_WINDOWS && !MDBX_NATIVE_SEH */
 
 int osal_fastmutex_release(osal_fastmutex_t *fastmutex) {
 #if IS_WINDOWS
@@ -30072,10 +30217,6 @@ bool osal_pathequal(const pathchar_t *l, const pathchar_t *r, size_t len) {
 #endif
 }
 
-#if !IS_WINDOWS
-static const char dev_null[] = "/dev/null";
-#endif /* !Windows */
-
 int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env, const pathchar_t *pathname,
                   mdbx_filehandle_t *fd, mdbx_mode_t unix_mode_bits) {
   *fd = INVALID_HANDLE_VALUE;
@@ -30202,18 +30343,32 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 
   /* Safeguard for https://libmdbx.dqdkfa.ru/dead-github/issues/144 */
 #if STDIN_FILENO == 0 && STDOUT_FILENO == 1 && STDERR_FILENO == 2
-  int stub_fd0 = -1, stub_fd1 = -1, stub_fd2 = -1;
+  /* When opening a database in the switched daemon mode program, the standard file descriptors can be closed, and the
+   * newly opened here file descriptor can get one of the those values. In this cases, using such a descriptor to
+   * interact with the database is extremely dangerous, since in a complex application using many libraries with
+   * dependencies, it cannot be guaranteed that no one component continued to use the standard value of the descriptor
+   * and thus will perform unexpected input/output to the database file and damage it.
+   *
+   * To prevent the described situation, several safety measures are being taken here:
+   *  1. If any of the descriptors 0-2 is closed, an attempt will be made to open it for /dev/null.
+   *     This ensures that the subsequent dup() returns a handle greater than 2.
+   *  2. If the descriptor open to the database is less than or equal to 2,
+   *     it will be duplicated using dup() so that the total value is greater than 2.
+   *  3. All temporarily open descriptors are closed,
+   *     including those open to the database if its value is less than or equal to 2.
+   */
+  int hazardous_fd0 = -1, hazardous_fd1 = -1, hazardous_fd2 = -1;
   if (!is_valid_fd(STDIN_FILENO)) {
     WARNING("STD%s_FILENO/%d is invalid, open %s for temporary stub", "IN", STDIN_FILENO, dev_null);
-    stub_fd0 = open(dev_null, O_RDONLY | O_NOCTTY);
+    hazardous_fd0 = open(dev_null, O_RDONLY | O_NOCTTY);
   }
   if (!is_valid_fd(STDOUT_FILENO)) {
     WARNING("STD%s_FILENO/%d is invalid, open %s for temporary stub", "OUT", STDOUT_FILENO, dev_null);
-    stub_fd1 = open(dev_null, O_WRONLY | O_NOCTTY);
+    hazardous_fd1 = open(dev_null, O_WRONLY | O_NOCTTY);
   }
   if (!is_valid_fd(STDERR_FILENO)) {
     WARNING("STD%s_FILENO/%d is invalid, open %s for temporary stub", "ERR", STDERR_FILENO, dev_null);
-    stub_fd2 = open(dev_null, O_WRONLY | O_NOCTTY);
+    hazardous_fd2 = open(dev_null, O_WRONLY | O_NOCTTY);
   }
 #else
 #error "Unexpected or unsupported UNIX or POSIX system"
@@ -30237,26 +30392,26 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 #if STDIN_FILENO == 0 && STDOUT_FILENO == 1 && STDERR_FILENO == 2
   if (*fd == STDIN_FILENO) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "IN", STDIN_FILENO);
-    ASSERT(stub_fd0 == -1);
-    *fd = dup(stub_fd0 = *fd);
+    ASSERT(hazardous_fd0 == -1);
+    *fd = dup(hazardous_fd0 = STDIN_FILENO);
   }
   if (*fd == STDOUT_FILENO) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "OUT", STDOUT_FILENO);
-    ASSERT(stub_fd1 == -1);
-    *fd = dup(stub_fd1 = *fd);
+    ASSERT(hazardous_fd1 == -1);
+    *fd = dup(hazardous_fd1 = STDOUT_FILENO);
   }
   if (*fd == STDERR_FILENO) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "ERR", STDERR_FILENO);
-    ASSERT(stub_fd2 == -1);
-    *fd = dup(stub_fd2 = *fd);
+    ASSERT(hazardous_fd2 == -1);
+    *fd = dup(hazardous_fd2 = STDERR_FILENO);
   }
   const int err = errno;
-  if (stub_fd0 != -1)
-    close(stub_fd0);
-  if (stub_fd1 != -1)
-    close(stub_fd1);
-  if (stub_fd2 != -1)
-    close(stub_fd2);
+  if (hazardous_fd0 != -1)
+    close(hazardous_fd0);
+  if (hazardous_fd1 != -1)
+    close(hazardous_fd1);
+  if (hazardous_fd2 != -1)
+    close(hazardous_fd2);
   if (*fd >= STDIN_FILENO && *fd <= STDERR_FILENO) {
     ERROR("Rejecting the use of a FD in the range "
           "STDIN_FILENO/%d..STDERR_FILENO/%d to prevent database corruption",
@@ -32436,9 +32591,10 @@ bin128_t osal_guid(const MDBX_env *env) {
   return uuid;
 }
 
-const char *osal_getenv(const char *name, bool secure) {
+const char *osal_getenv_singlethreaded(const char *name, bool secure) {
   (void)secure;
 #if IS_WINDOWS
+  /* We sure this function never calls in a multithreaded cases, since used used at initialization stage only. */
   static char buf[42];
   SetLastError(ERROR_OUT_OF_PAPER);
   const size_t len = GetEnvironmentVariableA(name, buf, sizeof(buf));
@@ -32462,45 +32618,6 @@ const char *osal_getenv(const char *name, bool secure) {
 #endif /* glibc >= 2.17 */
   return getenv(name);
 #endif
-}
-
-bool osal_safe_peek_uint32(const void *ptr, int32_t *dest) {
-  bool done = false;
-  *dest = 0;
-#if IS_WINDOWS
-  __try {
-    if (IsBadReadPtr(ptr, 4) == 0) {
-      memcpy(dest, ptr, 4);
-      done = true;
-    }
-  } __except (EXCEPTION_EXECUTE_HANDLER) {
-    return false;
-  }
-#else
-  static int nullfd = -1;
-  if (nullfd < 0) {
-    static pthread_mutex_t nullfd_mutex = PTHREAD_MUTEX_INITIALIZER;
-    pthread_mutex_lock(&nullfd_mutex);
-    if (nullfd < 0) {
-      nullfd = open(dev_null, O_WRONLY
-#ifdef O_CLOEXEC
-                                  | O_CLOEXEC
-#endif /* O_CLOEXEC */
-      );
-      if (unlikely(nullfd < 0)) {
-        pthread_mutex_unlock(&nullfd_mutex);
-        ERROR("unable open(%s), err %d", dev_null, errno);
-        return false;
-      }
-    }
-    pthread_mutex_unlock(&nullfd_mutex);
-  }
-  if (write(nullfd, ptr, 4) == 4) {
-    memcpy(dest, ptr, 4);
-    done = true;
-  }
-#endif
-  return done;
 }
 
 /*--------------------------------------------------------------------------*/
@@ -42109,10 +42226,10 @@ __dll_export
         0,
         14,
         2,
-        293,
+        302,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.293 */
-        {"2026-07-13T02:40:29+03:00", "afa87f6901647422f0649a54e112ca17aeeb66df", "43618122476a638b9b8690bd095e8f98c31f967c", "v0.14.2-293-g43618122"},
+                                        0.14.2.302 */
+        {"2026-07-15T01:38:18+03:00", "be00a9778c8dca21b14cb979a25c25b98d2ccf32", "904f30d76dcb4b63f4cb30c0a767715d41ab4e13", "v0.14.2-302-g904f30d7"},
         sourcery};
 
 __dll_export
