@@ -10087,7 +10087,7 @@ __cold int mdbx_env_set_option(MDBX_env *env, const MDBX_option_t option, uint64
     else if (value > INT_MAX)
       err = MDBX_EINVAL;
     else
-      env->lck->presync_threshold.weak = min_unsigned(bytes_ceil2os_pgno(env, (size_t)value), 1);
+      env->lck->presync_threshold.weak = max_unsigned(bytes_ceil2os_pgno(env, (size_t)value), 1);
     break;
 
   default:
@@ -21229,7 +21229,7 @@ retry:;
 
   const size_t autosync_threshold = atomic_load32(&env->lck->autosync_threshold, mo_Relaxed);
   const uint64_t autosync_period = atomic_load64(&env->lck->autosync_period, mo_Relaxed);
-  const size_t presync_threshold = min_unsigned(atomic_load32(&env->lck->presync_threshold, mo_Relaxed), 1);
+  const size_t presync_threshold = max_unsigned(atomic_load32(&env->lck->presync_threshold, mo_Relaxed), 1);
   uint64_t eoos_timestamp;
   if (force || (autosync_threshold && unsynced_pages >= autosync_threshold) ||
       (autosync_period && (eoos_timestamp = atomic_load64(&env->lck->eoos_timestamp, mo_Relaxed)) &&
