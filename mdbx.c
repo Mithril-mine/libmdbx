@@ -10084,7 +10084,7 @@ __cold int mdbx_env_set_option(MDBX_env *env, const MDBX_option_t option, uint64
       err = MDBX_EPERM;
     else if (value == /* default */ UINT64_MAX)
       env->lck->presync_threshold.weak = bytes_ceil2os_pgno(env, default_presync_threshold_bytes(env));
-    else if (value > INT_MAX)
+    else if (value > UINT32_C(0x80000000))
       err = MDBX_EINVAL;
     else
       env->lck->presync_threshold.weak = max_unsigned(bytes_ceil2os_pgno(env, (size_t)value), 1);
