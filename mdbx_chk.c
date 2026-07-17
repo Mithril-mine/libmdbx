@@ -383,7 +383,7 @@ static int conclude(MDBX_chk_context_t *ctx) {
                                 " at txn-id #%" PRIi64 "...",
                                 ctx->result.recent_txnid);
     flush();
-    err = error_fn("walk_pages", mdbx_env_sync_ex(ctx->env, true, false));
+    err = error_fn("mdbx_env_sync_ex", mdbx_env_sync_ex(ctx->env, true, false));
     if (err == MDBX_SUCCESS) {
       ctx->result.problems_meta -= 1;
       ctx->result.total_problems -= 1;
