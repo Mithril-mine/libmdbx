@@ -7,7 +7,7 @@ Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.3 at a release engineering stage
+## v0.14.3 is scheduled for 2026-07-23.
 
 The supporting release of a stable branch with bug fixes.
 
@@ -20,6 +20,7 @@ The supporting release of a stable branch with bug fixes.
 
  - [Cosmin Apreutesei](https://github.com/capr) for bugs reporting.
  - [stslam](https://github.com/stslam) for Embarcadero C++ Builder support.
+ - [Yi Chen](https://github.com/94xhn) for bugs fixing.
 
 ### Backward compatibility breaks:
 
@@ -72,7 +73,7 @@ The supporting release of a stable branch with bug fixes.
 
 ### Fixes:
 
- - Fixed assertions triggering in a specific scenarios of creating and renaming tables within nested transactions.
+ - Fixed assertions triggering in specific scenarios of creating and renaming tables within nested transactions.
 
  - Fixed the [issue](https://github.com/Mithril-mine/libmdbx/issues/361) of losing a table content after abortion the nested transaction where such table was dropped.
 
@@ -1536,7 +1537,7 @@ Signed-off-by: Леонид Юрьев (Leonid Yuriev) <leo@yuriev.ru>
 Это последний выпуск куста стабильных версий 0.12.x, спустя более двух
 лет после выпуска 0.12.1. Последующие выпуски 0.12.x будут формироваться
 только в случае существенных проблем/ошибок, вероятность чего близка к
-нулю. Для всех проектов находящихся в стадии активной разраборки
+нулю. Для всех проектов находящихся в стадии активной разработки
 рекомендуется использовать ветку `master`.
 
 ```

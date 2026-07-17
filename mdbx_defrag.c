@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-310-g2389b5a5 at 2026-07-15T12:48:43+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-316-g33ad000c at 2026-07-17T12:38:29+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -371,7 +371,8 @@ int main(int argc, char *argv[]) {
     const size_t preferred_batch = (step_size_MiB > INT_MAX / pages_per_MiB) ? 0 : step_size_MiB * pages_per_MiB;
     const size_t duration_limit_dot16 =
         (time_limit_seconds > SIZE_MAX >> 16) ? /* unlimited */ 0 : time_limit_seconds << /* seconds to dot16 */ 16;
-    const size_t defrag_enough = (wanna_defrag_percent < 100u) ? (info_gc.pages_gc * wanna_defrag_percent + 99u) / 100u : 0;
+    const size_t defrag_enough =
+        (wanna_defrag_percent < 100u) ? (info_gc.pages_gc * wanna_defrag_percent + 99u) / 100u : 0;
     const intptr_t acceptable_residue =
         acceptable_residue_percent ? (intptr_t)((payload_pages + 99u) / 100u * acceptable_residue_percent) : -1;
 
