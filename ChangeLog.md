@@ -113,6 +113,8 @@ The supporting release of a stable branch with bug fixes.
 
  - Fixed loss of `mincore()` cache due erase/overwrite on insert.
 
+ - Fixed missing headroom reservation in several `mdbx::buffer<>` methods.
+
 --------------------------------------------------------------------------------
 
 ## v0.14.2 "Буревестник" (stormy petrel, aka Bourevestnik) at 2026-05-14

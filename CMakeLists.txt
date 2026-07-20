@@ -134,7 +134,7 @@ if(NOT WIN32)
   if(MEMORYCHECK_COMMAND)
     set(MEMORYCHECK_TYPE Valgrind)
     set(MEMORYCHECK_SUPPRESSIONS_FILE
-        "${CMAKE_CURRENT_SOURCE_DIR}/valgrind_suppress.txt"
+        "${CMAKE_CURRENT_SOURCE_DIR}/valgrind_suppress.supp"
         CACHE FILEPATH "Suppressions file for Valgrind" FORCE)
     set(MEMORYCHECK_COMMAND_OPTIONS
         "--trace-children=yes --leak-check=full --track-origins=yes --expensive-definedness-checks=yes --error-exitcode=42 --error-markers=@VALGRIND --errors-for-leak-kinds=definite --fair-sched=yes --suppressions=${MEMORYCHECK_SUPPRESSIONS_FILE}"

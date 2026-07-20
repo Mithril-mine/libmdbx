@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-321-gfa8aef44 at 2026-07-18T04:21:04+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-348-g0537f4a7 at 2026-07-20T11:06:02+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -14525,6 +14525,9 @@ static __always_inline int couple_init(cursor_couple_t *couple, const MDBX_txn *
                 (int)z_dupfix == P_DUPFIX);
   couple->outer.checking = (CHECKS2_ENABLED() || (txn->env->flags & MDBX_VALIDATION)) ? z_pagecheck | z_leaf : z_leaf;
   couple->outer.subcur = nullptr;
+#if MDBX_DEBUG_SEARCH_DISPATCHING
+  couple->outer.search_step_counter = 42;
+#endif
 
   if (tree->flags & MDBX_DUPSORT) {
     couple->inner.cursor.signature = cur_signature_live;
@@ -14539,6 +14542,9 @@ static __always_inline int couple_init(cursor_couple_t *couple, const MDBX_txn *
     mx->cursor.top_and_flags = z_fresh_mark | z_inner;
     STATIC_ASSERT(MDBX_DUPFIXED * 2 == P_DUPFIX);
     mx->cursor.checking = couple->outer.checking + ((tree->flags & MDBX_DUPFIXED) << 1);
+#if MDBX_DEBUG_SEARCH_DISPATCHING
+    mx->cursor.search_step_counter = 421;
+#endif
   }
 
   if (unlikely(*dbi_state & DBI_STALE))
@@ -14597,12 +14603,15 @@ int cursor_dupsort_setup(MDBX_cursor *mc, const node_t *node, const page_t *mp) 
       goto bailout;
     }
     page_t *sp = node_data(node);
+    mx->nested_tree.flags = flags_db2sub(mc->tree->flags);
     mx->nested_tree.height = 1;
+    mx->nested_tree.dupfix_size = mc->tree->dupfix_size;
+    mx->nested_tree.root = 0;
     mx->nested_tree.branch_pages = 0;
     mx->nested_tree.leaf_pages = 1;
     mx->nested_tree.large_pages = 0;
+    mx->nested_tree.sequence = 0;
     mx->nested_tree.items = page_numkeys(sp);
-    mx->nested_tree.root = 0;
     mx->nested_tree.mod_txnid = mp->txnid;
     mx->cursor.top_and_flags = z_inner;
     mx->cursor.pg[0] = sp;
@@ -24991,9 +25000,9 @@ __cold static size_t assume_ram_pages(void) {
 
   size_t result = (size_t)(total_ram_pages + avail_ram_pages) / 2;
   if (RUNNING_ON_ASAN)
-    result = avail_ram_pages >> 1;
+    result >>= 1;
   if (mdbx_running_on_Valgrind())
-    result = avail_ram_pages >> 4;
+    result >>= 3;
 
   return result;
 }
@@ -25022,7 +25031,7 @@ __cold static size_t reasonable_db_maxsize(void) {
   /* Suggesting should not be more than golden ratio of the size of RAM. */
   size_t result = (globals.assume_ram_pages * 207 >> 7) << globals.sys_pagesize_ln2;
   if (result > globals.mmap_limit / 2)
-    return globals.mmap_limit / 2;
+    result = globals.mmap_limit / 2;
 
   /* Round to the nearest human-readable granulation. */
   for (size_t unit = MEGABYTE; unit; unit <<= 5) {
@@ -32671,7 +32680,7 @@ void osal_ctor(void) {
   osal_iov_max = IOV_MAX;
 #endif /* _SC_IOV_MAX */
   if (RUNNING_ON_VALGRIND && osal_iov_max > 64)
-    /* чтобы не описывать все 1024 исключения в valgrind_suppress.txt */
+    /* чтобы не описывать все 1024 исключения в valgrind_suppress.supp */
     osal_iov_max = 64;
 #endif /* MDBX_HAVE_PWRITEV */
 
@@ -42267,10 +42276,10 @@ __dll_export
         0,
         14,
         2,
-        321,
+        348,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.321 */
-        {"2026-07-18T04:21:04+03:00", "4ac6d6ef9ceb2cc21ab948ff5839e5263038610d", "fa8aef44ce18b2d0e0a0f042d5afa8195e95f113", "v0.14.2-321-gfa8aef44"},
+                                        0.14.2.348 */
+        {"2026-07-20T11:06:02+03:00", "dcf05b67ab1b3f4bba0472eae7839e197ede018c", "0537f4a78a949d77f1f697d15e9604a6da4b48f9", "v0.14.2-348-g0537f4a7"},
         sourcery};
 
 __dll_export
