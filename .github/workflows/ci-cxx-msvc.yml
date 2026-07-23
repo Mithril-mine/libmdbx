@@ -1,0 +1,57 @@
+name: ci-cxx-msvc
+
+env:
+  CI: GITHUB
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+  schedule:
+    - cron: "42 3 * * *"
+      timezone: "Europe/Moscow"
+  repository_dispatch:
+    types: [dispatch-event]
+
+permissions:
+  contents: read
+
+jobs:
+  ci-job:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolset: [v142, v143, v145]
+        cxx: [11, 14, 17, 20, 23]
+        target: [Win32, x64, ARM64]
+        build-type: [Debug, Release]
+        os: [windows-latest, windows-2022, windows-2025-vs2026]
+        exclude:
+          - os: windows-2025-vs2026
+            toolset: v143
+          - os: windows-latest
+            target: ARM64
+          - os: windows-2022
+            toolset: v145
+          - os: windows-2022
+            cxx: 23
+          - target: ARM64
+            toolset: v142
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        submodules: true
+    - name: ci-step
+      env:
+        CI_MAKE_TARGET: ""
+        CI_CMAKE_TEST_COMMAND: true
+        CXXSTD: "-std=gnu++${{ matrix.cxx }}"
+      shell: bash
+      run: |
+        . ci/ci.sh "-A|${{ matrix.target }}|-T|${{ matrix.toolset }}|-DCMAKE_BUILD_TYPE=${{ matrix.build-type }}|-DCMAKE_CXX_STANDARD=${{ matrix.cxx }}" \
+          "--config|${{ matrix.build-type }}" "--build-config|${{ matrix.build-type }}"

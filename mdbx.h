@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-348-g0537f4a7 at 2026-07-20T11:06:02+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -539,22 +539,22 @@ typedef mode_t mdbx_mode_t;
  *  - the proper implementation of DEFINE_ENUM_FLAG_OPERATORS for C++ required
  *    the constexpr feature which is broken in most old compilers;
  *  - DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK. */
-#if !defined(DEFINE_ENUM_FLAG_OPERATORS) && !defined(DOXYGEN)
+#if !defined(MDBX_DEFINE_ENUM_FLAG_OPERATORS) && !defined(DOXYGEN)
 
 #ifdef __cplusplus
 #if !defined(__cpp_constexpr) || __cpp_constexpr < 200704L || (defined(__LCC__) && __LCC__ < 124) ||                   \
     (defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ < 407) && !defined(__clang__) && !defined(__LCC__)) ||      \
     (defined(_MSC_VER) && _MSC_VER < 1910) || (defined(__clang__) && __clang_major__ < 4)
 /* The constexpr feature is not available or (may be) broken */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
 #else
 /* C always allows these operators for enums */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif /* __cpp_constexpr */
 
 /// Define operator overloads to enable bit operations on enum values that are
 /// used to define flags (based on Microsoft's DEFINE_ENUM_FLAG_OPERATORS).
-#define DEFINE_ENUM_FLAG_OPERATORS(ENUM)                                                                               \
+#define MDBX_DEFINE_ENUM_FLAG_OPERATORS(ENUM)                                                                          \
   extern "C++" {                                                                                                       \
   MDBX_NOSANITIZE_ENUM MDBX_CXX01_CONSTEXPR ENUM operator|(ENUM a, ENUM b) { return ENUM(unsigned(a) | unsigned(b)); } \
   MDBX_NOSANITIZE_ENUM MDBX_CXX14_CONSTEXPR ENUM &operator|=(ENUM &a, ENUM b) { return a = a | b; }                    \
@@ -569,21 +569,21 @@ typedef mode_t mdbx_mode_t;
   }
 #else /* __cplusplus */
 /* nope for C since it always allows these operators for enums */
-#define DEFINE_ENUM_FLAG_OPERATORS(ENUM)
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_DEFINE_ENUM_FLAG_OPERATORS(ENUM)
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif /* !__cplusplus */
 
-#elif !defined(CONSTEXPR_ENUM_FLAGS_OPERATIONS)
+#elif !defined(MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS)
 
 #ifdef __cplusplus
-/* DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
+/* MDBX_DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK */
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
 #else
 /* C always allows these operators for enums */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif
 
-#endif /* DEFINE_ENUM_FLAG_OPERATORS */
+#endif /* MDBX_DEFINE_ENUM_FLAG_OPERATORS */
 
 #ifndef MDBX_LIKELY
 #if defined(DOXYGEN) || (defined(__GNUC__) || __has_builtin(__builtin_expect)) && !defined(__COVERITY__)
@@ -975,7 +975,7 @@ typedef enum MDBX_debug_flags {
   /** Avoids UBSAN false-positive issues/traps. */
   MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 127
 } MDBX_debug_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
 
 /** \brief A log callback function that accepts a format string and arguments passed through the `va_list` pointer.
  * \see mdbx_setup_debug()
@@ -1493,7 +1493,7 @@ typedef enum MDBX_env_flags {
 
   /** end of sync_modes @} */
 } MDBX_env_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_env_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_env_flags)
 
 /** Transaction flags
  * \ingroup c_transactions
@@ -1518,7 +1518,7 @@ typedef enum MDBX_txn_flags {
  * will be ready for use with \ref mdbx_txn_renew(). This flag allows to
  * preallocate memory and assign a reader slot, thus avoiding these operations
  * at the next start of the transaction. */
-#if CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
+#if MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
   MDBX_TXN_RDONLY_PREPARE = MDBX_RDONLY | MDBX_NOMEMINIT,
 #else
   MDBX_TXN_RDONLY_PREPARE = uint32_t(MDBX_RDONLY) | uint32_t(MDBX_NOMEMINIT),
@@ -1594,7 +1594,7 @@ typedef enum MDBX_txn_flags {
    * but can't be used with \ref mdbx_txn_begin(). */
   MDBX_TXN_BLOCKED = MDBX_TXN_FINISHED | MDBX_TXN_ERROR | MDBX_TXN_HAS_CHILD | MDBX_TXN_PARKED
 } MDBX_txn_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_txn_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_txn_flags)
 
 /** \brief Table flags
  * \ingroup c_dbi
@@ -1644,7 +1644,7 @@ typedef enum MDBX_db_flags {
    * application could determine the actual flags by \ref mdbx_dbi_flags(). */
   MDBX_DB_ACCEDE = MDBX_ACCEDE
 } MDBX_db_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_db_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_db_flags)
 
 /** \brief Data changing flags
  * \ingroup c_crud
@@ -1689,7 +1689,7 @@ typedef enum MDBX_put_flags {
    * Store multiple data items in one call. */
   MDBX_MULTIPLE = UINT32_C(0x80000)
 } MDBX_put_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_put_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_put_flags)
 
 /** \brief Environment copy flags
  * \ingroup c_extra
@@ -1725,7 +1725,7 @@ typedef enum MDBX_copy_flags {
   MDBX_CP_OVERWRITE = 64u
 
 } MDBX_copy_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_copy_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_copy_flags)
 
 /** \brief Cursor operations
  * \ingroup c_cursors
@@ -3285,7 +3285,7 @@ typedef enum MDBX_warmup_flags {
   /** Release the lock that was performed before by \ref MDBX_warmup_lock. */
   MDBX_warmup_release = 16,
 } MDBX_warmup_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_warmup_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_warmup_flags)
 
 /** \brief Warms up the database by loading pages into memory, optionally lock ones.
  * \ingroup c_settings
@@ -5085,7 +5085,7 @@ typedef enum MDBX_dbi_state {
   /** Named-DB handle created in this txn */
   MDBX_DBI_CREAT = 0x08,
 } MDBX_dbi_state_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_dbi_state)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_dbi_state)
 
 /** \brief Retrieve the DB flags and status for a table handle.
  * \ingroup c_statinfo
@@ -7128,7 +7128,7 @@ typedef enum MDBX_chk_flags {
    * comparison functions. */
   MDBX_CHK_IGNORE_ORDER = 8
 } MDBX_chk_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_chk_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_chk_flags)
 
 /** \brief Levels of logging/detailing of information supplied via callbacks during a database integrity check.
  * \ingroup c_extra
@@ -7483,7 +7483,7 @@ typedef enum MDBX_defrag_stopping_reasons {
   MDBX_defrag_aborted = 64,          /**< Aborted by user */
   MDBX_defrag_error = 128            /**< An error occurred during defragmentation */
 } MDBX_defrag_stopping_reasons_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_defrag_stopping_reasons)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_defrag_stopping_reasons)
 
 /** \brief The numerical metrics of progress and result of database defragmentation.
  * \ingroup c_extra

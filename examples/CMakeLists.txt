@@ -1,7 +1,7 @@
 # Copyright (c) 2020-2026 Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> ###############################################
 # SPDX-License-Identifier: Apache-2.0
 #
-project(mdbx_ut_and_examples)
+project(mdbx_examples)
 
 if(NOT DEFINED MDBX_LIBRARY)
   set(MDBX_LIBRARY mdbx)

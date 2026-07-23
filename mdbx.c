@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-348-g0537f4a7 at 2026-07-20T11:06:02+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -63,6 +63,14 @@ typedef struct bind_reader_slot_result {
   reader_slot_t *slot;
 } bsr_t;
 
+#ifndef MDBX_64BIT_ATOMIC
+#error "The MDBX_64BIT_ATOMIC must be defined before"
+#endif /* MDBX_64BIT_ATOMIC */
+
+#ifndef MDBX_64BIT_CAS
+#error "The MDBX_64BIT_CAS must be defined before"
+#endif /* MDBX_64BIT_CAS */
+
 #ifndef __cplusplus
 
 MDBX_MAYBE_UNUSED static __always_inline void atomic_yield(void) {
@@ -125,7 +133,6 @@ MDBX_MAYBE_UNUSED static __always_inline uint32_t atomic_store32(mdbx_atomic_uin
                                                                  enum mdbx_memory_order order) {
   STATIC_ASSERT(sizeof(mdbx_atomic_uint32_t) == 4);
 #ifdef MDBX_HAVE_C11ATOMICS
-  ASSERT(atomic_is_lock_free(MDBX_c11a_rw(uint32_t, p)));
   atomic_store_explicit(MDBX_c11a_rw(uint32_t, p), value, mo_c11_store(order));
 #else  /* MDBX_HAVE_C11ATOMICS */
   if (order != mo_Relaxed)
@@ -142,7 +149,6 @@ MDBX_MAYBE_UNUSED static __always_inline uint32_t atomic_load32(const volatile m
                                                                 enum mdbx_memory_order order) {
   STATIC_ASSERT(sizeof(mdbx_atomic_uint32_t) == 4);
 #ifdef MDBX_HAVE_C11ATOMICS
-  ASSERT(atomic_is_lock_free(MDBX_c11a_ro(uint32_t, p)));
   return atomic_load_explicit(MDBX_c11a_ro(uint32_t, p), mo_c11_load(order));
 #else  /* MDBX_HAVE_C11ATOMICS */
   osal_memory_fence(order, false);
@@ -183,19 +189,16 @@ MDBX_MAYBE_UNUSED static __always_inline mdbx_pid_t atomic_store_pid(mdbx_atomic
 MDBX_MAYBE_UNUSED static __always_inline uint64_t atomic_store64(mdbx_atomic_uint64_t *p, const uint64_t value,
                                                                  enum mdbx_memory_order order) {
   STATIC_ASSERT(sizeof(mdbx_atomic_uint64_t) == 8);
-#if MDBX_64BIT_ATOMIC
 #if __GNUC_PREREQ(11, 0)
-  STATIC_ASSERT(__alignof__(mdbx_atomic_uint64_t) >= sizeof(uint64_t));
+  STATIC_ASSERT(__alignof__(mdbx_atomic_uint64_t) >= __alignof__(uint64_t));
 #endif /* GNU C >= 11 */
 #ifdef MDBX_HAVE_C11ATOMICS
-  ASSERT(atomic_is_lock_free(MDBX_c11a_rw(uint64_t, p)));
   atomic_store_explicit(MDBX_c11a_rw(uint64_t, p), value, mo_c11_store(order));
-#else  /* MDBX_HAVE_C11ATOMICS */
+#elif MDBX_64BIT_ATOMIC
   if (order != mo_Relaxed)
     osal_compiler_barrier();
   p->weak = value;
   osal_memory_fence(order, true);
-#endif /* MDBX_HAVE_C11ATOMICS */
 #else  /* !MDBX_64BIT_ATOMIC */
   osal_compiler_barrier();
   atomic_store32(&p->low, (uint32_t)value, mo_Relaxed);
@@ -213,18 +216,14 @@ MDBX_MAYBE_UNUSED static
     __always_inline
 #endif /* MDBX_64BIT_ATOMIC */
         uint64_t atomic_load64(const volatile mdbx_atomic_uint64_t *p, enum mdbx_memory_order order) {
-  STATIC_ASSERT(sizeof(mdbx_atomic_uint64_t) == 8);
-#if MDBX_64BIT_ATOMIC
 #ifdef MDBX_HAVE_C11ATOMICS
-  ASSERT(atomic_is_lock_free(MDBX_c11a_ro(uint64_t, p)));
   return atomic_load_explicit(MDBX_c11a_ro(uint64_t, p), mo_c11_load(order));
-#else  /* MDBX_HAVE_C11ATOMICS */
+#elif MDBX_64BIT_ATOMIC
   osal_memory_fence(order, false);
   const uint64_t value = p->weak;
   if (order != mo_Relaxed)
     osal_compiler_barrier();
   return value;
-#endif /* MDBX_HAVE_C11ATOMICS */
 #else  /* !MDBX_64BIT_ATOMIC */
   osal_compiler_barrier();
   uint64_t value = (uint64_t)atomic_load32(&p->high, order) << 32;
@@ -250,7 +249,6 @@ MDBX_MAYBE_UNUSED static
 MDBX_MAYBE_UNUSED static __always_inline bool atomic_cas64(mdbx_atomic_uint64_t *p, uint64_t c, uint64_t v) {
 #ifdef MDBX_HAVE_C11ATOMICS
   STATIC_ASSERT(sizeof(long long) >= sizeof(uint64_t));
-  ASSERT(atomic_is_lock_free(MDBX_c11a_rw(uint64_t, p)));
   return atomic_compare_exchange_strong(MDBX_c11a_rw(uint64_t, p), &c, v);
 #elif defined(__GNUC__) || defined(__clang__)
   return __sync_bool_compare_and_swap(&p->weak, c, v);
@@ -267,7 +265,6 @@ MDBX_MAYBE_UNUSED static __always_inline bool atomic_cas64(mdbx_atomic_uint64_t 
 MDBX_MAYBE_UNUSED static __always_inline bool atomic_cas32(mdbx_atomic_uint32_t *p, uint32_t c, uint32_t v) {
 #ifdef MDBX_HAVE_C11ATOMICS
   STATIC_ASSERT(sizeof(int) >= sizeof(uint32_t));
-  ASSERT(atomic_is_lock_free(MDBX_c11a_rw(uint32_t, p)));
   return atomic_compare_exchange_strong(MDBX_c11a_rw(uint32_t, p), &c, v);
 #elif defined(__GNUC__) || defined(__clang__)
   return __sync_bool_compare_and_swap(&p->weak, c, v);
@@ -284,7 +281,6 @@ MDBX_MAYBE_UNUSED static __always_inline bool atomic_cas32(mdbx_atomic_uint32_t 
 MDBX_MAYBE_UNUSED static __always_inline uint32_t atomic_add32(mdbx_atomic_uint32_t *p, uint32_t v) {
 #ifdef MDBX_HAVE_C11ATOMICS
   STATIC_ASSERT(sizeof(int) >= sizeof(uint32_t));
-  ASSERT(atomic_is_lock_free(MDBX_c11a_rw(uint32_t, p)));
   return atomic_fetch_add(MDBX_c11a_rw(uint32_t, p), v);
 #elif defined(__GNUC__) || defined(__clang__)
   return __sync_fetch_and_add(&p->weak, v);
@@ -312,11 +308,11 @@ MDBX_MAYBE_UNUSED static __always_inline uint64_t safe64_txnid_next(uint64_t txn
 /* Atomically make target value >= SAFE64_INVALID_THRESHOLD */
 MDBX_MAYBE_UNUSED static __always_inline void safe64_reset(mdbx_atomic_uint64_t *p, bool single_writer) {
   if (single_writer) {
-#if MDBX_64BIT_ATOMIC && MDBX_WORDBITS >= 64
+#if MDBX_64BIT_ATOMIC
     atomic_store64(p, UINT64_MAX, mo_AcquireRelease);
 #else
     atomic_store32(&p->high, UINT32_MAX, mo_AcquireRelease);
-#endif /* MDBX_64BIT_ATOMIC && MDBX_WORDBITS >= 64 */
+#endif /* MDBX_64BIT_ATOMIC */
   } else {
 #if MDBX_64BIT_CAS && MDBX_64BIT_ATOMIC
     /* atomically make value >= SAFE64_INVALID_THRESHOLD by 64-bit operation */
@@ -373,10 +369,17 @@ MDBX_MAYBE_UNUSED static __always_inline void safe64_write(mdbx_atomic_uint64_t 
   atomic_store32(&p->low, (uint32_t)v, mo_Relaxed);
   ASSERT(p->weak >= SAFE64_INVALID_THRESHOLD);
   jitter4testing(true);
+  ASSERT(p->weak >= SAFE64_INVALID_THRESHOLD);
   /* update high-part from SAFE64_INVALID_THRESHOLD to actual value */
   atomic_store32(&p->high, (uint32_t)(v >> 32), mo_AcquireRelease);
 #endif /* MDBX_64BIT_ATOMIC */
-  ASSERT(p->weak == v);
+
+  if (CHECKS0_ENABLED() && /* In the non-ancient versions, this is became a dangerous extra check, as there are
+                              scenarios of contention parallel updates */
+      0) {
+    uint64_t snap = atomic_load64(p, mo_AcquireRelease);
+    ASSERT(snap == v || snap >= SAFE64_INVALID_THRESHOLD);
+  }
   jitter4testing(true);
 }
 
@@ -462,7 +465,7 @@ typedef struct MDBX_rkl {
 MDBX_MAYBE_UNUSED MDBX_INTERNAL void rkl_init(rkl_t *rkl);
 MDBX_MAYBE_UNUSED MDBX_INTERNAL int rkl_reserve(rkl_t *rkl, size_t wanna_size);
 MDBX_MAYBE_UNUSED MDBX_INTERNAL void rkl_clear(rkl_t *rkl);
-MDBX_MAYBE_UNUSED static inline void rkl_clear_and_shrink(rkl_t *rkl) { rkl_clear(rkl); /* TODO */ }
+MDBX_MAYBE_UNUSED MDBX_INTERNAL void rkl_clear_and_shrink(rkl_t *rkl);
 MDBX_MAYBE_UNUSED MDBX_INTERNAL void rkl_destroy(rkl_t *rkl);
 MDBX_MAYBE_UNUSED MDBX_INTERNAL void rkl_destructive_move(rkl_t *src, rkl_t *dst);
 MDBX_MAYBE_UNUSED MDBX_INTERNAL __must_check_result int rkl_copy(const rkl_t *src, rkl_t *dst);
@@ -1375,7 +1378,7 @@ enum db_flags {
   DB_INTERNAL_FLAGS = DB_VALID
 };
 
-#if !defined(__cplusplus) || CONSTEXPR_ENUM_FLAGS_OPERATIONS
+#if !defined(__cplusplus) || MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS
 MDBX_MAYBE_UNUSED static void static_checks(void) {
   STATIC_ASSERT(MDBX_WORDBITS == sizeof(void *) * CHAR_BIT);
   STATIC_ASSERT(UINT64_C(0x80000000) == (uint32_t)ENV_FATAL_ERROR);
@@ -3128,7 +3131,9 @@ MDBX_INTERNAL void gc_put_destroy(gcu_t *ctx);
 #define ALLOC_COALESCE 4    /* внутреннее состояние/флажок */
 #define ALLOC_SHOULD_SCAN 8 /* внутреннее состояние/флажок */
 #define ALLOC_LIFO 16       /* внутреннее состояние/флажок */
+#if 0                       /* currently unused */
 #define ALLOC_EXACTLY 32
+#endif
 
 MDBX_INTERNAL pgr_t gc_alloc_ex(const MDBX_cursor *const mc, const size_t num, uint8_t flags);
 
@@ -6889,16 +6894,22 @@ int mdbx_dbi_close(MDBX_env *env, MDBX_dbi dbi) {
 }
 
 int mdbx_dbi_flags_ex(const MDBX_txn *txn, MDBX_dbi dbi, unsigned *flags, unsigned *state) {
-  int rc = check_txn(txn, MDBX_TXN_BLOCKED - MDBX_TXN_ERROR - MDBX_TXN_PARKED);
-  if (unlikely(rc != MDBX_SUCCESS))
-    return LOG_IFERR(rc);
-
-  rc = dbi_check(txn, dbi);
-  if (unlikely(rc != MDBX_SUCCESS))
-    return LOG_IFERR(rc);
-
   if (unlikely(!flags || !state))
     return LOG_IFERR(MDBX_EINVAL);
+
+  int rc = check_txn(txn, MDBX_TXN_BLOCKED - MDBX_TXN_ERROR - MDBX_TXN_PARKED);
+  if (unlikely(rc != MDBX_SUCCESS)) {
+    *flags = 0;
+    *state = 0;
+    return LOG_IFERR(rc);
+  }
+
+  rc = dbi_check(txn, dbi);
+  if (unlikely(rc != MDBX_SUCCESS)) {
+    *flags = 0;
+    *state = 0;
+    return LOG_IFERR(rc);
+  }
 
   *flags = txn->dbs[dbi].flags & DB_PERSISTENT_FLAGS;
   *state = txn->dbi_state[dbi] & (DBI_FRESH | DBI_CREAT | DBI_DIRTY | DBI_STALE);
@@ -22462,15 +22473,16 @@ static pgno_t gc_repnl_scan_sequence_reserve(const MDBX_txn *txn, const size_t n
   ASSERT(len >= num && num > 1);
   ASSERT((flags & ALLOC_RESERVE) != 0);
   const size_t seq = num - 1;
-#if !MDBX_PNL_ASCENDING
+#if defined(ALLOC_EXACTLY) && !MDBX_PNL_ASCENDING
   if (edge[-(ptrdiff_t)seq] - *edge == seq &&
       (likely((flags & ALLOC_EXACTLY) == 0) || len == num || edge[-(ptrdiff_t)num] - *edge != num)) {
     return *edge;
   }
-#endif /* !MDBX_PNL_ASCENDING */
+#endif /* defined(ALLOC_EXACTLY) && !MDBX_PNL_ASCENDING */
   pgno_t *target = scan4seq_impl(edge, len, seq);
   ASSERT(target == scan4range_checker(txn->wr.repnl, seq));
   while (target) {
+#if defined(ALLOC_EXACTLY)
     if (unlikely(flags & ALLOC_EXACTLY) && len > num) {
       const ptrdiff_t step = MDBX_PNL_ASCENDING ? -1 : 1;
       if (target[step] - target[0] == 1) {
@@ -22489,6 +22501,7 @@ static pgno_t gc_repnl_scan_sequence_reserve(const MDBX_txn *txn, const size_t n
       }
       /* найденная последовательность ровно необходимой длины */
     }
+#endif /* defined(ALLOC_EXACTLY) */
     const pgno_t pgno = *target;
     return pgno;
   }
@@ -22504,7 +22517,7 @@ __hot pgno_t gc_repnl_get_sequence(MDBX_txn *txn, const size_t num, uint8_t flag
   ASSERT(len >= num && num > 1);
   ASSERT((flags & ALLOC_RESERVE) == 0);
   const size_t seq = num - 1;
-#if !MDBX_PNL_ASCENDING
+#if defined(ALLOC_EXACTLY) && !MDBX_PNL_ASCENDING
   if (edge[-(ptrdiff_t)seq] - *edge == seq &&
       (likely((flags & ALLOC_EXACTLY) == 0) || len == num || edge[-(ptrdiff_t)num] - *edge != num)) {
     ASSERT(edge == scan4range_checker(txn->wr.repnl, seq));
@@ -22512,10 +22525,11 @@ __hot pgno_t gc_repnl_get_sequence(MDBX_txn *txn, const size_t num, uint8_t flag
     pnl_setsize(txn->wr.repnl, len - num);
     return *edge;
   }
-#endif /* !MDBX_PNL_ASCENDING */
+#endif /* defined(ALLOC_EXACTLY) && !MDBX_PNL_ASCENDING */
   pgno_t *target = scan4seq_impl(edge, len, seq);
   ASSERT(target == scan4range_checker(txn->wr.repnl, seq));
   while (target) {
+#if defined(ALLOC_EXACTLY)
     if (unlikely(flags & ALLOC_EXACTLY) && len > num) {
       const ptrdiff_t step = MDBX_PNL_ASCENDING ? -1 : 1;
       if (target[step] - target[0] == 1) {
@@ -22534,6 +22548,7 @@ __hot pgno_t gc_repnl_get_sequence(MDBX_txn *txn, const size_t num, uint8_t flag
       }
       /* найденная последовательность ровно необходимой длины */
     }
+#endif /* defined(ALLOC_EXACTLY) */
     const pgno_t pgno = *target;
     /* вырезаем найденную последовательность с перемещением хвоста */
     pnl_setsize(txn->wr.repnl, len - num);
@@ -25601,7 +25616,8 @@ __cold MDBX_chk_line_t *histogram_print(MDBX_chk_scope_t *scope, MDBX_chk_line_t
   return line;
 }
 
-#if !IS_WINDOWS
+#if !(defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS))
+
 /*----------------------------------------------------------------------------*
  * POSIX/non-Windows LCK-implementation */
 
@@ -25643,10 +25659,10 @@ __cold MDBX_chk_line_t *histogram_print(MDBX_chk_scope_t *scope, MDBX_chk_line_t
  *   = заблокирован весь dxb-файл посредством F_RDLCK или F_WRLCK,
  *     в зависимости от MDBX_RDONLY.
  *
- * Не-операционный режим на время пере-инициализации и разрушении lck-файла:
+ * Не-операционный режим на время пере-инициализации и разрушения lck-файла:
  *   = F_WRLCK блокировка первого байта lck-файла, другие процессы ждут её
  *     снятия при получении F_RDLCK через F_SETLKW.
- *   - блокировки dxb-файла могут меняться до снятие эксклюзивной блокировки
+ *   - блокировки dxb-файла могут меняться до снятия эксклюзивной блокировки
  *     lck-файла:
  *       + для НЕ-эксклюзивного режима блокировка pid-байта в dxb-файле
  *         посредством F_RDLCK или F_WRLCK, в зависимости от MDBX_RDONLY.
@@ -26023,10 +26039,10 @@ int lck_upgrade(MDBX_env *env, bool dont_wait) {
   const int cmd = dont_wait ? op_setlk : op_setlkw;
   int rc = lck_op(env->lck_mmap.fd, cmd, F_WRLCK, 0, 1);
   if (rc == MDBX_SUCCESS && (env->flags & MDBX_EXCLUSIVE) == 0) {
-    rc = (env->pid > 1) ? lck_op(env->lazy_fd, cmd, F_WRLCK, 0, env->pid - 1) : MDBX_SUCCESS;
+    rc = lck_op(env->lazy_fd, cmd, F_WRLCK, 0, env->pid);
     if (rc == MDBX_SUCCESS) {
       rc = lck_op(env->lazy_fd, cmd, F_WRLCK, env->pid + 1, OFF_T_MAX - env->pid - 1);
-      if (rc != MDBX_SUCCESS && env->pid > 1 && lck_setlk_with3retries(env->lazy_fd, F_UNLCK, 0, env->pid - 1))
+      if (rc != MDBX_SUCCESS && lck_setlk_with3retries(env->lazy_fd, F_UNLCK, 0, env->pid))
         rc = MDBX_PANIC;
     }
     if (rc != MDBX_SUCCESS && lck_setlk_with3retries(env->lck_mmap.fd, F_RDLCK, 0, 1))
@@ -32680,7 +32696,7 @@ void osal_ctor(void) {
   osal_iov_max = IOV_MAX;
 #endif /* _SC_IOV_MAX */
   if (RUNNING_ON_VALGRIND && osal_iov_max > 64)
-    /* чтобы не описывать все 1024 исключения в valgrind_suppress.supp */
+    /* чтобы не описывать все 1024 исключения в valgrind.supp */
     osal_iov_max = 64;
 #endif /* MDBX_HAVE_PWRITEV */
 
@@ -35350,6 +35366,15 @@ void rkl_clear(rkl_t *rkl) {
   rkl->solid_begin = UINT64_MAX;
   rkl->solid_end = 0;
   rkl->list_length = 0;
+}
+
+void rkl_clear_and_shrink(rkl_t *rkl) {
+  if (rkl->list != rkl->inplace) {
+    osal_free(rkl->list);
+    rkl->list_limit = ARRAY_LENGTH(rkl->inplace);
+    rkl->list = rkl->inplace;
+  }
+  rkl_clear(rkl);
 }
 
 void rkl_destroy(rkl_t *rkl) {
@@ -42276,10 +42301,10 @@ __dll_export
         0,
         14,
         2,
-        348,
+        393,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.348 */
-        {"2026-07-20T11:06:02+03:00", "dcf05b67ab1b3f4bba0472eae7839e197ede018c", "0537f4a78a949d77f1f697d15e9604a6da4b48f9", "v0.14.2-348-g0537f4a7"},
+                                        0.14.2.393 */
+        {"2026-07-23T14:32:18+03:00", "4f35174d231d475c526f11bed2bb2e3c16a2a0f1", "2bb56af7c5ba43a3d6e1b35aac480b568ecd8916", "v0.14.2-393-g2bb56af7"},
         sourcery};
 
 __dll_export
