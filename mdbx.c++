@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-348-g0537f4a7 at 2026-07-20T11:06:02+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -62,6 +62,14 @@ typedef struct bind_reader_slot_result {
   int err;
   reader_slot_t *slot;
 } bsr_t;
+
+#ifndef MDBX_64BIT_ATOMIC
+#error "The MDBX_64BIT_ATOMIC must be defined before"
+#endif /* MDBX_64BIT_ATOMIC */
+
+#ifndef MDBX_64BIT_CAS
+#error "The MDBX_64BIT_CAS must be defined before"
+#endif /* MDBX_64BIT_CAS */
 
 /* Сортированный набор txnid, использующий внутри комбинацию непрерывного интервала и списка.
  * Обеспечивает хранение id записей при переработке, очистку и обновлении GC, включая возврат остатков переработанных
@@ -937,7 +945,7 @@ enum db_flags {
   DB_INTERNAL_FLAGS = DB_VALID
 };
 
-#if !defined(__cplusplus) || CONSTEXPR_ENUM_FLAGS_OPERATIONS
+#if !defined(__cplusplus) || MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS
 MDBX_MAYBE_UNUSED static void static_checks(void) {
   STATIC_ASSERT(MDBX_WORDBITS == sizeof(void *) * CHAR_BIT);
   STATIC_ASSERT(UINT64_C(0x80000000) == (uint32_t)ENV_FATAL_ERROR);
@@ -2242,7 +2250,8 @@ env::operate_options::operate_options(MDBX_env_flags_t flags) noexcept
     : no_sticky_threads(((flags & (MDBX_NOSTICKYTHREADS | MDBX_EXCLUSIVE)) == MDBX_NOSTICKYTHREADS) ? true : false),
       nested_transactions((flags & (MDBX_WRITEMAP | MDBX_RDONLY)) ? false : true),
       exclusive((flags & MDBX_EXCLUSIVE) ? true : false), disable_readahead((flags & MDBX_NORDAHEAD) ? true : false),
-      disable_clear_memory((flags & MDBX_NOMEMINIT) ? true : false) {}
+      disable_clear_memory((flags & MDBX_NOMEMINIT) ? true : false),
+      enable_validation((flags & MDBX_VALIDATION) ? true : false) {}
 
 bool env::is_pristine() const { return get_stat().ms_mod_txnid == 0 && get_info().mi_recent_txnid == INITIAL_TXNID; }
 

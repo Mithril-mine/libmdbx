@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-348-g0537f4a7 at 2026-07-20T11:06:02+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -197,7 +197,7 @@
 #define MDBX_CXX20_CONSTEXPR inline
 #endif /* MDBX_CXX20_CONSTEXPR */
 
-#if CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
+#if MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
 #define MDBX_CXX01_CONSTEXPR_ENUM MDBX_CXX01_CONSTEXPR
 #define MDBX_CXX11_CONSTEXPR_ENUM MDBX_CXX11_CONSTEXPR
 #define MDBX_CXX14_CONSTEXPR_ENUM MDBX_CXX14_CONSTEXPR
@@ -209,7 +209,7 @@
 #define MDBX_CXX14_CONSTEXPR_ENUM inline
 #define MDBX_CXX17_CONSTEXPR_ENUM inline
 #define MDBX_CXX20_CONSTEXPR_ENUM inline
-#endif /* CONSTEXPR_ENUM_FLAGS_OPERATIONS */
+#endif /* MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS */
 
 /** Workaround for old compilers without support assertion inside `constexpr` functions. */
 #if defined(CONSTEXPR_ASSERT)
@@ -1580,6 +1580,9 @@ private:
 
     using allocator_pointer = typename allocator_traits::pointer;
     using allocator_const_pointer = typename allocator_traits::const_pointer;
+    using move_assign_alloc = allocation_aware_details::move_assign_alloc<silo, allocator_type>;
+    using copy_assign_alloc = allocation_aware_details::copy_assign_alloc<silo, allocator_type>;
+    using swap_alloc = allocation_aware_details::swap_alloc<silo, allocator_type>;
 
     MDBX_CXX20_CONSTEXPR ::std::pair<allocator_pointer, size_t> allocate_storage(size_t bytes) {
       MDBX_INLINE_API_ASSERT(bytes >= sizeof(bin));
@@ -1969,10 +1972,9 @@ public:
   /// \todo buffer& operator<<(buffer&, ...) for writing
   /// \todo template<class X> key(X) for encoding keys while writing
 
-  using move_assign_alloc = allocation_aware_details::move_assign_alloc<silo, allocator_type>;
-  using copy_assign_alloc = allocation_aware_details::copy_assign_alloc<silo, allocator_type>;
-  using swap_alloc = allocation_aware_details::swap_alloc<struct silo, allocator_type>;
-
+  using move_assign_alloc = typename silo::move_assign_alloc;
+  using copy_assign_alloc = typename silo::copy_assign_alloc;
+  using swap_alloc = typename silo::swap_alloc;
   static constexpr bool is_swap_nothrow() noexcept { return swap_alloc::is_nothrow(); }
 
   /// \brief Returns the associated allocator.
@@ -2169,7 +2171,7 @@ public:
 
   inline buffer(const txn &transaction, const slice &src, const allocator_type &alloc = allocator_type());
 
-  buffer(buffer &&src) noexcept(noexcept(::std::is_nothrow_move_constructible<allocator_type>::value))
+  buffer(buffer &&src) noexcept(::std::is_nothrow_move_constructible<allocator_type>::value)
       : inherited(/* no move here */ src), silo_(::std::move(src.silo_), src.is_reference()) {
     /* CoverityScan issues an erroneous warning here about using an uninitialized object. Which is not true,
      * since in C++ (unlike Rust) an object remains initialized after a move-assignment operation; Moreover,
@@ -2839,7 +2841,7 @@ enum class value_mode {
                              ///< lexicographic comparison like `std::memcmp()`.
                              ///< In terms of keys, they are not unique, i.e. has
                              ///< duplicates which are sorted by associated data values.
-#if CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
+#if MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
   multi_reverse = MDBX_DUPSORT | MDBX_REVERSEDUP,  ///< A more than one data value could be associated with
                                                    ///< each key. Internally each key is stored once, and
                                                    ///< the corresponding data values are sorted by
@@ -4476,7 +4478,7 @@ public:
   inline estimate_result estimate(const slice &key, const slice &value) const;
   inline estimate_result estimate(const slice &key) const;
   inline estimate_result estimate(move_operation operation) const;
-  inline estimate_result estimate(move_operation operation, slice &key) const;
+  inline estimate_result estimate(move_operation operation, const slice &key) const;
 
   static inline ptrdiff_t distance_between(const cursor from, const cursor to,
                                            unsigned deepness = /* enough to cover whole tree height */ 42);
@@ -4961,7 +4963,7 @@ MDBX_CXX14_CONSTEXPR slice slice::safe_tail(size_t n) const {
 MDBX_CXX14_CONSTEXPR slice slice::safe_middle(size_t from, size_t n) const {
   if (MDBX_UNLIKELY(n > max_length))
     MDBX_CXX20_UNLIKELY throw_max_length_exceeded();
-  if (MDBX_UNLIKELY(from + n /* no overflow possible here, since size() < max_length */ > size()))
+  if (MDBX_UNLIKELY(from > max_length || from + n > size()))
     MDBX_CXX20_UNLIKELY throw_out_range();
   return middle(from, n);
 }
@@ -6305,6 +6307,10 @@ inline cursor::estimate_result cursor::estimate(move_operation operation) const 
   return estimate_result(*this, operation);
 }
 
+inline cursor::estimate_result cursor::estimate(move_operation operation, const slice &key) const {
+  return estimate_result(*this, operation, key);
+}
+
 inline void cursor::renew(::mdbx::txn &txn) { error::success_or_throw(::mdbx_cursor_renew(txn, handle_)); }
 
 inline void cursor::bind(::mdbx::txn &txn, ::mdbx::map_handle map_handle) {
@@ -6487,16 +6493,20 @@ inline bool cursor::distribute(const cursor from, const cursor to, cursor *curso
 inline bool cursor::distribute(const cursor from, const cursor to, const std::vector<cursor> &cursors_array,
                                unsigned deepness) {
   static_assert(sizeof(cursor) == sizeof(MDBX_cursor *), "oops");
-  const int err = ::mdbx_cursor_distribute(from, to, const_cast<MDBX_cursor **>(&cursors_array[0].handle_),
-                                           cursors_array.size(), deepness);
+  const int err = MDBX_LIKELY(!cursors_array.empty())
+                      ? ::mdbx_cursor_distribute(from, to, const_cast<MDBX_cursor **>(&cursors_array[0].handle_),
+                                                 cursors_array.size(), deepness)
+                      : MDBX_EINVAL;
   return error::boolean_or_throw(err);
 }
 
 inline bool cursor::distribute(const cursor from, const cursor to, const std::vector<cursor_managed> &cursors_array,
                                unsigned deepness) {
   static_assert(sizeof(cursor_managed) == sizeof(MDBX_cursor *), "oops");
-  const int err = ::mdbx_cursor_distribute(from, to, const_cast<MDBX_cursor **>(&cursors_array[0].handle_),
-                                           cursors_array.size(), deepness);
+  const int err = MDBX_LIKELY(!cursors_array.empty())
+                      ? ::mdbx_cursor_distribute(from, to, const_cast<MDBX_cursor **>(&cursors_array[0].handle_),
+                                                 cursors_array.size(), deepness)
+                      : MDBX_EINVAL;
   return error::boolean_or_throw(err);
 }
 

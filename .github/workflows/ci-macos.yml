@@ -1,0 +1,42 @@
+name: ci-macos
+
+env:
+  CI: GITHUB
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  push:
+  schedule:
+    - cron: "42 3 * * *"
+      timezone: "Europe/Moscow"
+  repository_dispatch:
+    types: [dispatch-event]
+
+jobs:
+  ci-job:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-26, macos-26-intel]
+        build-type: [Debug, Release]
+        cxx: [ON]
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        submodules: true
+    - name: ci-step
+      shell: bash
+      run: |
+        export CI_MAKE_TARGET=$(if [ "${{ matrix.build-type }}" != 'Debug' ]; then echo 'test'; else echo 'smoke'; fi) && \
+        export MDBX_BUILD_OPTIONS=$(if [ "${{ matrix.build-type }}" = 'Debug' ]; then echo '-DMDBX_CHECKING=2 -DMDBX_DEBUG=1'; else echo '-DMDBX_CHECKING=0 -DMDBX_DEBUG=0'; fi) && \
+        export MDBX_BUILD_CXX=$(if [ "${{ matrix.cxx }}" = 'ON' ]; then echo 'YES'; else echo 'NO'; fi) && \
+        . ci/ci.sh "-DCMAKE_BUILD_TYPE=${{ matrix.build-type }}|-DMDBX_BUILD_CXX:BOOL=${{ matrix.cxx }}"

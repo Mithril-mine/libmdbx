@@ -1,0 +1,50 @@
+name: ci-windows-msvc
+
+env:
+  CI: GITHUB
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+on:
+  push:
+  schedule:
+    - cron: "42 3 * * *"
+      timezone: "Europe/Moscow"
+  repository_dispatch:
+    types: [dispatch-event]
+
+jobs:
+  ci-job:
+    strategy:
+      fail-fast: false
+      matrix:
+        toolset: [v143, v145]
+        dll: [ON, OFF]
+        without_crt: [ON, OFF]
+        target: [x64, Win32, ARM64]
+        build-type: [Debug, Release]
+        os: [windows-latest, windows-11-vs2026-arm]
+        exclude:
+          - os: windows-11-vs2026-arm
+            toolset: v143
+          - os: windows-latest
+            target: ARM64
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        submodules: true
+    - name: ci-step
+      env:
+        CI_MAKE_TARGET: ""
+      shell: bash
+      run: |
+        . ci/ci.sh "-A|${{ matrix.target }}|-T|${{ matrix.toolset }}|-DCMAKE_BUILD_TYPE=${{ matrix.build-type }}|-DMDBX_BUILD_SHARED_LIBRARY:BOOL=${{ matrix.dll }}|-DMDBX_WITHOUT_MSVC_CRT:BOOL=${{ matrix.without_crt }}" \
+          "--config|${{ matrix.build-type }}" "--build-config|${{ matrix.build-type }}"

@@ -7,7 +7,7 @@ Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.3 is scheduled for 2026-07-23.
+## v0.14.3 is re-scheduled for 2026-08-08.
 
 The supporting release of a stable branch with bug fixes.
 
@@ -18,6 +18,7 @@ The supporting release of a stable branch with bug fixes.
 
 ### Appreciations:
 
+ - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bugs reporting.
  - [Cosmin Apreutesei](https://github.com/capr) for bugs reporting.
  - [stslam](https://github.com/stslam) for Embarcadero C++ Builder support.
  - [Yi Chen](https://github.com/94xhn) for bugs fixing.
@@ -46,6 +47,8 @@ The supporting release of a stable branch with bug fixes.
  - On Windows platform the Windows-10 API is now used by default.
    Previous versions are still supported, but now they should be explicitly requested during library build by defining `_WIN32_WINNT`.
 
+ - Restructured project directories, renamed `ut_and_examples` into `examples`, etc.
+
 ### Improvements:
 
  - Deferred invalidation of the dbi-handles of dropped tables has been implemented until the corresponding transactions are committed.
@@ -72,6 +75,10 @@ The supporting release of a stable branch with bug fixes.
  - For Windows, the `MDBX_WITHOUT_MSVC_CRT=ON` build mode has been significantly improved using ntdll functions to eliminate dependence on MSVC CRT.
    Among other things, now there is a replacement for the __try/__except/__finally operators, support for Structural Exception Handling in the `SAFESEH` mode, simple substitution of _load_config_used, etc.
 
+ - Provided CI on SourceCraft and GitHub.
+
+ - Refined handling `MDBX_BUILD_OPTIONS` in the `GNUmakefile` to avoid redefinitions/overriding.
+
 ### Fixes:
 
  - Fixed assertions triggering in specific scenarios of creating and renaming tables within nested transactions.
@@ -79,8 +86,6 @@ The supporting release of a stable branch with bug fixes.
  - Fixed the [issue](https://github.com/Mithril-mine/libmdbx/issues/361) of losing a table content after abortion the nested transaction where such table was dropped.
 
  - Fixed `ERROR_LOCK_VIOLATION` during defrag on Windows in operation modes using overlapped I/O.
-
- - Fixed off-by-one bugs in the `mdbx::from_base64` and `mdbx::slice::is_printable()`.
 
  - Fixed major typo in condition inside `latch_maindb_locked()`.
    However, despite the severity of the error, the scenario of its manifestation could not be found due to a combination of other checks in the code.
@@ -95,8 +100,6 @@ The supporting release of a stable branch with bug fixes.
 
  - Fixed a lot of typos and a few bugs detected by CodeQL.
 
- - Fixed ODR-violations warnings from modern GCC while both LTO and UBSAN are enabled.
-
  - Fixed unreasonably high memory 2GB consumption in `mdbx_load` utility due to leftover debug changes.
 
  - Fixed running `ctest -T memcheck` by adding workaround of CTest/CMake bugs for Valgrind parameters.
@@ -109,11 +112,19 @@ The supporting release of a stable branch with bug fixes.
 
  - Fixed `mdbx_defrag` for `-f` option handling.
 
- - Fixed UTF-8 U+100000..U+10FFFF range checking/decoding inside `mdbx::slice::is_printable()`.
-
  - Fixed loss of `mincore()` cache due erase/overwrite on insert.
 
- - Fixed missing headroom reservation in several `mdbx::buffer<>` methods.
+ - Fixed extra assertion/check inside atomic `safe64_write()`.
+
+ - C++ API fixes:
+    - Fixed ODR-violations warnings from modern GCC while both LTO and UBSAN are enabled.
+    - Fixed UTF-8 U+100000..U+10FFFF range checking/decoding inside `mdbx::slice::is_printable()`.
+    - Fixed missing headroom reservation in several `mdbx::buffer<>` methods.
+    - Fixed missing `enable_validation(flags & MDBX_VALIDATION)` inside `mdbx::env::operate_options::operate_options()`.
+    - Fixed off-by-one bugs in the `mdbx::from_base64` and `mdbx::slice::is_printable()`.
+    - Fixed possibility of overflow in `mdbx::slice::safe_middle()`.
+    - Added missing implementation `mdbx::cursor::estimate(move_operation operation, const slice &key)`.
+    - Fixed UB in case empty array passed to `mdbx::cursor::distribute()`.
 
 --------------------------------------------------------------------------------
 
