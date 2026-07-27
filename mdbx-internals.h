@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-422-g4e5641dd at 2026-07-27T15:51:14+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 88b82051a3cccffce9966c05fc37d1561d1483b604fd38d40bc4a8dac3faf03e_v0_14_2_393_g2bb56af7
+#define MDBX_BUILD_SOURCERY 624f34eebfab079ef5542c4887a13a78784c021750c63d4ed964a38ddd8cef12_v0_14_2_422_g4e5641dd
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -2412,7 +2412,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 /* Embarcadero Clang falls back to Dinkumware stdatomic.h on x86.
  * Fix incompatible atomic_* expansions for volatile _Atomic objects:
  * Dinkumware macros do (pobj)->_Atom which breaks on scalar _Atomic.
- * Use Clang __c11_atomic_* builtins directly instead. */
+ * Use Clang __c11_atomic_* builtins directly instead.
+ * Provide missing fence and memory-order macros for C mode. */
 #undef atomic_is_lock_free
 #define atomic_is_lock_free(obj) __c11_atomic_is_lock_free(sizeof(*(obj)))
 #undef atomic_store_explicit
@@ -2424,6 +2425,14 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
   __c11_atomic_compare_exchange_strong((obj), (exp), (val), __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST)
 #undef atomic_fetch_add
 #define atomic_fetch_add(obj, val) __c11_atomic_fetch_add((obj), (val), __ATOMIC_SEQ_CST)
+#undef atomic_thread_fence
+#define atomic_thread_fence(ord) __c11_atomic_thread_fence(ord)
+#ifndef memory_order_relaxed
+#define memory_order_relaxed __ATOMIC_RELAXED
+#define memory_order_acquire __ATOMIC_ACQUIRE
+#define memory_order_release __ATOMIC_RELEASE
+#define memory_order_seq_cst __ATOMIC_SEQ_CST
+#endif
 #define MDBX_HAVE_C11ATOMICS
 /* #endif __CODEGEARC__ */
 
@@ -2677,12 +2686,13 @@ typedef enum page_type {
   P_BAD = P_LEGACY_DIRTY /* explicit flag for invalid/bad page */,
   P_DUPFIX = 0x20u /* for MDBX_DUPFIXED records */,
   P_SUBP = 0x40u /* for MDBX_DUPSORT sub-pages */,
+  P_STICKED = 0x1000u /* must not be spilled */,
   P_SPILLED = 0x2000u /* spilled in parent txn */,
   P_LOOSE = 0x4000u /* page was dirtied then freed, can be reused */,
   P_FROZEN = 0x8000u /* used for retire page with known status */,
   P_TYPE = (P_BRANCH | P_LEAF | P_LARGE | P_META | P_DUPFIX | P_SUBP),
-  P_FLAGS = (P_BAD | P_SPILLED | P_LOOSE | P_FROZEN),
-  P_ILL_BITS = (uint16_t)~(P_BRANCH | P_LEAF | P_DUPFIX | P_LARGE | P_SPILLED),
+  P_FLAGS = (P_BAD | P_SPILLED | P_LOOSE | P_FROZEN | P_STICKED),
+  P_ILL_BITS = (uint16_t)~(P_BRANCH | P_LEAF | P_DUPFIX | P_LARGE | P_SPILLED | P_STICKED),
 
   page_broken = 0,
   page_large = P_LARGE,
@@ -3298,16 +3308,20 @@ __extern_C MDBX_NORETURN void panic_at_fmt(const struct MDBX_panic_point *const 
       ENSURE_OBJ(obj, expr);                                                                                           \
   } while (0)
 
+MDBX_MAYBE_UNUSED static inline const void *txn2obj(const MDBX_txn *txn) { return txn; }
+MDBX_MAYBE_UNUSED static inline const void *cursor2obj(const MDBX_cursor *mc) { return mc; }
+MDBX_MAYBE_UNUSED static inline const void *env2obj(const MDBX_env *env) { return env; }
+
 #define ASSERT(expr) CHECK0(expr)
-#define eASSERT0(env, expr) CHECK0_OBJ(env, expr)
-#define eASSERT1(env, expr) CHECK1_OBJ(env, expr)
-#define eASSERT2(env, expr) CHECK2_OBJ(env, expr)
-#define tASSERT0(txn, expr) CHECK0_OBJ(txn, expr)
-#define tASSERT1(txn, expr) CHECK1_OBJ(txn, expr)
-#define tASSERT2(txn, expr) CHECK2_OBJ(txn, expr)
-#define cASSERT0(mc, expr) CHECK0_OBJ(mc, expr)
-#define cASSERT1(mc, expr) CHECK1_OBJ(mc, expr)
-#define cASSERT2(mc, expr) CHECK2_OBJ(mc, expr)
+#define eASSERT0(env, expr) CHECK0_OBJ(env2obj(env), expr)
+#define eASSERT1(env, expr) CHECK1_OBJ(env2obj(env), expr)
+#define eASSERT2(env, expr) CHECK2_OBJ(env2obj(env), expr)
+#define tASSERT0(txn, expr) CHECK0_OBJ(txn2obj(txn), expr)
+#define tASSERT1(txn, expr) CHECK1_OBJ(txn2obj(txn), expr)
+#define tASSERT2(txn, expr) CHECK2_OBJ(txn2obj(txn), expr)
+#define cASSERT0(mc, expr) CHECK0_OBJ(cursor2obj(mc), expr)
+#define cASSERT1(mc, expr) CHECK1_OBJ(cursor2obj(mc), expr)
+#define cASSERT2(mc, expr) CHECK2_OBJ(cursor2obj(mc), expr)
 
 /* --------------------------------------------------------------------------------------------------------------- */
 

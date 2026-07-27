@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-422-g4e5641dd at 2026-07-27T15:51:14+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -2824,6 +2824,10 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_option
   }
   if (it.exclusive) {
     out << delimiter << "exclusive";
+    delimiter = comma;
+  }
+  if (it.enable_validation) {
+    out << delimiter << "enable_validation";
     delimiter = comma;
   }
   if (it.disable_readahead) {

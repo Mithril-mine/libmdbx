@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-393-g2bb56af7 at 2026-07-23T14:32:18+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.2-422-g4e5641dd at 2026-07-27T15:51:14+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -1007,9 +1007,9 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
                   "Must be a standard layout type!");
     if (MDBX_LIKELY(size() == sizeof(POD)))
       MDBX_CXX20_LIKELY {
-        POD r;
-        memcpy(&r, data(), sizeof(r));
-        return r;
+        POD _as_pod_local;
+        memcpy(&_as_pod_local, data(), sizeof(_as_pod_local));
+        return _as_pod_local;
       }
     throw_bad_value_size();
   }
@@ -3082,6 +3082,7 @@ public:
     MDBX_CXX11_CONSTEXPR geometry() noexcept {}
     MDBX_CXX11_CONSTEXPR
     geometry(const geometry &) noexcept = default;
+    MDBX_CXX14_CONSTEXPR geometry &operator=(const geometry &) noexcept = default;
     MDBX_CXX11_CONSTEXPR geometry(intptr_t size_lower, intptr_t size_now = default_value,
                                   intptr_t size_upper = default_value, intptr_t growth_step = default_value,
                                   intptr_t shrink_threshold = default_value, intptr_t pagesize = default_value) noexcept
@@ -3498,8 +3499,10 @@ public:
     subpage_reserve_prereq = MDBX_opt_subpage_reserve_prereq,
     /// \copydoc MDBX_opt_subpage_reserve_limit
     subpage_reserve_limit = MDBX_opt_subpage_reserve_limit,
-    /// \copydoc MDBX_opt_split_reserve
-    split_reserve = MDBX_opt_split_reserve
+    /// \copydoc MDBX_opt_split_reserve,
+    split_reserve = MDBX_opt_split_reserve,
+    /// \copydoc MDBX_opt_presync_threshold
+    presync_threshold = MDBX_opt_presync_threshold
   };
 
   /// \copybrief mdbx_env_set_option()
