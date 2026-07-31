@@ -11,13 +11,14 @@
 $(info // The GNU Make $(MAKE_VERSION))
 SHELL         := $(shell env bash -c 'echo $$BASH')
 MAKE_VERx3    := $(shell printf "%3s%3s%3s" $(subst ., ,$(MAKE_VERSION)))
+BASH_VERx2    := $(shell printf "%3s%3s" $$(echo $${BASH_VERSION} | cut -d . -f 1,2 | tr . ' '))
 make_lt_3_81  := $(shell expr "$(MAKE_VERx3)" "<" "  3 81")
 ifneq ($(make_lt_3_81),0)
 $(error Please use GNU Make 3.81 or above)
 endif
 make_ge_4_1   := $(shell expr "$(MAKE_VERx3)" ">=" "  4  1")
 make_ge_4_4   := $(shell expr "$(MAKE_VERx3)" ">=" "  4  4")
-bash_lt_4.3   := $(shell expr "$${BASH_VERSION}" \< "4.3")
+bash_ge_4_3   := $(shell expr "$(BASH_VERx2)" ">=" "  4  3")
 SRC_PROBE_C   := $(shell [ -f mdbx.c ] && echo mdbx.c || echo src/osal.c)
 SRC_PROBE_CXX := $(shell [ -f mdbx.c++ ] && echo mdbx.c++ || echo src/mdbx.c++)
 UNAME         := $(shell uname -s 2>/dev/null || echo Unknown)
@@ -59,6 +60,9 @@ CTEST	?= ctest
 CTEST_OPT ?=
 # target directory for `make dist`
 DIST_DIR ?= dist
+# sanitizers
+ASAN_OPTIONS	?=log_path=asan.log:poison_history_size=42
+UBSAN_OPTIONS	?=log_path=ubsan.log:print_stacktrace=1
 
 # build options
 MDBX_DEBUG           ?=
@@ -96,10 +100,10 @@ else
 WAIT         = .WAIT
 endif
 
-ifneq ($(bash_lt_4_3),0)
-STOCHASTIC   = echo "Skip running stochastic script since Bash < 4.3"
-else
+ifeq ($(bash_ge_4_3),1)
 STOCHASTIC   = ./tests/stochastic.sh
+else
+STOCHASTIC   = echo "Skip running stochastic script since Bash < 4.3"
 endif
 
 ################################################################################
@@ -260,7 +264,7 @@ strip: all
 clean:
 	@echo '  CLEANING...'
 	$(QUIET)rm -rf $(MDBX_TOOLS) mdbx_test @* *.[ao] *.[ls]o *.$(SO_SUFFIX) *.dSYM *~ tmp.db/* \
-		*.gcov *.log *.err src/*.o tests/*.o mdbx_example dist @dist-check \
+		*.gcov *.log *.err src/*.o tests/*.o mdbx_legacy_example mdbx_modern_example dist @dist-check \
 		config-gnumake.h src/config-gnumake.h *.tar* @buildflags.tag @dist-checked.tag \
 		mdbx_*.static mdbx_*.static-lto CMakeFiles
 
@@ -288,14 +292,14 @@ ninja-debug: cmake-build
 ninja: cmake-build
 cmake-build:
 	@echo "  RUN: cmake -G Ninja && cmake --build"
-	$(QUIET)mkdir -p @cmake-ninja-build && $(CMAKE) $(CMAKE_OPT) -G Ninja -S . -B @cmake-ninja-build && $(CMAKE) --build @cmake-ninja-build
+	$(QUIET)mkdir -p @cmake-ninja-build && ASAN_OPTIONS=$(ASAN_OPTIONS) UBSAN_OPTIONS=$(UBSAN_OPTIONS) $(CMAKE) $(CMAKE_OPT) -G Ninja -S . -B @cmake-ninja-build && $(CMAKE) --build @cmake-ninja-build
 
 ctest: cmake-build
 	@echo "  RUN: ctest .."
-	$(QUIET)$(CTEST) --test-dir @cmake-ninja-build --parallel `(nproc | sysctl -n hw.ncpu | echo 2) 2>/dev/null` --schedule-random $(CTEST_OPT)
+	$(QUIET)ASAN_OPTIONS=$(ASAN_OPTIONS) UBSAN_OPTIONS=$(UBSAN_OPTIONS) $(CTEST) --test-dir @cmake-ninja-build --parallel `(nproc | sysctl -n hw.ncpu | echo 2) 2>/dev/null` --schedule-random $(CTEST_OPT)
 
-run-ut: mdbx_example
-	$(QUIET)for UT in $^; do echo "  Running $$UT" && ./$${UT} || exit -1; done
+run-ut: mdbx_legacy_example $(call select_by,MDBX_BUILD_CXX,mdbx_modern_example,)
+	$(QUIET)for UT in $^; do echo "  Running $$UT" && ASAN_OPTIONS=$(ASAN_OPTIONS) UBSAN_OPTIONS=$(UBSAN_OPTIONS) ./$${UT} || exit -1; done
 
 TEST_TARGETS :=
 TEST_BUILD_TARGETS :=
@@ -324,7 +328,7 @@ smoke-assertion test-assertion: MDBX_CHECKING=2
 test-assertion: test
 smoke-assertion: smoke
 
-smoke-ubsan test-ubsan: CFLAGS_EXTRA += -DENABLE_UBSAN -Ofast -fsanitize=undefined -fsanitize-undefined-trap-on-error
+smoke-ubsan test-ubsan: CFLAGS_EXTRA += -DENABLE_UBSAN -Ofast -fsanitize=undefined -fsanitize-undefined-trap-on-error -fno-sanitize-recover=all
 smoke-ubsan test-ubsan: CMAKE_OPT += -DENABLE_UBSAN:BOOL=ON -DENABLE_ASAN:BOOL=OFF -DENABLE_MEMCHECK:BOOL=OFF
 smoke-ubsan test-ubsan: MDBX_CHECKING=2
 test-ubsan: test

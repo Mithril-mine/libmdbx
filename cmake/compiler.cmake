@@ -944,7 +944,7 @@ macro(setup_compile_flags)
 
   if(ENABLE_UBSAN)
     if(NOT MSVC)
-      add_compile_flags("C;CXX" "-fsanitize=undefined" "-fsanitize-undefined-trap-on-error")
+      add_compile_flags("C;CXX" "-fsanitize=undefined" "-fsanitize-undefined-trap-on-error" "-fno-sanitize-recover=all")
     else()
       add_compile_flags("C;CXX" "/fsanitize=undefined")
     endif()

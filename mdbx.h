@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-422-g4e5641dd at 2026-07-27T15:51:14+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-492-g4ca45169 at 2026-07-31T22:58:19+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -2622,7 +2622,12 @@ LIBMDBX_API int mdbx_env_delete(const char *pathname, MDBX_env_delete_mode_t mod
  * \note Available only on Windows.
  * \see mdbx_env_delete() */
 LIBMDBX_API int mdbx_env_deleteW(const wchar_t *pathname, MDBX_env_delete_mode_t mode);
+#define mdbx_env_deleteA(pathname, mode) mdbx_env_delete(pathname, mode)
+#ifdef UNICODE
 #define mdbx_env_deleteT(pathname, mode) mdbx_env_deleteW(pathname, mode)
+#else
+#define mdbx_env_deleteT(pathname, mode) mdbx_env_deleteA(pathname, mode)
+#endif /* UNICODE */
 #else
 #define mdbx_env_deleteT(pathname, mode) mdbx_env_delete(pathname, mode)
 #endif /* Windows */

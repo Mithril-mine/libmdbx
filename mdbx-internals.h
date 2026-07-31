@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-422-g4e5641dd at 2026-07-27T15:51:14+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-492-g4ca45169 at 2026-07-31T22:58:19+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 624f34eebfab079ef5542c4887a13a78784c021750c63d4ed964a38ddd8cef12_v0_14_2_422_g4e5641dd
+#define MDBX_BUILD_SOURCERY d5bc6bf54108e5711f513b2776ee6543bac4d50ed69b4c1566edbd3fe7639c1b_v0_14_2_492_g4ca45169
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -254,11 +254,11 @@
 #define __has_builtin(x) (0)
 #endif
 
-#if __has_feature(thread_sanitizer)
+#if __has_feature(thread_sanitizer) && !defined(__SANITIZE_THREAD__)
 #define __SANITIZE_THREAD__ 1
 #endif
 
-#if __has_feature(address_sanitizer)
+#if __has_feature(address_sanitizer) && !defined(__SANITIZE_ADDRESS__)
 #define __SANITIZE_ADDRESS__ 1
 #endif
 
@@ -927,6 +927,15 @@ __extern_C key_t ftok(const char *, int);
 
 #ifndef RUNNING_ON_ASAN
 #define RUNNING_ON_ASAN (0)
+#endif
+
+#define MDBX_NOTHING /* just nothung */
+
+#if defined(__SANITIZE_ADDRESS__) && !defined(MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS)
+/* Avoid ASAN-trap due the target TLS-variable feed by Darwin's tlv_free() */
+#define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) __attribute__((__no_sanitize_address__, __noinline__))
+#else
+#define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) ELSEWISE
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -2686,13 +2695,12 @@ typedef enum page_type {
   P_BAD = P_LEGACY_DIRTY /* explicit flag for invalid/bad page */,
   P_DUPFIX = 0x20u /* for MDBX_DUPFIXED records */,
   P_SUBP = 0x40u /* for MDBX_DUPSORT sub-pages */,
-  P_STICKED = 0x1000u /* must not be spilled */,
   P_SPILLED = 0x2000u /* spilled in parent txn */,
   P_LOOSE = 0x4000u /* page was dirtied then freed, can be reused */,
   P_FROZEN = 0x8000u /* used for retire page with known status */,
   P_TYPE = (P_BRANCH | P_LEAF | P_LARGE | P_META | P_DUPFIX | P_SUBP),
-  P_FLAGS = (P_BAD | P_SPILLED | P_LOOSE | P_FROZEN | P_STICKED),
-  P_ILL_BITS = (uint16_t)~(P_BRANCH | P_LEAF | P_DUPFIX | P_LARGE | P_SPILLED | P_STICKED),
+  P_FLAGS = (P_BAD | P_SPILLED | P_LOOSE | P_FROZEN),
+  P_ILL_BITS = (uint16_t)~(P_BRANCH | P_LEAF | P_DUPFIX | P_LARGE | P_SPILLED),
 
   page_broken = 0,
   page_large = P_LARGE,

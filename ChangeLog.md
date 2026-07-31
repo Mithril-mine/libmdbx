@@ -49,6 +49,8 @@ The supporting release of a stable branch with bug fixes.
 
  - Restructured project directories, renamed `ut_and_examples` into `examples`, etc.
 
+ - The `mdbx_replace_ex()` now returns only previous data from a DB, but never new ones, even it has the same value.
+
 ### Improvements:
 
  - Deferred invalidation of the dbi-handles of dropped tables has been implemented until the corresponding transactions are committed.
@@ -60,7 +62,7 @@ The supporting release of a stable branch with bug fixes.
 
  - Embarcadero C++ Builder now could be used to build libmdbx on Windows.
 
- - Allowed to use cursors binded to the same table/DBI, but to different read-only transaction, in an API with multiple cursors in the parameters.
+ - Allowed to use cursors bonded to the same table/DBI, but to different read-only transaction, in an API with multiple cursors in the parameters.
 
  - Added the missing recipe for Conan to an amalgamated source code.
 
@@ -77,70 +79,75 @@ The supporting release of a stable branch with bug fixes.
 
  - Provided CI on SourceCraft and GitHub.
 
- - Refined handling `MDBX_BUILD_OPTIONS` in the `GNUmakefile` to avoid redefinitions/overriding.
+ - Refined handling `MDBX_BUILD_OPTIONS` in the `GNUmakefile` to avoid redefinition/overriding.
+
+ - On Windows provided `mdbx_env_deleteA()` and define `mdbx_env_deleteT()` depend on the `UNICODE`.
 
 ### Fixes:
-
- - Fixed assertions triggering in specific scenarios of creating and renaming tables within nested transactions.
 
  - Fixed the [issue](https://github.com/Mithril-mine/libmdbx/issues/361) of losing a table content after abortion the nested transaction where such table was dropped.
 
  - Fixed `ERROR_LOCK_VIOLATION` during defrag on Windows in operation modes using overlapped I/O.
 
- - Fixed major typo in condition inside `latch_maindb_locked()`.
-   However, despite the severity of the error, the scenario of its manifestation could not be found due to a combination of other checks in the code.
-
- - Fixed possibility of infinite loop inside `mdbx_txn_abort()` because of `memcmp()`/`memcpy()` typo.
-
  - Fixed `env_owned_wrtxn()` to avoid by-pass locking in the `MDBX_NOSTICKYTHREADS` mode.
-
- - Fixed missing `return` statement in one of the error paths inside `mdbx_cursor_bind()`.
-
- - Fixed potential buffer overread by `fgets()` in `mdbx_load` utility.
-
- - Fixed a lot of typos and a few bugs detected by CodeQL.
 
  - Fixed unreasonably high memory 2GB consumption in `mdbx_load` utility due to leftover debug changes.
 
- - Fixed running `ctest -T memcheck` by adding workaround of CTest/CMake bugs for Valgrind parameters.
-
- - Fixed/removed leftover usage of float point in `mdbx_stat` utility.
-
- - Fixed `mach_port_t` leak inside `mdbx_get_sysraminfo()`.
-
- - Fixed Windows section handle leak inside `osal_mresize()` in unsuccessful case.
-
- - Fixed `mdbx_defrag` for `-f` option handling.
-
  - Fixed loss of `mincore()` cache due erase/overwrite on insert.
 
- - Fixed extra assertion/check inside atomic `safe64_write()`.
+ - Fixed a lot of typos and a few bugs detected by CodeQL.
 
- - Fixed assertion parentheses in `mdbx_txn_renew()`.
+ - Rare or specific conditions:
+    - Fixed major typo in condition inside `latch_maindb_locked()`.
+      However, despite the severity of the error, the scenario of its manifestation could not be found due to a combination of other checks in the code.
+    - Fixed possibility of infinite loop inside `mdbx_txn_abort()` because of `memcmp()`/`memcpy()` typo.
+    - Fixed potential buffer over-read by `fgets()` in `mdbx_load` utility.
+    - Fixed missing `return` statement in one of the error paths inside `mdbx_cursor_bind()`.
+    - Fixed extra rdt-unlock in the failure path of `dxb_resize()`.
+    - Fixed NULL deference in `walk_pgno()` when operating on a corrupted DB, which also affects `mdbx_chk` utility.
 
- - Fixed extra rdt-unlock in the failure path of `dxb_resize()`.
+ - Resource leaks:
+    - Fixed `mach_port_t` leak inside `mdbx_get_sysraminfo()`.
+    - Fixed Windows section handle leak inside `osal_mresize()` in unsuccessful case.
+    - Fixed a leak of the table name in the failure path of `dbi_open_locked()` in a specific cases.
+    - Fixed minor leaks/non-cleanup when `defrag_init()` failed.
+    - Fixed `cond_pair` leak in the failure path of `copy_with_compacting()`.
 
- - Fixed handling a returned intermediate error codes in `meta_wipe_steady()`.
+ - Spilling:
+    - Fixed spurious assertion inside `spill_cursor_keep()`.
+    - Fixed committing a pure nested transaction has a spilled pages.
+    - Fixed a case when a prepared GC-slots are spilled-out during `gc_update()`.
+    - Fixed a leak of spilled pages list on a nested transaction abort.
+    - Reworked internal cursors cloning to be compatible with subsequent pages tracking before spilling.
+    - Introduced the internal `TXN_NIPPED` flag to suspend spilling during GC processing.
+    - Fixed tracking and invalidation of the inner part of the sibling cursors inside `cursor_del()`.
+    - Fixed sibling cursors tracking/invalidation in `cutoff_zikkurat()`.
+    - Fixed cursors tracking in `node_move()`.
 
- - Spilling fixed:
-   - Fixed spurious assertion inside `spill_cursor_keep()`.
-   - Fixed committing a pure nested transaction has a spilled pages.
-   - Fixed a case when a prepared GC-slots are spilled-out during `gc_update()`.
-   - Fixed a leak of spilled pages list on a nested transaction abort.
-   - Fixed `cursor_clone_slightly()` so that the clone is compatible with a pages tracking before spilling, in the case when the source is inner.
-   - Introduce `P_STICKED` to marks an unattached pages to a tree to avoid spill-out until finish.
-   - Fixed cursor tracking for all change/touch operations, as the spill could now be triggered by `page_alloc()`.
-
- - C++ API fixes:
-    - Fixed ODR-violations warnings from modern GCC while both LTO and UBSAN are enabled.
+ - C++ API:
+    - Fixed ODR violations warnings from modern GCC while both LTO and UBSAN are enabled.
     - Fixed UTF-8 U+100000..U+10FFFF range checking/decoding inside `mdbx::slice::is_printable()`.
     - Fixed missing headroom reservation in several `mdbx::buffer<>` methods.
     - Fixed missing `enable_validation(flags & MDBX_VALIDATION)` inside `mdbx::env::operate_options::operate_options()`.
     - Fixed off-by-one bugs in the `mdbx::from_base64` and `mdbx::slice::is_printable()`.
     - Fixed possibility of overflow in `mdbx::slice::safe_middle()`.
     - Fixed UB in case empty array passed to `mdbx::cursor::distribute()`.
-    - Fixed  `enable_validation` in the `std::ostream &operator<<(::std::ostream &, const env::operate_options &)`.
+    - Fixed `enable_validation` in the `std::ostream &operator<<(::std::ostream &, const env::operate_options &)`.
     - Added missing `mdbx::cursor::estimate(move_operation operation, const slice &key)`, `mdbx::env::extra_runtime_option::presync_threshold` and `mdbx::env::geometry::&operator=()`.
+    - Fixed using wide characher count instead of bytes in `mdbx::slice` and `mdbx::buffer<>` methods.
+    - Fixed `mdbx::buffer::reserve()` and `mdbx::buffer::assign()` for cases when buffer hold a reference to external data.
+    - Fixed `mdbx::txn::extract()`, `mdbx::txn::replace()` and `mdbx::txn::replace_reserve()`.
+    - Re-enabled `mdbx::buffer(std::basic_string<>, ...)` constructors.
+
+ - Minors:
+    - Fixed assertions triggering in specific scenarios of creating and renaming tables within nested transactions.
+    - Fixed handling a returned intermediate error codes in `meta_wipe_steady()`.
+    - Fixed UBSAN issue inside thread-local storage destructor callback when DB opened in a without-lck (exclusive read-only) mode.
+    - Fixed the exit status of `mdbx_load` for specific error cases.
+    - Fixed running `ctest -T memcheck` by adding workaround of CTest/CMake bugs for Valgrind parameters.
+    - Fixed/removed leftover usage of float point in `mdbx_stat` utility.
+    - Fixed `mdbx_defrag` for `-f` option handling.
+    - etc...
 
 --------------------------------------------------------------------------------
 
