@@ -120,9 +120,8 @@ The supporting release of a stable branch with bug fixes.
     - Fixed a leak of spilled pages list on a nested transaction abort.
     - Reworked internal cursors cloning to be compatible with subsequent pages tracking before spilling.
     - Introduced the internal `TXN_NIPPED` flag to suspend spilling during GC processing.
-    - Fixed tracking and invalidation of the inner part of the sibling cursors inside `cursor_del()`.
-    - Fixed sibling cursors tracking/invalidation in `cutoff_zikkurat()`.
-    - Fixed cursors tracking in `node_move()`.
+    - Fixed tracking and invalidation of the inner part of the sibling cursors.
+    - Reworked cursor's stack with introducing the `stash` of pages.
 
  - C++ API:
     - Fixed ODR violations warnings from modern GCC while both LTO and UBSAN are enabled.

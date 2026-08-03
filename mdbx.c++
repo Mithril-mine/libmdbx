@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-492-g4ca45169 at 2026-07-31T22:58:19+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-508-g9abf372f at 2026-08-03T15:34:28+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -673,34 +673,49 @@ struct MDBX_txn {
 struct MDBX_cursor {
   int32_t signature;
   union {
-    /* Тут некоторые трюки/заморочки с тем чтобы во всех основных сценариях
-     * проверять состояние курсора одной простой операцией сравнения,
-     * и при этом ни на каплю не усложнять код итерации стека курсора.
-     *
-     * Поэтому решение такое:
-     *  - поля flags и top сделаны знаковыми, а их отрицательные значения
-     *    используются для обозначения не-установленного/не-инициализированного
-     *    состояния курсора;
-     *  - для инвалидации/сброса курсора достаточно записать отрицательное
-     *    значение в объединенное поле top_and_flags;
-     *  - все проверки состояния сводятся к сравнению одного из полей
-     *    flags/snum/snum_and_flags, которые в зависимости от сценария,
-     *    трактуются либо как знаковые, либо как безнаковые. */
+    /* Некоторые трюки для того, чтобы в большинстве сценариев
+     * проверять и обновлять состояние курсора одной операцией сравнения или записи:
+     *  - поля flags, top и stash сделаны знаковыми, а их отрицательные значения
+     *    используются для обозначения не-установленного состояния курсора;
+     *  - для сброса курсора достаточно записать ОДНО отрицательное
+     *    значение в объединённое поле combo_state;
+     *  - почти все проверки состояния сводятся к сравнению ОДНОГО из полей
+     *    flags/top/stash/combo_state.
+     *  - при заполнении стека достаточно выполнять запись в поле top_and_stash, что обнуляет stash,
+     *    а отдельное чтение stash требуется только в трёх случаях:
+     *     1. обновлении страниц на стеках в page_touch_unmodifiable();
+     *     2. пометки используемых страниц в spill_cursor_keep();
+     *     3. в отладочных проверках, в том числе в txn_probe_dbi_cursors_stacks() при поиске висячих страниц.
+     */
     __anonymous_struct_extension__ struct {
 #if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-      int8_t flags;
-      /* индекс вершины стека, меньше нуля для не-инициализированного курсора */
-      int8_t top;
+      int16_t flags;
+      union {
+        __anonymous_struct_extension__ struct {
+          /* Позиция вершины стека, меньше нуля для пустого курсора.
+           * Может быть меньше общего количество страниц в стеке курсора при перемещении к корню дерева в ходе изменения
+           * его структуры. */
+          int8_t top;
+          /* Количество страниц после текущей позиции вершины стека.
+           * Требуется для отслеживания всех используемых в курсорах страниц в том числе при уменьшении top в ходе
+           * модификации дерева. */
+          int8_t stash;
+        };
+        int16_t top_and_stash;
+      };
 #else
-      int8_t top;
-      int8_t flags;
+      union {
+        __anonymous_struct_extension__ struct {
+          int8_t stash;
+          int8_t top;
+        };
+        int16_t top_and_stash;
+      };
+      int16_t flags;
 #endif
     };
-    int16_t top_and_flags;
+    int32_t combo_state;
   };
-  /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
-  uint8_t checking;
-  uint8_t pad;
 
   /* Указывает на txn->dbi_state[] для DBI этого курсора.
    * Модификатор __restrict тут полезен и безопасен в текущем понимании,
@@ -722,6 +737,9 @@ struct MDBX_cursor {
 #ifndef MDBX_DEBUG_SEARCH_DISPATCHING
 #define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
 #endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+  /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
+  uint8_t checking;
 
 #if MDBX_DEBUG_SEARCH_DISPATCHING
   unsigned search_step_counter;

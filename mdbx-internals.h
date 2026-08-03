@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-492-g4ca45169 at 2026-07-31T22:58:19+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-508-g9abf372f at 2026-08-03T15:34:28+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY d5bc6bf54108e5711f513b2776ee6543bac4d50ed69b4c1566edbd3fe7639c1b_v0_14_2_492_g4ca45169
+#define MDBX_BUILD_SOURCERY bec3014f96f0c34a9c4c81b6950507a931e4251a04ad756d0ee866f57f9360d8_v0_14_2_508_g9abf372f
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -920,9 +920,13 @@ __extern_C key_t ftok(const char *, int);
 #ifdef __SANITIZE_ADDRESS__
 #define RUNNING_ON_ASAN (1)
 #include <sanitizer/asan_interface.h>
+#define ASAN_REGISON_IS_POISONED(addr, size) __asan_region_is_poisoned((void *)(addr), size)
+#define ASAN_DESCRIBE_ADDRESS(addr) __asan_describe_address((void *)(addr))
 #elif !defined(ASAN_POISON_MEMORY_REGION)
 #define ASAN_POISON_MEMORY_REGION(addr, size) ((void)(addr), (void)(size))
 #define ASAN_UNPOISON_MEMORY_REGION(addr, size) ((void)(addr), (void)(size))
+#define ASAN_REGISON_IS_POISONED(addr, size) ((void)(addr), (void)(size), 0)
+#define ASAN_DESCRIBE_ADDRESS(addr) ((void)addr)
 #endif /* __SANITIZE_ADDRESS__ */
 
 #ifndef RUNNING_ON_ASAN
@@ -3431,6 +3435,20 @@ MDBX_MAYBE_UNUSED static inline int log_if_error(const int err, const char *func
 #define LOG_IFERR(err) log_if_error((err), __func__, __LINE__)
 
 #endif /* !__cplusplus */
+
+/* --------------------------------------------------------------------------------------------------------------- */
+
+MDBX_MAYBE_UNUSED static inline char sanitizer_kind_of_poison(const void *addr, size_t size) {
+  if (ASAN_REGISON_IS_POISONED(addr, sizeof(size)))
+    return 'P';
+  if (mdbx_running_on_Valgrind()) {
+    if (!VALGRIND_CHECK_MEM_IS_ADDRESSABLE(addr, sizeof(size)))
+      return 'N';
+    if (!VALGRIND_CHECK_MEM_IS_DEFINED(addr, sizeof(size)))
+      return 'U';
+  }
+  return 0;
+}
 
 /* Test if the flags f are set in a flag word w. */
 #define F_ISSET(w, f) (((w) & (f)) == (f))
