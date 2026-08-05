@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-508-g9abf372f at 2026-08-03T15:34:28+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-527-g6c0d0e15 at 2026-08-05T17:32:59+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY bec3014f96f0c34a9c4c81b6950507a931e4251a04ad756d0ee866f57f9360d8_v0_14_2_508_g9abf372f
+#define MDBX_BUILD_SOURCERY d08dda1c90a1febd510b99380a13919a304eaca3bfe9bd1025bd706109f2a8f0_v0_14_2_527_g6c0d0e15
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -3439,12 +3439,12 @@ MDBX_MAYBE_UNUSED static inline int log_if_error(const int err, const char *func
 /* --------------------------------------------------------------------------------------------------------------- */
 
 MDBX_MAYBE_UNUSED static inline char sanitizer_kind_of_poison(const void *addr, size_t size) {
-  if (ASAN_REGISON_IS_POISONED(addr, sizeof(size)))
+  if (ASAN_REGISON_IS_POISONED(addr, size))
     return 'P';
   if (mdbx_running_on_Valgrind()) {
-    if (!VALGRIND_CHECK_MEM_IS_ADDRESSABLE(addr, sizeof(size)))
+    if (VALGRIND_CHECK_MEM_IS_ADDRESSABLE(addr, size))
       return 'N';
-    if (!VALGRIND_CHECK_MEM_IS_DEFINED(addr, sizeof(size)))
+    if (VALGRIND_CHECK_MEM_IS_DEFINED(addr, size))
       return 'U';
   }
   return 0;

@@ -83,6 +83,8 @@ The supporting release of a stable branch with bug fixes.
 
  - On Windows provided `mdbx_env_deleteA()` and define `mdbx_env_deleteT()` depend on the `UNICODE`.
 
+ - Added `/experimental:c11atomics` workaround for MSVC compiler weakness to enable C11 atomics.
+
 ### Fixes:
 
  - Fixed the [issue](https://github.com/Mithril-mine/libmdbx/issues/361) of losing a table content after abortion the nested transaction where such table was dropped.
@@ -122,6 +124,7 @@ The supporting release of a stable branch with bug fixes.
     - Introduced the internal `TXN_NIPPED` flag to suspend spilling during GC processing.
     - Fixed tracking and invalidation of the inner part of the sibling cursors.
     - Reworked cursor's stack with introducing the `stash` of pages.
+    - Fixed spilling/accounting for `MDBX_AVOID_MSYNC=ON`.
 
  - C++ API:
     - Fixed ODR violations warnings from modern GCC while both LTO and UBSAN are enabled.
@@ -146,6 +149,8 @@ The supporting release of a stable branch with bug fixes.
     - Fixed running `ctest -T memcheck` by adding workaround of CTest/CMake bugs for Valgrind parameters.
     - Fixed/removed leftover usage of float point in `mdbx_stat` utility.
     - Fixed `mdbx_defrag` for `-f` option handling.
+    - Fixed MSVC warnings of implicit narrow type-casting.
+    - Added compile-time guard for C11 atomics to avoid wrong code generation on non-x86 platforms by MSVC.
     - etc...
 
 --------------------------------------------------------------------------------

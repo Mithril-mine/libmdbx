@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-508-g9abf372f at 2026-08-03T15:34:28+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-527-g6c0d0e15 at 2026-08-05T17:32:59+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -670,6 +670,10 @@ struct MDBX_txn {
 
 #define CURSOR_STACK_SIZE (16 + MDBX_WORDBITS / 4)
 
+#ifndef xMDBX_DEBUG_SPILLING
+#define xMDBX_DEBUG_SPILLING 0
+#endif
+
 struct MDBX_cursor {
   int32_t signature;
   union {
@@ -740,6 +744,26 @@ struct MDBX_cursor {
 
   /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
   uint8_t checking;
+
+#if xMDBX_DEBUG_SPILLING > 0
+  uint8_t tmp_split_top;
+  page_t *tmp_split[CURSOR_STACK_SIZE];
+#define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp)                                                                            \
+  do {                                                                                                                 \
+    MDBX_cursor *_mc = (mc);                                                                                           \
+    cASSERT0(_mc, _mc->tmp_split_top < CURSOR_STACK_SIZE - 1);                                                         \
+    _mc->tmp_split[_mc->tmp_split_top++] = (mp);                                                                       \
+  } while (0)
+#define CURSOR_TRACING_TMPPAGE_POP(mc, mp)                                                                             \
+  do {                                                                                                                 \
+    MDBX_cursor *_mc = (mc);                                                                                           \
+    cASSERT0(_mc, _mc->tmp_split_top > 0 && _mc->tmp_split[_mc->tmp_split_top - 1] == (mp));                           \
+    _mc->tmp_split[--_mc->tmp_split_top] = nullptr;                                                                    \
+  } while (0)
+#else
+#define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp) ((void)(mc), (void)(mp))
+#define CURSOR_TRACING_TMPPAGE_POP(mc, mp) ((void)(mc), (void)(mp))
+#endif /* xMDBX_DEBUG_SPILLING */
 
 #if MDBX_DEBUG_SEARCH_DISPATCHING
   unsigned search_step_counter;
@@ -905,9 +929,6 @@ struct MDBX_env {
   pgno_t poison_edge;
 #endif /* ENABLE_MEMCHECK || __SANITIZE_ADDRESS__ */
 
-#ifndef xMDBX_DEBUG_SPILLING
-#define xMDBX_DEBUG_SPILLING 0
-#endif
 #if xMDBX_DEBUG_SPILLING == 2
   size_t debug_dirtied_est, debug_dirtied_act;
 #endif /* xMDBX_DEBUG_SPILLING */
