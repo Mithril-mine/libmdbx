@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-543-ga4d2e4ab at 2026-08-07T16:04:08+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -5539,12 +5539,10 @@ __cold static int copy_asis(MDBX_env *env, MDBX_txn *txn, mdbx_filehandle_t fd, 
   }
 
   jitter4testing(false);
-  size_t offset = meta_bytes;
   if (dest_is_pipe) {
     rc = osal_write(fd, buffer, meta_bytes);
     if (unlikely(rc != MDBX_SUCCESS))
       return rc;
-    offset = 0;
   }
 
 #if MDBX_USE_COPYFILERANGE
@@ -5565,6 +5563,7 @@ __cold static int copy_asis(MDBX_env *env, MDBX_txn *txn, mdbx_filehandle_t fd, 
   /* Copy the data */
   const size_t whole_size = pgno_ceil2os_bytes(env, txn->geo.end_pgno);
   const size_t used_size = pgno2bytes(env, txn->geo.first_unallocated);
+  size_t offset = meta_bytes;
   while (rc == MDBX_SUCCESS && offset < used_size) {
     if (flags & MDBX_CP_THROTTLE_MVCC) {
       rc = mdbx_txn_unpark(txn, false);
@@ -42755,10 +42754,10 @@ __dll_export
         0,
         14,
         2,
-        543,
+        548,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.543 */
-        {"2026-08-07T16:04:08+03:00", "5fc4a75ee7d37cfc66492dcf2808c8c95cda0081", "a4d2e4ab9f27971742bd4c8e2963f533d5bc10d7", "v0.14.2-543-ga4d2e4ab"},
+                                        0.14.2.548 */
+        {"2026-08-08T00:27:39+03:00", "52f1ff3ffcf5369904ac36d39a5696974089c546", "ee87b0d44604c2f79e87e497ec34cd528048dd18", "v0.14.2-548-gee87b0d4"},
         sourcery};
 
 __dll_export

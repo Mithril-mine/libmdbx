@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-543-ga4d2e4ab at 2026-08-07T16:04:08+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -2020,6 +2020,7 @@ typedef enum MDBX_error {
   MDBX_EIO = ERROR_WRITE_FAULT,
   MDBX_EPERM = ERROR_INVALID_FUNCTION,
   MDBX_EINTR = ERROR_CANCELLED,
+  MDBX_EEXIST = ERROR_FILE_EXISTS,
   MDBX_ENOFILE = ERROR_FILE_NOT_FOUND,
   MDBX_EREMOTE = ERROR_REMOTE_STORAGE_MEDIA_ERROR,
   MDBX_EDEADLK = ERROR_POSSIBLE_DEADLOCK
@@ -2041,6 +2042,7 @@ typedef enum MDBX_error {
   MDBX_EIO = EIO,
   MDBX_EPERM = EPERM,
   MDBX_EINTR = EINTR,
+  MDBX_EEXIST = EEXIST,
   MDBX_ENOFILE = ENOENT,
 #if defined(EREMOTEIO) || defined(DOXYGEN)
   /** Cannot use the database on a network file system or when exporting it via NFS. */
