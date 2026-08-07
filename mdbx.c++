@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-527-g6c0d0e15 at 2026-08-05T17:32:59+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-543-ga4d2e4ab at 2026-08-07T16:04:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -672,7 +672,15 @@ struct MDBX_txn {
 
 #ifndef xMDBX_DEBUG_SPILLING
 #define xMDBX_DEBUG_SPILLING 0
-#endif
+#endif /* xMDBX_DEBUG_SPILLING */
+
+#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
+#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
+#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+#ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
+#define MDBX_DEBUG_SEARCH_BRANCHLESS 0
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 
 struct MDBX_cursor {
   int32_t signature;
@@ -738,9 +746,6 @@ struct MDBX_cursor {
   MDBX_cursor *next;
   /* Состояние на момент старта вложенной транзакции */
   MDBX_cursor *backup;
-#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
-#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
 
   /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
   uint8_t checking;
@@ -765,7 +770,7 @@ struct MDBX_cursor {
 #define CURSOR_TRACING_TMPPAGE_POP(mc, mp) ((void)(mc), (void)(mp))
 #endif /* xMDBX_DEBUG_SPILLING */
 
-#if MDBX_DEBUG_SEARCH_DISPATCHING
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
   unsigned search_step_counter;
 #define MDBX_CURSOR_STC_INC(cursor)                                                                                    \
   do                                                                                                                   \
@@ -775,7 +780,7 @@ struct MDBX_cursor {
 #else
 #define MDBX_CURSOR_STC_INC(cursor) __noop
 #define MDBX_CURSOR_STC_GET(cursor) (0)
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 };
 
 struct inner_cursor {

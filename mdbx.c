@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-527-g6c0d0e15 at 2026-08-05T17:32:59+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-543-ga4d2e4ab at 2026-08-07T16:04:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -1109,7 +1109,15 @@ struct MDBX_txn {
 
 #ifndef xMDBX_DEBUG_SPILLING
 #define xMDBX_DEBUG_SPILLING 0
-#endif
+#endif /* xMDBX_DEBUG_SPILLING */
+
+#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
+#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
+#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+#ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
+#define MDBX_DEBUG_SEARCH_BRANCHLESS 0
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 
 struct MDBX_cursor {
   int32_t signature;
@@ -1175,9 +1183,6 @@ struct MDBX_cursor {
   MDBX_cursor *next;
   /* Состояние на момент старта вложенной транзакции */
   MDBX_cursor *backup;
-#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
-#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
 
   /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
   uint8_t checking;
@@ -1202,7 +1207,7 @@ struct MDBX_cursor {
 #define CURSOR_TRACING_TMPPAGE_POP(mc, mp) ((void)(mc), (void)(mp))
 #endif /* xMDBX_DEBUG_SPILLING */
 
-#if MDBX_DEBUG_SEARCH_DISPATCHING
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
   unsigned search_step_counter;
 #define MDBX_CURSOR_STC_INC(cursor)                                                                                    \
   do                                                                                                                   \
@@ -1212,7 +1217,7 @@ struct MDBX_cursor {
 #else
 #define MDBX_CURSOR_STC_INC(cursor) __noop
 #define MDBX_CURSOR_STC_GET(cursor) (0)
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 };
 
 struct inner_cursor {
@@ -1595,8 +1600,6 @@ MDBX_INTERNAL pgno_t default_dp_limit(const MDBX_env *env);
 MDBX_INTERNAL int __must_check_result tree_deepen_edge(MDBX_cursor *mc, int flags);
 MDBX_INTERNAL int tree_deepen_lowest(MDBX_cursor *mc);
 MDBX_INTERNAL intptr_t tree_diff_level(const MDBX_cursor *left, const MDBX_cursor *right);
-MDBX_INTERNAL size_t tree_search_branch_configure(const MDBX_cursor *mc, const MDBX_val *key);
-MDBX_INTERNAL sfr_t tree_search_foliage_configure(MDBX_cursor *mc, const MDBX_val *key);
 
 enum page_search_flags {
   Z_MODIFY = 1,
@@ -1622,6 +1625,12 @@ MDBX_INTERNAL int tree_cutoff_range(MDBX_cursor *begin, MDBX_cursor *end, bool e
 MDBX_INTERNAL int tree_drop(MDBX_cursor *mc);
 MDBX_INTERNAL int __must_check_result tree_rebalance(MDBX_cursor *mc);
 MDBX_INTERNAL int __must_check_result tree_propagate_key(MDBX_cursor *mc, const MDBX_val *key);
+static inline int __must_check_result tree_propagate_nullkey(MDBX_cursor *mc) {
+  MDBX_val nullkey;
+  nullkey.iov_base = &nullkey;
+  nullkey.iov_len = 0;
+  return tree_propagate_key(mc, &nullkey);
+}
 MDBX_INTERNAL void recalculate_merge_thresholds(MDBX_env *env);
 MDBX_INTERNAL void recalculate_subpage_thresholds(MDBX_env *env);
 
@@ -1667,6 +1676,273 @@ MDBX_INTERNAL MDBX_chk_line_t *MDBX_PRINTF_ARGS(2, 3) chk_print(MDBX_chk_line_t 
 MDBX_INTERNAL void chk_println_va(MDBX_chk_scope_t *const scope, enum MDBX_chk_severity severity, const char *fmt,
                                   va_list args);
 MDBX_INTERNAL void chk_println(MDBX_chk_scope_t *const scope, enum MDBX_chk_severity severity, const char *fmt, ...);
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32_unchecked(const size_t expected_alignment,
+                                                                                const MDBX_val *a, const MDBX_val *b) {
+  ASSERT(a->iov_len == 4 && b->iov_len == 4);
+  return CMP2INT(unaligned_peek_u32(expected_alignment, a->iov_base),
+                 unaligned_peek_u32(expected_alignment, b->iov_base));
+}
+
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t
+cmp_uint32_unaligned_unchecked(const MDBX_val *a, const MDBX_val *b) {
+  return cmp_uint32_unchecked(1, a, b);
+}
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64_unchecked(const size_t expected_alignment,
+                                                                                const MDBX_val *a, const MDBX_val *b) {
+  ASSERT(a->iov_len == 8 && b->iov_len == 8);
+  return CMP2INT(unaligned_peek_u64(expected_alignment, a->iov_base),
+                 unaligned_peek_u64(expected_alignment, b->iov_base));
+}
+
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t
+cmp_uint64_unaligned_unchecked(const MDBX_val *a, const MDBX_val *b) {
+  return cmp_uint64_unchecked(1, a, b);
+}
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint(const size_t expected_alignment, const MDBX_val *a,
+                                                                    const MDBX_val *b) {
+  if (likely(a->iov_len == b->iov_len)) {
+    if (sizeof(size_t) > 7 && likely(a->iov_len == 8))
+      return cmp_uint64_unchecked(expected_alignment, a, b);
+    if (likely(a->iov_len == 4))
+      return cmp_uint32_unchecked(expected_alignment, a, b);
+    if (sizeof(size_t) < 8 && likely(a->iov_len == 8))
+      return cmp_uint64_unchecked(expected_alignment, a, b);
+  }
+  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
+        b->iov_len);
+  return 0;
+}
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32(const size_t expected_alignment,
+                                                                      const MDBX_val *a, const MDBX_val *b) {
+  if (likely(a->iov_len == b->iov_len && a->iov_len == 4))
+    return cmp_uint32_unchecked(expected_alignment, a, b);
+  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
+        b->iov_len);
+  return 0;
+}
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64(const size_t expected_alignment,
+                                                                      const MDBX_val *a, const MDBX_val *b) {
+  if (likely(a->iov_len == b->iov_len && a->iov_len == 8))
+    return cmp_uint64_unchecked(expected_alignment, a, b);
+  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
+        b->iov_len);
+  return 0;
+}
+
+#if MDBX_UNALIGNED_OK < 2 || MDBX_CHECKING > 0
+/* Compare two items pointing at 2-byte aligned unsigned int's. */
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint_align2(const MDBX_val *a,
+                                                                                             const MDBX_val *b) {
+  return cmp_uint(2, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32_align2(const MDBX_val *a,
+                                                                                               const MDBX_val *b) {
+  return cmp_uint32(2, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64_align2(const MDBX_val *a,
+                                                                                               const MDBX_val *b) {
+  return cmp_uint64(2, a, b);
+}
+/* Currently unused
+  MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32_align2_unchecked(const
+  MDBX_val *a, const MDBX_val *b) { return cmp_uint32_unchecked(2, a, b);
+  }
+  MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64_align2_unchecked(const
+  MDBX_val *a, const MDBX_val *b) { return cmp_uint64_unchecked(2, a, b);
+  } */
+#else
+#define cmp_uint_align2 cmp_uint_unaligned
+#define ncmp_uint_align2 ncmp_uint_unaligned
+/* Currently unused
+#define cmp_uint32_align2 cmp_uint32_unaligned
+#define cmp_uint64_align2 cmp_uint64_unaligned
+#define cmp_uint32_align2_unchecked cmp_uint32_unaligned_unchecked
+#define cmp_uint64_align2_unchecked cmp_uint64_unaligned_unchecked */
+#endif /* !MDBX_UNALIGNED_OK || debug */
+
+#if MDBX_UNALIGNED_OK < 4 || MDBX_CHECKING > 0
+/* Compare two items pointing at 4-byte aligned unsigned int's. */
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint_align4(const MDBX_val *a,
+                                                                                             const MDBX_val *b) {
+  return cmp_uint(4, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32_align4(const MDBX_val *a,
+                                                                                               const MDBX_val *b) {
+  return cmp_uint32(4, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64_align4(const MDBX_val *a,
+                                                                                               const MDBX_val *b) {
+  return cmp_uint64(4, a, b);
+}
+/* Currently unused
+  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL intptr_t cmp_uint32_align4(const MDBX_val *a, const MDBX_val *b);
+  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL intptr_t cmp_uint64_align4(const MDBX_val *a, const MDBX_val *b); */
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t
+cmp_uint32_align4_unchecked(const MDBX_val *a, const MDBX_val *b) {
+  return cmp_uint32_unchecked(4, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t
+cmp_uint64_align4_unchecked(const MDBX_val *a, const MDBX_val *b) {
+  return cmp_uint64_unchecked(4, a, b);
+}
+#else
+#define cmp_uint_align4 cmp_uint_unaligned
+#define ncmp_uint_align4 ncmp_uint_unaligned
+/* Currently unused
+  #define cmp_uint32_align4 cmp_uint32_unaligned
+  #define cmp_uint64_align4 cmp_uint64_unaligned */
+#define cmp_uint32_align4_unchecked cmp_uint32_unaligned_unchecked
+#define cmp_uint64_align4_unchecked cmp_uint64_unaligned_unchecked
+#endif /* !MDBX_UNALIGNED_OK || debug */
+
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint_unaligned(const MDBX_val *a,
+                                                                                                const MDBX_val *b) {
+  return cmp_uint(1, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint32_unaligned(const MDBX_val *a,
+                                                                                                  const MDBX_val *b) {
+  return cmp_uint32(1, a, b);
+}
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_uint64_unaligned(const MDBX_val *a,
+                                                                                                  const MDBX_val *b) {
+  return cmp_uint64(1, a, b);
+}
+
+/*----------------------------------------------------------------------------*/
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool eq_fast_slowpath(const uint8_t *a, const uint8_t *b, size_t l);
+
+MDBX_NOTHROW_PURE_FUNCTION static inline bool eq_fast(const MDBX_val *a, const MDBX_val *b) {
+  return a->iov_len == b->iov_len && eq_fast_slowpath(a->iov_base, b->iov_base, a->iov_len);
+}
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b);
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b);
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_len(size_t a, size_t b) {
+  const intptr_t diff_len = a - b;
+  ASSERT(diff_len == (int)diff_len);
+  /* кастинг допустим, так как длина ключей проверяется и не должна превышать INT_MAX / 2. */
+  return diff_len;
+}
+
+/* Compare two items lexically */
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_lexical(const MDBX_val *a, const MDBX_val *b) {
+  const intptr_t diff_len = cmp_len(a->iov_len, b->iov_len);
+  const size_t shortest = (a->iov_len < b->iov_len) ? a->iov_len : b->iov_len;
+  int diff_data = likely(shortest) ? memcmp(a->iov_base, b->iov_base, shortest) : 0;
+  return likely(diff_data) ? diff_data : diff_len;
+}
+
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline unsigned tail3le(const uint8_t *p, size_t l) {
+  STATIC_ASSERT(sizeof(unsigned) > 2);
+  // 1: 0 0 0
+  // 2: 0 1 1
+  // 3: 0 1 2
+  return p[0] | p[l >> 1] << 8 | p[l - 1] << 16;
+}
+
+/* Compare two items in reverse byte order */
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_reverse(const MDBX_val *a, const MDBX_val *b) {
+  size_t left = (a->iov_len < b->iov_len) ? a->iov_len : b->iov_len;
+  if (likely(left)) {
+    const uint8_t *pa = ptr_disp(a->iov_base, a->iov_len);
+    const uint8_t *pb = ptr_disp(b->iov_base, b->iov_len);
+    while (left >= sizeof(size_t)) {
+      pa -= sizeof(size_t);
+      pb -= sizeof(size_t);
+      left -= sizeof(size_t);
+      STATIC_ASSERT(sizeof(size_t) == 4 || sizeof(size_t) == 8);
+      if (sizeof(size_t) == 4) {
+        uint32_t xa = unaligned_peek_u32(1, pa);
+        uint32_t xb = unaligned_peek_u32(1, pb);
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+        xa = osal_bswap32(xa);
+        xb = osal_bswap32(xb);
+#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
+        if (xa != xb)
+          return (xa < xb) ? -1 : 1;
+      } else {
+        uint64_t xa = unaligned_peek_u64(1, pa);
+        uint64_t xb = unaligned_peek_u64(1, pb);
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+        xa = osal_bswap64(xa);
+        xb = osal_bswap64(xb);
+#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
+        if (xa != xb)
+          return (xa < xb) ? -1 : 1;
+      }
+    }
+    if (sizeof(size_t) == 8 && left >= 4) {
+      pa -= 4;
+      pb -= 4;
+      left -= 4;
+      uint32_t xa = unaligned_peek_u32(1, pa);
+      uint32_t xb = unaligned_peek_u32(1, pb);
+#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
+      xa = osal_bswap32(xa);
+      xb = osal_bswap32(xb);
+#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
+      if (xa != xb)
+        return (xa < xb) ? -1 : 1;
+    }
+    if (left) {
+      unsigned xa = tail3le(pa - left, left);
+      unsigned xb = tail3le(pb - left, left);
+      if (xa != xb)
+        return (xa < xb) ? -1 : 1;
+    }
+  }
+  return cmp_len(a->iov_len, b->iov_len);
+}
+
+/* Fast non-lexically comparator */
+MDBX_NOTHROW_PURE_FUNCTION static __always_inline intptr_t cmp_lenfast(const MDBX_val *a, const MDBX_val *b) {
+  int diff = cmp_len(a->iov_len, b->iov_len);
+  return (likely(diff) || a->iov_len == 0) ? diff : memcmp(a->iov_base, b->iov_base, a->iov_len);
+}
+
+/*----------------------------------------------------------------------------*/
+
+#ifndef ncmp_uint_align2
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_uint_align2(const MDBX_val *a, const MDBX_val *b);
+#endif
+#ifndef ncmp_uint_align4
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_uint_align4(const MDBX_val *a, const MDBX_val *b);
+#endif
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_uint_unaligned(const MDBX_val *a, const MDBX_val *b);
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_lexical(const MDBX_val *a, const MDBX_val *b);
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_reverse(const MDBX_val *a, const MDBX_val *b);
+
+static inline MDBX_cmp_func builtin_keycmp(MDBX_db_flags_t flags) {
+  return (flags & MDBX_INTEGERKEY) ? ncmp_uint_align2 : !(flags & MDBX_REVERSEKEY) ? ncmp_lexical : ncmp_reverse;
+}
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int ncmp_lenfast(const MDBX_val *a, const MDBX_val *b);
+
+static inline MDBX_cmp_func builtin_datacmp(MDBX_db_flags_t flags) {
+  if (flags & MDBX_DUPSORT) {
+    if (flags & MDBX_INTEGERDUP)
+      return (flags & MDBX_INTEGERKEY) ? /* aligned since keys length are aligned */ ncmp_uint_align4
+                                       : /* may be unaligned since key length may vary */ ncmp_uint_unaligned;
+    return (flags & MDBX_REVERSEDUP) ? ncmp_reverse : ncmp_lexical;
+  }
+  return ncmp_lenfast;
+}
+
+MDBX_INTERNAL size_t tree_search_branch_configure(const MDBX_cursor *mc, const MDBX_val *key);
+MDBX_INTERNAL sfr_t tree_search_foliage_configure(MDBX_cursor *mc, const MDBX_val *key);
+
+static inline void clc_reset_methods(volatile clc_t *clc) {
+  clc->search_branch = tree_search_branch_configure;
+  clc->search_foliage = tree_search_foliage_configure;
+}
 
 /* valid flags for mdbx_node_add() */
 #define NODE_ADD_FLAGS (N_DUP | N_TREE | MDBX_RESERVE | MDBX_APPEND)
@@ -2270,120 +2546,6 @@ MDBX_NOTHROW_PURE_FUNCTION static inline MDBX_val page_dupfix_key(const page_t *
 
 /*----------------------------------------------------------------------------*/
 
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint32_unchecked(const size_t expected_alignment,
-                                                                           const MDBX_val *a, const MDBX_val *b) {
-  ASSERT(a->iov_len == 4 && b->iov_len == 4);
-  return CMP2INT(unaligned_peek_u32(expected_alignment, a->iov_base),
-                 unaligned_peek_u32(expected_alignment, b->iov_base));
-}
-
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int
-cmp_uint32_unaligned_unchecked(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint32_unchecked(1, a, b);
-}
-
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint64_unchecked(const size_t expected_alignment,
-                                                                           const MDBX_val *a, const MDBX_val *b) {
-  ASSERT(a->iov_len == 8 && b->iov_len == 8);
-  return CMP2INT(unaligned_peek_u64(expected_alignment, a->iov_base),
-                 unaligned_peek_u64(expected_alignment, b->iov_base));
-}
-
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int
-cmp_uint64_unaligned_unchecked(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint64_unchecked(1, a, b);
-}
-
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint_unaligned(const MDBX_val *a, const MDBX_val *b);
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint32_unaligned(const MDBX_val *a, const MDBX_val *b);
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint64_unaligned(const MDBX_val *a, const MDBX_val *b);
-
-#if MDBX_UNALIGNED_OK < 2 || MDBX_CHECKING > 0
-/* Compare two items pointing at 2-byte aligned unsigned int's. */
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint_align2(const MDBX_val *a, const MDBX_val *b);
-/* Currently unused
-  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint32_align2(const MDBX_val *a, const MDBX_val *b);
-  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint64_align2(const MDBX_val *a, const MDBX_val *b);
-  MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint32_align2_unchecked(const MDBX_val *a,
-                                                                                                      const MDBX_val *b)
-  { return cmp_uint32_unchecked(2, a, b);
-  }
-  MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint64_align2_unchecked(const MDBX_val *a,
-                                                                                                      const MDBX_val *b)
-  { return cmp_uint64_unchecked(2, a, b);
-  } */
-#else
-#define cmp_uint_align2 cmp_uint_unaligned
-/* Currently unused
-#define cmp_uint32_align2 cmp_uint32_unaligned
-#define cmp_uint64_align2 cmp_uint64_unaligned
-#define cmp_uint32_align2_unchecked cmp_uint32_unaligned_unchecked
-#define cmp_uint64_align2_unchecked cmp_uint64_unaligned_unchecked */
-#endif /* !MDBX_UNALIGNED_OK || debug */
-
-#if MDBX_UNALIGNED_OK < 4 || MDBX_CHECKING > 0
-/* Compare two items pointing at 4-byte aligned unsigned int's. */
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint_align4(const MDBX_val *a, const MDBX_val *b);
-/* Currently unused
-  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint32_align4(const MDBX_val *a, const MDBX_val *b);
-  MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_uint64_align4(const MDBX_val *a, const MDBX_val *b); */
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint32_align4_unchecked(const MDBX_val *a,
-                                                                                                    const MDBX_val *b) {
-  return cmp_uint32_unchecked(4, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint64_align4_unchecked(const MDBX_val *a,
-                                                                                                    const MDBX_val *b) {
-  return cmp_uint64_unchecked(4, a, b);
-}
-#else
-#define cmp_uint_align4 cmp_uint_unaligned
-/* Currently unused
-  #define cmp_uint32_align4 cmp_uint32_unaligned
-  #define cmp_uint64_align4 cmp_uint64_unaligned */
-#define cmp_uint32_align4_unchecked cmp_uint32_unaligned_unchecked
-#define cmp_uint64_align4_unchecked cmp_uint64_unaligned_unchecked
-#endif /* !MDBX_UNALIGNED_OK || debug */
-
-/* Compare two items lexically */
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_lexical(const MDBX_val *a, const MDBX_val *b);
-
-/* Compare two items in reverse byte order */
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_reverse(const MDBX_val *a, const MDBX_val *b);
-
-/* Fast non-lexically comparator */
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_lenfast(const MDBX_val *a, const MDBX_val *b);
-
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool eq_fast_slowpath(const uint8_t *a, const uint8_t *b, size_t l);
-
-MDBX_NOTHROW_PURE_FUNCTION static inline bool eq_fast(const MDBX_val *a, const MDBX_val *b) {
-  return a->iov_len == b->iov_len && eq_fast_slowpath(a->iov_base, b->iov_base, a->iov_len);
-}
-
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b);
-
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b);
-
-static inline MDBX_cmp_func builtin_keycmp(MDBX_db_flags_t flags) {
-  return (flags & MDBX_INTEGERKEY) ? cmp_uint_align2 : (flags & MDBX_REVERSEKEY) ? cmp_reverse : cmp_lexical;
-}
-
-static inline MDBX_cmp_func builtin_datacmp(MDBX_db_flags_t flags) {
-  if (flags & MDBX_DUPSORT) {
-    if (flags & MDBX_INTEGERDUP)
-      return (flags & MDBX_INTEGERKEY) ? /* aligned since keys length are aligned */ cmp_uint_align4
-                                       : /* may be unaligned since key length may vary */ cmp_uint_unaligned;
-    return (flags & MDBX_REVERSEDUP) ? cmp_reverse : cmp_lexical;
-  }
-  return cmp_lenfast;
-}
-
-static inline void clc_reset_methods(volatile clc_t *clc) {
-  clc->search_branch = tree_search_branch_configure;
-  clc->search_foliage = tree_search_foliage_configure;
-}
-
-/*----------------------------------------------------------------------------*/
-
 MDBX_INTERNAL uint32_t combine_durability_flags(const uint32_t a, const uint32_t b);
 
 MDBX_CONST_FUNCTION static inline lck_t *lckless_stub(const MDBX_env *env) {
@@ -2489,7 +2651,10 @@ static __always_inline int check_txn(const MDBX_txn *txn, int bad_bits) {
       !(bad_bits /* abort/reset/txn-break */ == 0 &&
         ((txn->flags & (txn_ro_flat | MDBX_TXN_FINISHED)) == (txn_ro_flat | MDBX_TXN_FINISHED))) &&
       unlikely(txn->owner != osal_thread_self()))
-    err = txn->owner ? MDBX_THREAD_MISMATCH : MDBX_BAD_TXN;
+    err = txn->owner ? MDBX_THREAD_MISMATCH
+          : ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+              ? MDBX_OUSTED
+              : MDBX_BAD_TXN;
 #endif /* MDBX_TXN_CHECKOWNER */
 
   return err;
@@ -5352,16 +5517,19 @@ __cold static int copy_asis(MDBX_env *env, MDBX_txn *txn, mdbx_filehandle_t fd, 
   const size_t meta_bytes = pgno2bytes(env, NUM_METAS);
   uint8_t *const data_buffer = buffer + ceil_powerof2(meta_bytes, globals.sys_pagesize);
   meta_t *const meta = meta_init_triplet(env, buffer);
-  meta_set_txnid(env, meta, txn->txnid);
 
+  /* copy last/fresh meta-data from the txn */
+  meta->geometry = txn->geo;
+  meta->trees.gc = txn->dbs[FREE_DBI];
+  meta->trees.main = txn->dbs[MAIN_DBI];
   if (flags & MDBX_CP_FORCE_DYNAMIC_SIZE)
     meta_make_sizeable(meta);
-
-  /* copy canary sequences if present */
   if (txn->canary.v) {
+    /* copy canary sequences if present */
     meta->canary = txn->canary;
     meta->canary.v = constmeta_txnid(meta);
   }
+  meta_set_txnid(env, meta, txn->txnid);
 
   int rc = MDBX_SUCCESS;
   if (flags & MDBX_CP_THROTTLE_MVCC) {
@@ -13073,8 +13241,8 @@ __cold static int chk_db(MDBX_chk_scope_t *const scope, MDBX_dbi dbi, MDBX_chk_t
 
   if (0 > (int)dbi) {
     err = dbi_open(txn, &tbl->name, MDBX_DB_ACCEDE, &dbi,
-                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? cmp_equal_or_greater : nullptr,
-                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? cmp_equal_or_greater : nullptr);
+                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? ncmp_equal_or_greater : nullptr,
+                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? ncmp_equal_or_greater : nullptr);
     if (unlikely(err)) {
       tASSERT0(txn, dbi >= txn->env->n_dbi || (txn->env->dbs_flags[dbi] & DB_VALID) == 0);
       chk_error_rc(scope, err, "mdbx_dbi_open");
@@ -13996,179 +14164,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION pgno_t pgno_ceil2os_pgno(const MDBX
 
 /*----------------------------------------------------------------------------*/
 
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint_inline(const size_t expected_alignment,
-                                                                      const MDBX_val *a, const MDBX_val *b) {
-  if (likely(a->iov_len == b->iov_len)) {
-    if (sizeof(size_t) > 7 && likely(a->iov_len == 8))
-      return cmp_uint64_unchecked(expected_alignment, a, b);
-    if (likely(a->iov_len == 4))
-      return cmp_uint32_unchecked(expected_alignment, a, b);
-    if (sizeof(size_t) < 8 && likely(a->iov_len == 8))
-      return cmp_uint64_unchecked(expected_alignment, a, b);
-  }
-  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
-        b->iov_len);
-  return 0;
-}
-
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint32_inline(const size_t expected_alignment,
-                                                                        const MDBX_val *a, const MDBX_val *b) {
-  if (likely(a->iov_len == b->iov_len && a->iov_len == 4))
-    return cmp_uint32_unchecked(expected_alignment, a, b);
-  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
-        b->iov_len);
-  return 0;
-}
-
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_uint64_inline(const size_t expected_alignment,
-                                                                        const MDBX_val *a, const MDBX_val *b) {
-  if (likely(a->iov_len == b->iov_len && a->iov_len == 8))
-    return cmp_uint64_unchecked(expected_alignment, a, b);
-  ERROR("mismatch and/or invalid size %p.%zu/%p.%zu for INTEGERKEY/INTEGERDUP", a->iov_base, a->iov_len, b->iov_base,
-        b->iov_len);
-  return 0;
-}
-
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint_unaligned(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint_inline(1, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint32_unaligned(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint32_inline(1, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint64_unaligned(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint64_inline(1, a, b);
-}
-
-#ifndef cmp_uint_align2
-/* Compare two items pointing at 2-byte aligned unsigned int's. */
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint_align2(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint_inline(2, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint32_align2(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint32_inline(2, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint64_align2(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint64_inline(2, a, b);
-}
-#endif /* cmp_uint_align2 */
-
-#ifndef cmp_uint_align4
-/* Compare two items pointing at 4-byte aligned unsigned int's. */
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint_align4(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint_inline(4, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint32_align4(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint32_inline(4, a, b);
-}
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_uint64_align4(const MDBX_val *a, const MDBX_val *b) {
-  return cmp_uint64_inline(4, a, b);
-}
-#endif /* cmp_uint_align4 */
-
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline int cmp_len(size_t a, size_t b) {
-  const intptr_t diff_len = a - b;
-  ASSERT(diff_len == (int)diff_len);
-  /* кастинг допустим, так как длина ключей проверяется и не должна превышать INT_MAX / 2. */
-  return (int)diff_len;
-}
-
-/* Compare two items lexically */
-MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_lexical(const MDBX_val *a, const MDBX_val *b) {
-  const int diff_len = cmp_len(a->iov_len, b->iov_len);
-  const size_t shortest = (a->iov_len < b->iov_len) ? a->iov_len : b->iov_len;
-  int diff_data = likely(shortest) ? memcmp(a->iov_base, b->iov_base, shortest) : 0;
-  return likely(diff_data) ? diff_data : diff_len;
-}
-
-MDBX_NOTHROW_PURE_FUNCTION static __always_inline unsigned tail3le(const uint8_t *p, size_t l) {
-  STATIC_ASSERT(sizeof(unsigned) > 2);
-  // 1: 0 0 0
-  // 2: 0 1 1
-  // 3: 0 1 2
-  return p[0] | p[l >> 1] << 8 | p[l - 1] << 16;
-}
-
-/* Compare two items in reverse byte order */
-MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_reverse(const MDBX_val *a, const MDBX_val *b) {
-  size_t left = (a->iov_len < b->iov_len) ? a->iov_len : b->iov_len;
-  if (likely(left)) {
-    const uint8_t *pa = ptr_disp(a->iov_base, a->iov_len);
-    const uint8_t *pb = ptr_disp(b->iov_base, b->iov_len);
-    while (left >= sizeof(size_t)) {
-      pa -= sizeof(size_t);
-      pb -= sizeof(size_t);
-      left -= sizeof(size_t);
-      STATIC_ASSERT(sizeof(size_t) == 4 || sizeof(size_t) == 8);
-      if (sizeof(size_t) == 4) {
-        uint32_t xa = unaligned_peek_u32(1, pa);
-        uint32_t xb = unaligned_peek_u32(1, pb);
-#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-        xa = osal_bswap32(xa);
-        xb = osal_bswap32(xb);
-#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
-        if (xa != xb)
-          return (xa < xb) ? -1 : 1;
-      } else {
-        uint64_t xa = unaligned_peek_u64(1, pa);
-        uint64_t xb = unaligned_peek_u64(1, pb);
-#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-        xa = osal_bswap64(xa);
-        xb = osal_bswap64(xb);
-#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
-        if (xa != xb)
-          return (xa < xb) ? -1 : 1;
-      }
-    }
-    if (sizeof(size_t) == 8 && left >= 4) {
-      pa -= 4;
-      pb -= 4;
-      left -= 4;
-      uint32_t xa = unaligned_peek_u32(1, pa);
-      uint32_t xb = unaligned_peek_u32(1, pb);
-#if __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
-      xa = osal_bswap32(xa);
-      xb = osal_bswap32(xb);
-#endif /* __BYTE_ORDER__ != __ORDER_BIG_ENDIAN__ */
-      if (xa != xb)
-        return (xa < xb) ? -1 : 1;
-    }
-    if (left) {
-      unsigned xa = tail3le(pa - left, left);
-      unsigned xb = tail3le(pb - left, left);
-      if (xa != xb)
-        return (xa < xb) ? -1 : 1;
-    }
-  }
-  return cmp_len(a->iov_len, b->iov_len);
-}
-
-/* Fast non-lexically comparator */
-MDBX_NOTHROW_PURE_FUNCTION __hot int cmp_lenfast(const MDBX_val *a, const MDBX_val *b) {
-  int diff = cmp_len(a->iov_len, b->iov_len);
-  return (likely(diff) || a->iov_len == 0) ? diff : memcmp(a->iov_base, b->iov_base, a->iov_len);
-}
-
-MDBX_NOTHROW_PURE_FUNCTION __hot bool eq_fast_slowpath(const uint8_t *a, const uint8_t *b, size_t l) {
-  if (likely(l > 3)) {
-    if (MDBX_UNALIGNED_OK >= 4 && likely(l < 9))
-      return ((unaligned_peek_u32(1, a) - unaligned_peek_u32(1, b)) |
-              (unaligned_peek_u32(1, a + l - 4) - unaligned_peek_u32(1, b + l - 4))) == 0;
-    if (MDBX_UNALIGNED_OK >= 8 && sizeof(size_t) > 7 && likely(l < 17))
-      return ((unaligned_peek_u64(1, a) - unaligned_peek_u64(1, b)) |
-              (unaligned_peek_u64(1, a + l - 8) - unaligned_peek_u64(1, b + l - 8))) == 0;
-    return memcmp(a, b, l) == 0;
-  }
-  if (likely(l))
-    return tail3le(a, l) == tail3le(b, l);
-  return true;
-}
-
-int cmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : 1; }
-
-int cmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : -1; }
-
-/*----------------------------------------------------------------------------*/
-
 __cold void update_mlcnt(const MDBX_env *env, const pgno_t new_aligned_mlocked_pgno, const bool lock_not_release) {
   for (;;) {
     const pgno_t mlock_pgno_before = atomic_load32(&env->mlocked_pgno, mo_AcquireRelease);
@@ -14406,6 +14401,45 @@ bool coherency_check_meta(const MDBX_env *env, const volatile meta_t *meta, bool
   uint64_t timestamp = 0;
   return coherency_check_written(env, 0, meta, -1, report ? &timestamp : nullptr) == MDBX_SUCCESS;
 }
+
+int ncmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : 1; }
+
+int ncmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : -1; }
+
+__hot bool eq_fast_slowpath(const uint8_t *a, const uint8_t *b, size_t l) {
+  if (likely(l > 3)) {
+    if (MDBX_UNALIGNED_OK >= 4 && likely(l < 9))
+      return ((unaligned_peek_u32(1, a) - unaligned_peek_u32(1, b)) |
+              (unaligned_peek_u32(1, a + l - 4) - unaligned_peek_u32(1, b + l - 4))) == 0;
+    if (MDBX_UNALIGNED_OK >= 8 && sizeof(size_t) > 7 && likely(l < 17))
+      return ((unaligned_peek_u64(1, a) - unaligned_peek_u64(1, b)) |
+              (unaligned_peek_u64(1, a + l - 8) - unaligned_peek_u64(1, b + l - 8))) == 0;
+    return memcmp(a, b, l) == 0;
+  }
+  if (likely(l))
+    return tail3le(a, l) == tail3le(b, l);
+  return true;
+}
+
+/*----------------------------------------------------------------------------*/
+
+#define NONINLINE_OLDAPI_COMPARATOR(name)                                                                              \
+  __hot int n##name(const MDBX_val *a, const MDBX_val *b) {                                                            \
+    intptr_t diff = name(a, b);                                                                                        \
+    ASSERT(diff == (int)diff);                                                                                         \
+    return (int)diff;                                                                                                  \
+  }
+
+NONINLINE_OLDAPI_COMPARATOR(cmp_lexical)
+NONINLINE_OLDAPI_COMPARATOR(cmp_reverse)
+NONINLINE_OLDAPI_COMPARATOR(cmp_lenfast)
+NONINLINE_OLDAPI_COMPARATOR(cmp_uint_unaligned)
+#ifndef cmp_uint_align2
+NONINLINE_OLDAPI_COMPARATOR(cmp_uint_align2)
+#endif
+#ifndef cmp_uint_align4
+NONINLINE_OLDAPI_COMPARATOR(cmp_uint_align4)
+#endif
 
 __cold int cursor_validate(const MDBX_cursor *mc) {
   if (!mc->txn->wr.dirtylist) {
@@ -14693,7 +14727,7 @@ static __always_inline int couple_init(cursor_couple_t *couple, const MDBX_txn *
                 (int)z_dupfix == P_DUPFIX);
   couple->outer.checking = (CHECKS2_ENABLED() || (txn->env->flags & MDBX_VALIDATION)) ? z_pagecheck | z_leaf : z_leaf;
   couple->outer.subcur = nullptr;
-#if MDBX_DEBUG_SEARCH_DISPATCHING
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
   couple->outer.search_step_counter = 42;
 #endif
 
@@ -14717,7 +14751,7 @@ static __always_inline int couple_init(cursor_couple_t *couple, const MDBX_txn *
     mx->cursor.dbi_state = dbi_state;
     STATIC_ASSERT(MDBX_DUPFIXED * 2 == P_DUPFIX);
     mx->cursor.checking = couple->outer.checking + ((tree->flags & MDBX_DUPFIXED) << 1);
-#if MDBX_DEBUG_SEARCH_DISPATCHING
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
     mx->cursor.search_step_counter = 421;
 #endif
   }
@@ -20580,9 +20614,9 @@ __cold int dxb_setup(MDBX_env *env, const int lck_rc, const mdbx_mode_t mode_bit
     return MDBX_INCOMPATIBLE;
   }
   env->dbs_flags[FREE_DBI] = DB_VALID | MDBX_INTEGERKEY;
-  env->kvs[FREE_DBI].clc.k.cmp = cmp_uint_align4; /* aligned MDBX_INTEGERKEY */
+  env->kvs[FREE_DBI].clc.k.cmp = ncmp_uint_align4; /* aligned MDBX_INTEGERKEY */
   env->kvs[FREE_DBI].clc.k.lmax = env->kvs[FREE_DBI].clc.k.lmin = 8;
-  env->kvs[FREE_DBI].clc.v.cmp = cmp_lenfast;
+  env->kvs[FREE_DBI].clc.v.cmp = ncmp_lenfast;
   env->kvs[FREE_DBI].clc.v.lmin = 4;
   env->kvs[FREE_DBI].clc.v.lmax = mdbx_env_get_maxvalsize_ex(env, MDBX_INTEGERKEY);
   clc_reset_methods(&env->kvs[FREE_DBI].clc.k);
@@ -33166,7 +33200,7 @@ MDBX_CONST_FUNCTION static clc_t value_clc(const MDBX_cursor *mc) {
   if (likely((mc->flags & z_inner) == 0))
     return mc->clc->v;
   else {
-    clc_t stub = {.cmp = cmp_equal_or_wrong, .lmin = 0, .lmax = 0};
+    clc_t stub = {.cmp = ncmp_equal_or_wrong, .lmin = 0, .lmax = 0};
     return stub;
   }
 }
@@ -38630,10 +38664,9 @@ static int node_move(MDBX_cursor *csrc, MDBX_cursor *cdst, bool fromleft) {
         return rc;
     }
     if (is_branch(psrc)) {
-      const MDBX_val nullkey = {0, 0};
       const indx_t ix = csrc->ki[csrc->top];
       csrc->ki[csrc->top] = 0;
-      rc = tree_propagate_key(csrc, &nullkey);
+      rc = tree_propagate_nullkey(csrc);
       csrc->ki[csrc->top] = ix;
       cASSERT0(csrc, rc == MDBX_SUCCESS);
     }
@@ -38664,10 +38697,9 @@ static int node_move(MDBX_cursor *csrc, MDBX_cursor *cdst, bool fromleft) {
         return rc;
     }
     if (is_branch(pdst)) {
-      const MDBX_val nullkey = {0, 0};
       const indx_t ix = cdst->ki[cdst->top];
       cdst->ki[cdst->top] = 0;
-      rc = tree_propagate_key(cdst, &nullkey);
+      rc = tree_propagate_nullkey(cdst);
       cdst->ki[cdst->top] = ix;
       cASSERT0(cdst, rc == MDBX_SUCCESS);
     }
@@ -38795,8 +38827,7 @@ static int page_merge(MDBX_cursor *csrc, MDBX_cursor *cdst) {
   cursor_enroot(csrc, 1);
   node_del(csrc, 0);
   if (csrc->ki[csrc->top] == 0) {
-    const MDBX_val nullkey = {0, 0};
-    rc = tree_propagate_key(csrc, &nullkey);
+    rc = tree_propagate_nullkey(csrc);
     cASSERT0(csrc, rc != MDBX_RESULT_TRUE);
     if (unlikely(rc != MDBX_SUCCESS)) {
       /* cursor_undo_enroot(csrc, 1); don't needed on failure */
@@ -39223,9 +39254,7 @@ int tree_propagate_key(MDBX_cursor *mc, const MDBX_val *key) {
 
   /* But even if no shift was needed, update key size */
   node_set_ks(node, key->iov_len);
-
-  if (likely(key->iov_len /* to avoid UBSAN traps*/ != 0))
-    memcpy(node_key(node), key->iov_base, key->iov_len);
+  memcpy(node_key(node), key->iov_base, key->iov_len);
   return MDBX_SUCCESS;
 }
 
@@ -39390,7 +39419,7 @@ __hot __noinline int tree_deepen_edge(MDBX_cursor *mc, int flags) {
   LOWER += (half + 1) & CMP;                                                                                           \
   SIZE = half + (CMP & adjust)
 
-static int null_comparator(const MDBX_val *a, const MDBX_val *b) {
+static intptr_t null_comparator(const MDBX_val *a, const MDBX_val *b) {
   (void)a;
   (void)b;
   panic("must not be called");
@@ -39535,7 +39564,11 @@ SEARCH_FOLIAGE(ordinal_dupfix, cmp_uint_align4, cmp_uint_unaligned, true, true)
 SEARCH_FOLIAGE(uint32_dupfix, cmp_uint32_align4_unchecked, cmp_uint32_unaligned_unchecked, true, true)
 SEARCH_FOLIAGE(uint64_dupfix, cmp_uint64_align4_unchecked, cmp_uint64_unaligned_unchecked, true, true)
 
-#if MDBX_DEBUG_SEARCH_DISPATCHING
+MDBX_MAYBE_UNUSED static const char *cmp2name(MDBX_cmp_func);
+MDBX_MAYBE_UNUSED static const char *search_foliage2name(MDBX_search_foliage);
+MDBX_MAYBE_UNUSED static const char *search_branch2name(MDBX_search_branch);
+
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
 
 MDBX_MAYBE_UNUSED __cold static sfr_t old_node_search(MDBX_cursor *mc, const MDBX_val *key) {
   page_t *mp = mc->pg[mc->top];
@@ -39631,7 +39664,7 @@ MDBX_MAYBE_UNUSED __cold static size_t old_branch_search(MDBX_cursor *mc, const 
   return indx;
 }
 
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION __hot static MDBX_search_foliage
 cursor_to_search_foliage(const MDBX_cursor *mc) {
@@ -39640,11 +39673,11 @@ cursor_to_search_foliage(const MDBX_cursor *mc) {
 
   if ((mc->tree->flags & MDBX_DUPFIXED) && is_inner(mc)) {
 
-    if (comparator == cmp_lexical)
+    if (comparator == ncmp_lexical)
       return search_foliage_lexical_dupfix;
-    if (comparator == cmp_reverse)
+    if (comparator == ncmp_reverse)
       return search_foliage_reverse_dupfix;
-    if (comparator == cmp_lenfast)
+    if (comparator == ncmp_lenfast)
       return search_foliage_lenfast_dupfix;
 
     if (mc->tree->flags & MDBX_INTEGERKEY) {
@@ -39656,14 +39689,14 @@ cursor_to_search_foliage(const MDBX_cursor *mc) {
       }
       size_t ordinal = 0;
 #ifndef cmp_uint_align2
-      if (comparator == cmp_uint_align2)
+      if (comparator == ncmp_uint_align2)
         ordinal = keylen;
 #endif /* cmp_uint_align2 */
 #ifndef cmp_uint_align4
-      if (comparator == cmp_uint_align4)
+      if (comparator == ncmp_uint_align4)
         ordinal = keylen;
 #endif /* cmp_uint_align4 */
-      if (comparator == cmp_uint_unaligned)
+      if (comparator == ncmp_uint_unaligned)
         ordinal = keylen;
       if (ordinal) {
         if ((mc->txn->env->flags & MDBX_VALIDATION) == 0 && ordinal == mc->clc->k.lmin && ordinal == mc->clc->k.lmax) {
@@ -39679,11 +39712,11 @@ cursor_to_search_foliage(const MDBX_cursor *mc) {
     return search_foliage_custom_dupfix;
   }
 
-  if (comparator == cmp_lexical)
+  if (comparator == ncmp_lexical)
     return search_foliage_lexical_usual;
-  if (comparator == cmp_reverse)
+  if (comparator == ncmp_reverse)
     return search_foliage_reverse_usual;
-  if (comparator == cmp_lenfast)
+  if (comparator == ncmp_lenfast)
     return search_foliage_lenfast_usual;
 
   if (mc->tree->flags & MDBX_INTEGERKEY) {
@@ -39692,20 +39725,16 @@ cursor_to_search_foliage(const MDBX_cursor *mc) {
     cASSERT0(mc, !is_dupfix_leaf(mp) && page_numkeys(mp) > 0);
     const size_t keylen = node_ks(page_node(mp, 0));
     cASSERT0(mc, keylen >= mc->clc->k.lmin && keylen <= mc->clc->k.lmax && (keylen == 4 || keylen == 8));
-    if (/* paranoia */ keylen >= mc->clc->k.lmin && keylen <= mc->clc->k.lmax && (keylen == 4 || keylen == 8)) {
-      mc->clc->k.lmin = keylen;
-      mc->clc->k.lmax = keylen;
-    }
     size_t ordinal = 0;
 #ifndef cmp_uint_align2
-    if (comparator == cmp_uint_align2)
+    if (comparator == ncmp_uint_align2)
       ordinal = keylen;
 #endif /* cmp_uint_align2 */
 #ifndef cmp_uint_align4
-    if (comparator == cmp_uint_align4)
+    if (comparator == ncmp_uint_align4)
       ordinal = keylen;
 #endif /* cmp_uint_align4 */
-    if (comparator == cmp_uint_unaligned)
+    if (comparator == ncmp_uint_unaligned)
       ordinal = keylen;
     if (ordinal) {
       if ((mc->txn->env->flags & MDBX_VALIDATION) == 0 && ordinal == mc->clc->k.lmin && ordinal == mc->clc->k.lmax) {
@@ -39723,7 +39752,13 @@ cursor_to_search_foliage(const MDBX_cursor *mc) {
 
 __hot sfr_t tree_search_foliage_configure(MDBX_cursor *mc, const MDBX_val *key) {
   MDBX_search_foliage search_foliage = cursor_to_search_foliage(mc);
+
 #if MDBX_DEBUG_SEARCH_DISPATCHING
+  NOTICE("dispatch-%s: dbi %zu, %s %s => %s", "search_foligage", cursor_dbi(mc), cmp2name(mc->clc->k.cmp),
+         cmp2name(mc->clc->v.cmp), search_foliage2name(search_foliage));
+#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
   const unsigned snap_1 = MDBX_CURSOR_STC_GET(mc);
   sfr_t old = old_node_search(mc, key);
   int old_i = mc->ki[mc->top];
@@ -39749,7 +39784,7 @@ __hot sfr_t tree_search_foliage_configure(MDBX_cursor *mc, const MDBX_val *key) 
 #else
   mc->clc->k.search_foliage = search_foliage;
   return search_foliage(mc, key);
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
@@ -39797,11 +39832,11 @@ cursor_to_search_branch(const MDBX_cursor *mc) {
   MDBX_cmp_func comparator = mc->clc->k.cmp;
   ASSERT(comparator != nullptr);
 
-  if (comparator == cmp_lexical)
+  if (comparator == ncmp_lexical)
     return search_branch_lexical;
-  if (comparator == cmp_reverse)
+  if (comparator == ncmp_reverse)
     return search_branch_reverse;
-  if (comparator == cmp_lenfast)
+  if (comparator == ncmp_lenfast)
     return search_branch_lenfast;
 
   if (mc->tree->flags & MDBX_INTEGERKEY) {
@@ -39811,20 +39846,16 @@ cursor_to_search_branch(const MDBX_cursor *mc) {
     STATIC_ASSERT(P_BRANCH == 1);
     const size_t keylen = is_dupfix_leaf(mp) ? mp->dupfix_ksize : node_ks(page_node(mp, mp->flags & P_BRANCH));
     cASSERT0(mc, keylen >= mc->clc->k.lmin && keylen <= mc->clc->k.lmax && (keylen == 4 || keylen == 8));
-    if (/* paranoia */ keylen >= mc->clc->k.lmin && keylen <= mc->clc->k.lmax && (keylen == 4 || keylen == 8)) {
-      mc->clc->k.lmin = keylen;
-      mc->clc->k.lmax = keylen;
-    }
     size_t ordinal = 0;
 #ifndef cmp_uint_align2
-    if (comparator == cmp_uint_align2)
+    if (comparator == ncmp_uint_align2)
       ordinal = keylen;
 #endif /* cmp_uint_align2 */
 #ifndef cmp_uint_align4
-    if (comparator == cmp_uint_align4)
+    if (comparator == ncmp_uint_align4)
       ordinal = keylen;
 #endif /* cmp_uint_align4 */
-    if (comparator == cmp_uint_unaligned)
+    if (comparator == ncmp_uint_unaligned)
       ordinal = keylen;
     if (ordinal) {
       if ((mc->txn->env->flags & MDBX_VALIDATION) == 0 && ordinal == mc->clc->k.lmin && ordinal == mc->clc->k.lmax) {
@@ -39842,7 +39873,13 @@ cursor_to_search_branch(const MDBX_cursor *mc) {
 
 size_t tree_search_branch_configure(const MDBX_cursor *mc, const MDBX_val *key) {
   MDBX_search_branch search_branch = cursor_to_search_branch(mc);
+
 #if MDBX_DEBUG_SEARCH_DISPATCHING
+  NOTICE("dispatch-%s: dbi %zu, %s %s => %s", "search_branch", cursor_dbi(mc), cmp2name(mc->clc->k.cmp),
+         cmp2name(mc->clc->v.cmp), search_branch2name(search_branch));
+#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+#if MDBX_DEBUG_SEARCH_BRANCHLESS
   const unsigned snap_1 = MDBX_CURSOR_STC_GET(mc);
   size_t old_i = old_branch_search((MDBX_cursor *)mc, key);
   const unsigned snap_2 = MDBX_CURSOR_STC_GET(mc);
@@ -39864,7 +39901,7 @@ size_t tree_search_branch_configure(const MDBX_cursor *mc, const MDBX_val *key) 
 #else
   mc->clc->k.search_branch = search_branch;
   return search_branch(mc, key);
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 }
 
 #undef CLEAR_VALUE_PROPAGATION
@@ -39872,6 +39909,54 @@ size_t tree_search_branch_configure(const MDBX_cursor *mc, const MDBX_val *key) 
 #undef BINARY_BRANCHLESS_SEARCH_CYCLE_END
 #undef SEARCH_BRANCH
 #undef SEARCH_FOLIAGE
+
+MDBX_MAYBE_UNUSED static const char *cmp2name(MDBX_cmp_func);
+MDBX_MAYBE_UNUSED static const char *search_foliage2name(MDBX_search_foliage);
+MDBX_MAYBE_UNUSED static const char *search_branch2name(MDBX_search_branch);
+
+#define CASE(name)                                                                                                     \
+  if (fn == name)                                                                                                      \
+  return #name
+
+static const char *cmp2name(MDBX_cmp_func fn) {
+  CASE(ncmp_lexical);
+  CASE(ncmp_reverse);
+  CASE(ncmp_lenfast);
+  CASE(ncmp_uint_align2);
+  CASE(ncmp_uint_align4);
+  CASE(ncmp_uint_unaligned);
+  return "unknown";
+}
+
+static const char *search_foliage2name(MDBX_search_foliage fn) {
+  CASE(search_foliage_lexical_usual);
+  CASE(search_foliage_reverse_usual);
+  CASE(search_foliage_lenfast_usual);
+  CASE(search_foliage_custom_usual);
+  CASE(search_foliage_ordinal_usual);
+  CASE(search_foliage_uint32_usual);
+  CASE(search_foliage_uint64_usual);
+
+  CASE(search_foliage_lexical_dupfix);
+  CASE(search_foliage_reverse_dupfix);
+  CASE(search_foliage_lenfast_dupfix);
+  CASE(search_foliage_custom_dupfix);
+  CASE(search_foliage_ordinal_dupfix);
+  CASE(search_foliage_uint32_dupfix);
+  CASE(search_foliage_uint64_dupfix);
+  return "unknown";
+}
+
+static const char *search_branch2name(MDBX_search_branch fn) {
+  CASE(search_branch_ordinal);
+  CASE(search_branch_uint32);
+  CASE(search_branch_uint64);
+  CASE(search_branch_lexical);
+  CASE(search_branch_reverse);
+  CASE(search_branch_lenfast);
+  CASE(search_branch_custom);
+  return "unknown";
+}
 
 static inline size_t txl_size2bytes(const size_t size) {
   ASSERT(size > 0 && size <= txl_max * 2);
@@ -41525,7 +41610,9 @@ int txn_ro_park(MDBX_txn *txn, bool autounpark) {
 int txn_ro_unpark(MDBX_txn *txn) {
   if (unlikely((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_HAS_CHILD | txn_ro_flat | MDBX_TXN_PARKED)) !=
                (txn_ro_flat | MDBX_TXN_PARKED)))
-    return (txn->flags & MDBX_TXN_OUSTED) ? MDBX_OUSTED : MDBX_BAD_TXN;
+    return ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+               ? MDBX_OUSTED
+               : MDBX_BAD_TXN;
 
   for (reader_slot_t *const slot = txn->ro.slot; slot; atomic_yield()) {
     const mdbx_pid_t pid = atomic_load_pid(&slot->pid, mo_Relaxed);
@@ -42668,10 +42755,10 @@ __dll_export
         0,
         14,
         2,
-        527,
+        543,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.527 */
-        {"2026-08-05T17:32:59+03:00", "d11f6d7a1469db91ff8720f9c65ab9fc98314d6c", "6c0d0e15fa37d68b269a212f58bb581403afe421", "v0.14.2-527-g6c0d0e15"},
+                                        0.14.2.543 */
+        {"2026-08-07T16:04:08+03:00", "5fc4a75ee7d37cfc66492dcf2808c8c95cda0081", "a4d2e4ab9f27971742bd4c8e2963f533d5bc10d7", "v0.14.2-543-ga4d2e4ab"},
         sourcery};
 
 __dll_export

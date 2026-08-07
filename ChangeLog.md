@@ -91,6 +91,8 @@ The supporting release of a stable branch with bug fixes.
 
  - Fixed `ERROR_LOCK_VIOLATION` during defrag on Windows in operation modes using overlapped I/O.
 
+ - Fixed the regression/bug in the copy-without-compaction code, which leads to produce a copy without a payload.
+
  - Fixed `env_owned_wrtxn()` to avoid by-pass locking in the `MDBX_NOSTICKYTHREADS` mode.
 
  - Fixed unreasonably high memory 2GB consumption in `mdbx_load` utility due to leftover debug changes.
