@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-566-ga5a7be06 at 2026-08-09T09:57:43+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -624,8 +624,7 @@ typedef mode_t mdbx_mode_t;
 extern "C" {
 #endif
 
-/* MDBX version 0.14.x, but it is unstable/under-development yet. */
-#define MDBX_VERSION_UNSTABLE
+/* MDBX version 0.14.x */
 #define MDBX_VERSION_MAJOR 0
 #define MDBX_VERSION_MINOR 14
 

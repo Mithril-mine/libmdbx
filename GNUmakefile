@@ -264,7 +264,8 @@ strip: all
 clean:
 	@echo '  CLEANING...'
 	$(QUIET)rm -rf $(MDBX_TOOLS) mdbx_test @* *.[ao] *.[ls]o *.$(SO_SUFFIX) *.dSYM *~ tmp.db/* \
-		*.gcov *.log *.err src/*.o tests/*.o mdbx_legacy_example mdbx_modern_example dist @dist-check \
+		*.gcov *.log *.err src/*.o tests/*.o tests/framework/*.o tests/ut/*.o tests/issues/*.o \
+		mdbx_legacy_example mdbx_modern_example dist @dist-check \
 		config-gnumake.h src/config-gnumake.h *.tar* @buildflags.tag @dist-checked.tag \
 		mdbx_*.static mdbx_*.static-lto CMakeFiles
 

@@ -7,9 +7,10 @@ Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
 BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.3 is re-scheduled for 2026-08-08.
+## v0.14.3 "Китов" (Kitov) at 2026-08-09.
 
-The supporting release of a stable branch with bug fixes.
+The supporting release with a lot of bug fixes,
+in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pioneer of cybernetics and the one of inventors of M-100, which was a most powerful computer of the World in 1958.
 
 ### Important:
 
