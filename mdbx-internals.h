@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-566-ga5a7be06 at 2026-08-09T09:57:43+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY d5b7db14f7dd4cf9258d39c07b7494d8497f089ab807375fa295548a28140ef6_v0_14_2_548_gee87b0d4
+#define MDBX_BUILD_SOURCERY b4b45066d6d0a76d3e2f42bd10fcb7e8091c88a170fa2ad31456cf2cfe2d661a_v0_14_2_566_ga5a7be06
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -2389,6 +2389,21 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #if MDBX_FORCE_ASSERTIONS && MDBX_CHECKING < 2
 #error "Please use one of MDBX_CHECKING either MDBX_FORCE_ASSERTIONS build options, but not both"
 #endif
+
+/********************************************************************************
+ * Internal debugging options */
+
+#ifndef MDBX_DEBUG_SPILLING
+#define MDBX_DEBUG_SPILLING 0
+#endif /* MDBX_DEBUG_SPILLING */
+
+#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
+#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
+#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
+
+#ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
+#define MDBX_DEBUG_SEARCH_BRANCHLESS 0
+#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
 
 /* Since 2026-04-01 alternatives to MDBX_PNL_ASCENDING = 0 are no longer supported. */
 #define MDBX_PNL_ASCENDING 0

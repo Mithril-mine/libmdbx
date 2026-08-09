@@ -614,6 +614,14 @@ mark_as_advanced(MDBX_USE_FALLOCATE)
 add_option(MDBX ENABLE_FAKE_NESTED_READONLY_TRANSACTIONS "Enables fake nested read-only transactions, which are much cheaper but do not restore the state of cursors in case of transaction abortion." OFF)
 mark_as_advanced(MDBX_ENABLE_FAKE_NESTED_READONLY_TRANSACTIONS)
 
+# Internal debugging
+add_option( MDBX DEBUG_SPILLING "Kind of internal debugging" OFF)
+add_option( MDBX DEBUG_SEARCH_DISPATCHING "Kind of internal debugging" OFF)
+add_option( MDBX DEBUG_SEARCH_BRANCHLESS "Kind of internal debugging" OFF)
+mark_as_advanced(MDBX_DEBUG_SPILLING)
+mark_as_advanced(MDBX_DEBUG_SEARCH_DISPATCHING)
+mark_as_advanced(MDBX_DEBUG_SEARCH_BRANCHLESS)
+
 if(DEFINED MDBX_FORCE_ASSERTIONS)
   message(WARNING "The `MDBX_FORCE_ASSERTIONS` is obsolete, please use `MDBX_CHECKING=2` instead")
   if(DEFINED MDBX_CHECKING)

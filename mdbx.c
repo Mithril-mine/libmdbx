@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-566-ga5a7be06 at 2026-08-09T09:57:43+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -1107,18 +1107,6 @@ struct MDBX_txn {
 
 #define CURSOR_STACK_SIZE (16 + MDBX_WORDBITS / 4)
 
-#ifndef xMDBX_DEBUG_SPILLING
-#define xMDBX_DEBUG_SPILLING 0
-#endif /* xMDBX_DEBUG_SPILLING */
-
-#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
-#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
-
-#ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
-#define MDBX_DEBUG_SEARCH_BRANCHLESS 0
-#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
-
 struct MDBX_cursor {
   int32_t signature;
   union {
@@ -1187,7 +1175,7 @@ struct MDBX_cursor {
   /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
   uint8_t checking;
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   uint8_t tmp_split_top;
   page_t *tmp_split[CURSOR_STACK_SIZE];
 #define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp)                                                                            \
@@ -1205,7 +1193,7 @@ struct MDBX_cursor {
 #else
 #define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp) ((void)(mc), (void)(mp))
 #define CURSOR_TRACING_TMPPAGE_POP(mc, mp) ((void)(mc), (void)(mp))
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
 #if MDBX_DEBUG_SEARCH_BRANCHLESS
   unsigned search_step_counter;
@@ -1371,9 +1359,9 @@ struct MDBX_env {
   pgno_t poison_edge;
 #endif /* ENABLE_MEMCHECK || __SANITIZE_ADDRESS__ */
 
-#if xMDBX_DEBUG_SPILLING == 2
+#if MDBX_DEBUG_SPILLING == 2
   size_t debug_dirtied_est, debug_dirtied_act;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   /* --------------------------------------------------- mostly volatile part */
 
@@ -1531,7 +1519,7 @@ struct commit_timestamp {
 };
 MDBX_INTERNAL pgop_stat_t *txn_latency_gcprof(const MDBX_env *env, MDBX_commit_latency *latency);
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
 MDBX_INTERNAL void txn_probe_dbi_cursors_stacks(const MDBX_txn *txn, size_t dbi, const char *func, unsigned line);
 #define PROBE_AGAINST_DANGLING_DBI(cursor)                                                                             \
   txn_probe_dbi_cursors_stacks((cursor)->txn, cursor_dbi(cursor), __func__, __LINE__)
@@ -1540,7 +1528,7 @@ MDBX_INTERNAL void txn_probe_all_cursors_against_dangling(MDBX_txn *txn, const c
 #else
 #define PROBE_AGAINST_DANGLING_DBI(cursor) ((void)(cursor))
 #define PROBE_AGAINST_DANGLING_TXN(txn) ((void)(txn))
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
 MDBX_INTERNAL bool txn_refund(MDBX_txn *txn);
 MDBX_INTERNAL bool txn_gc_detent(const MDBX_txn *const txn);
@@ -3793,8 +3781,8 @@ static inline int txn_spill(MDBX_txn *const txn, MDBX_cursor *const m0, const si
 
   /* production mode */
   if (likely(wanna_spill_npages < 1 && wanna_spill_entries < 1)
-#if xMDBX_DEBUG_SPILLING == 1
-      /* debug mode: always try to spill if xMDBX_DEBUG_SPILLING == 1 */
+#if MDBX_DEBUG_SPILLING == 1
+      /* debug mode: always try to spill if MDBX_DEBUG_SPILLING == 1 */
       && txn->txnid % 23 > 11
 #endif
   )
@@ -5740,8 +5728,19 @@ __cold static int copy2pathname(MDBX_txn *txn, const pathchar_t *dest_path, MDBX
                          S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP
 #endif
   );
-  if (unlikely(rc != MDBX_SUCCESS))
+  if (unlikely(rc != MDBX_SUCCESS)) {
+    if (rc != MDBX_EEXIST) {
+#if IS_WINDOWS
+      if (rc == ERROR_PATH_NOT_FOUND || rc == ERROR_INVALID_DRIVE || rc == ERROR_BAD_NETPATH ||
+          rc == ERROR_BAD_PATHNAME)
+        return rc;
+#endif
+      int err = osal_removefile(dest_path);
+      if (err != MDBX_SUCCESS && err != MDBX_ENOFILE)
+        ERROR("unable remove incomplete copy destination `%" MDBX_PRIsPATH "`, error %d", dest_path, err);
+    }
     return rc;
+  }
 
 #if IS_WINDOWS
   /* no locking required since the file opened with ShareMode == 0 */
@@ -5806,12 +5805,13 @@ __cold static int copy2pathname(MDBX_txn *txn, const pathchar_t *dest_path, MDBX
   if (rc == MDBX_SUCCESS)
     rc = copy2fd(txn, newfd, flags);
 
-  if (newfd != INVALID_HANDLE_VALUE) {
-    int err = osal_closefile(newfd);
-    if (rc == MDBX_SUCCESS && err != rc)
-      rc = err;
-    if (rc != MDBX_SUCCESS)
-      (void)osal_removefile(dest_path);
+  int err = osal_closefile(newfd);
+  if (rc == MDBX_SUCCESS && err != rc)
+    rc = err;
+  if (rc != MDBX_SUCCESS) {
+    err = osal_removefile(dest_path);
+    if (err != MDBX_SUCCESS && err != MDBX_ENOFILE)
+      ERROR("unable remove incomplete copy destination `%" MDBX_PRIsPATH "`, error %d", dest_path, err);
   }
   return rc;
 }
@@ -7462,6 +7462,13 @@ __cold int mdbx_env_create(MDBX_env **penv) {
     return LOG_IFERR(MDBX_EINVAL);
   *penv = nullptr;
 
+#if IS_WINDOWS
+  if (!imports.srwl_Init) {
+    FATAL("The %s() was not called by the system module loader.", "mdbx_init");
+    return LOG_IFERR(MDBX_PANIC);
+  }
+#endif /* IS_WINDOWS */
+
 #ifdef MDBX_HAVE_C11ATOMICS
   if (unlikely(!atomic_is_lock_free((const volatile uint32_t *)penv))) {
     ERROR("lock-free atomic ops for %u-bit types is required", 32);
@@ -7475,7 +7482,8 @@ __cold int mdbx_env_create(MDBX_env **penv) {
 #endif /* MDBX_64BIT_ATOMIC */
 #endif /* MDBX_HAVE_C11ATOMICS */
 
-  if (unlikely(!is_powerof2(globals.sys_pagesize) || globals.sys_pagesize < MDBX_MIN_PAGESIZE)) {
+  if (unlikely(!is_powerof2(globals.sys_pagesize) || globals.sys_pagesize < MDBX_MIN_PAGESIZE ||
+               globals.sys_pagesize > 16 * MEGABYTE)) {
     ERROR("unsuitable system pagesize %u", globals.sys_pagesize);
     return LOG_IFERR(MDBX_INCOMPATIBLE);
   }
@@ -14594,7 +14602,7 @@ __hot int cursor_touch(MDBX_cursor *const mc, const MDBX_val *key, const MDBX_va
         if (!cursor_is_main(mc))
           need += txn->dbs[MAIN_DBI].height + (size_t)3;
       }
-#if xMDBX_DEBUG_SPILLING != 2
+#if MDBX_DEBUG_SPILLING != 2
       /* production mode */
       /* 4) Double the page chain estimation
        * for extensively splitting, rebalance and merging */
@@ -14607,7 +14615,7 @@ __hot int cursor_touch(MDBX_cursor *const mc, const MDBX_val *key, const MDBX_va
       (void)data;
       txn->env->debug_dirtied_est = ++need;
       txn->env->debug_dirtied_act = 0;
-#endif /* xMDBX_DEBUG_SPILLING == 2 */
+#endif /* MDBX_DEBUG_SPILLING == 2 */
 
       int err = txn_spill(txn, mc, need);
       if (unlikely(err != MDBX_SUCCESS))
@@ -14730,10 +14738,10 @@ static __always_inline int couple_init(cursor_couple_t *couple, const MDBX_txn *
   couple->outer.search_step_counter = 42;
 #endif
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   couple->outer.tmp_split_top = 0;
   couple->inner.cursor.tmp_split_top = 0;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   subcur_t *const mx = &couple->inner;
   mx->cursor.combo_state = z_fresh_mark | z_inner;
@@ -14787,9 +14795,9 @@ int cursor_dupsort_setup(MDBX_cursor *mc, const node_t *node, const page_t *mp) 
   if (!MDBX_DISABLE_VALIDATION && unlikely(mx == nullptr))
     return unexpected_dupsort(mc);
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   mx->cursor.tmp_split_top = 0;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   const uint8_t flags = node_flags(node);
   switch (flags) {
@@ -14869,9 +14877,9 @@ MDBX_cursor *cursor_cpstk(const MDBX_cursor *csrc, MDBX_cursor *cdst) {
   cASSERT0(cdst, cdst->clc == csrc->clc);
   cASSERT0(cdst, cdst->dbi_state == csrc->dbi_state);
   cdst->combo_state = csrc->combo_state;
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   cdst->tmp_split_top = 0;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   for (intptr_t i = 0, last = csrc->top + csrc->stash; i <= last; i++) {
     cdst->pg[i] = csrc->pg[i];
@@ -25066,6 +25074,8 @@ static void mdbx_fini(void);
 
 #if IS_WINDOWS
 
+extern const IMAGE_TLS_DIRECTORY _tls_used;
+
 #if MDBX_BUILD_SHARED_LIBRARY
 #if MDBX_WITHOUT_MSVC_CRT && !defined(_DEBUG)
 /* DEBUG/CHECKED builds still require MSVC's CRT for runtime checks.
@@ -25101,6 +25111,13 @@ static
 #endif /* MDBX_BUILD_SHARED_LIBRARY */
 {
   (void)reserved;
+
+#if defined(__MINGW64__) || defined(__MINGW32__) || defined(__MINGW__)
+  /* A .CRT$XL* callback requires MinGW's PE TLS directory.
+   * Keep its _tls_used definition linked, including with GNU ld --gc-sections. */
+  __asm__ __volatile__("" : : "r"(&_tls_used));
+#endif /* MinGW */
+
   switch (reason) {
   case DLL_PROCESS_ATTACH:
     windows_import();
@@ -27885,13 +27902,13 @@ static inline const char *sanitizer_probe_page_dangling(const MDBX_txn *txn, con
     return nullptr;
   }
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   for (unsigned i = 0; i < mc->tmp_split_top; ++i)
     if (mc->tmp_split[i] == mp)
       return nullptr;
 #else
   (void)mc;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   if ((txn->flags & MDBX_WRITEMAP) != 0 || !txn->wr.dirtylist)
     return "MMAP.outside-mmap-region";
@@ -34515,11 +34532,11 @@ __hot int __must_check_result page_dirty(MDBX_txn *txn, page_t *mp, size_t npage
   }
   tASSERT0(txn, (txn->flags & MDBX_WRITEMAP) == 0 || MDBX_AVOID_MSYNC);
 
-#if xMDBX_DEBUG_SPILLING == 2
+#if MDBX_DEBUG_SPILLING == 2
   txn->env->debug_dirtied_act += 1;
   ENSURE(txn->env, txn->env->debug_dirtied_act < txn->env->debug_dirtied_est);
   ENSURE(txn->env, txn->wr.dirtyroom + txn->wr.loose_count > 0);
-#endif /* xMDBX_DEBUG_SPILLING == 2 */
+#endif /* MDBX_DEBUG_SPILLING == 2 */
 
   int rc;
   if (unlikely(txn->wr.dirtyroom == 0)) {
@@ -37234,10 +37251,10 @@ __cold int spill_slowpath(MDBX_txn *const txn, MDBX_cursor *const m0, const intp
   /* Preserve pages which may soon be dirtied again */
   const size_t unspillable = spill_txn_keep(txn, m0);
   if (unspillable + txn->wr.loose_count >= dl->length) {
-#if xMDBX_DEBUG_SPILLING == 1 /* avoid false failure in debug mode  */
+#if MDBX_DEBUG_SPILLING == 1 /* avoid false failure in debug mode  */
     if (likely(txn->wr.dirtyroom + txn->wr.loose_count >= need))
       return MDBX_SUCCESS;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
     ERROR("all %zu dirty pages are unspillable since referenced "
           "by a cursor(s), use fewer cursors or increase "
           "MDBX_opt_txn_dp_limit",
@@ -37395,7 +37412,7 @@ __cold int spill_slowpath(MDBX_txn *const txn, MDBX_cursor *const m0, const intp
     }
   }
 
-#if xMDBX_DEBUG_SPILLING == 2
+#if MDBX_DEBUG_SPILLING == 2
   if (txn->wr.loose_count + txn->wr.dirtyroom <= need / 2 + 1)
     ERROR("dirty-list length: before %zu, after %zu, parent %zi, loose %zu; "
           "needed %zu, spillable %zu; "
@@ -37404,7 +37421,7 @@ __cold int spill_slowpath(MDBX_txn *const txn, MDBX_cursor *const m0, const intp
           (txn->parent && txn->parent->wr.dirtylist) ? (intptr_t)txn->parent->wr.dirtylist->length : -1,
           txn->wr.loose_count, need, spillable_entries, spilled_entries, txn->wr.dirtyroom);
   ENSURE(txn->env, txn->wr.loose_count + txn->wr.dirtyroom > need / 2);
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
 done:
   return likely(txn->wr.dirtyroom + txn->wr.loose_count > min_unsigned(need, CURSOR_STACK_SIZE)) ? MDBX_SUCCESS
@@ -42754,10 +42771,10 @@ __dll_export
         0,
         14,
         2,
-        548,
+        566,
         "", /* pre-release suffix of SemVer
-                                        0.14.2.548 */
-        {"2026-08-08T00:27:39+03:00", "52f1ff3ffcf5369904ac36d39a5696974089c546", "ee87b0d44604c2f79e87e497ec34cd528048dd18", "v0.14.2-548-gee87b0d4"},
+                                        0.14.2.566 */
+        {"2026-08-09T09:57:43+03:00", "710bea9f42e8da817136507a9e7ad7b28fcf8d34", "a5a7be0633c27e5378e0cd922dcd440997fcbe7a", "v0.14.2-566-ga5a7be06"},
         sourcery};
 
 __dll_export

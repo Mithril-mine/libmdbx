@@ -101,6 +101,8 @@ The supporting release of a stable branch with bug fixes.
 
  - Fixed a lot of typos and a few bugs detected by CodeQL.
 
+ - Fixed loosing of global init and thread-local-storage destructors in static library build by MinGW toolchain in particular cases.
+
  - Rare or specific conditions:
     - Fixed major typo in condition inside `latch_maindb_locked()`.
       However, despite the severity of the error, the scenario of its manifestation could not be found due to a combination of other checks in the code.

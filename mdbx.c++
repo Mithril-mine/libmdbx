@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-566-ga5a7be06 at 2026-08-09T09:57:43+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -670,18 +670,6 @@ struct MDBX_txn {
 
 #define CURSOR_STACK_SIZE (16 + MDBX_WORDBITS / 4)
 
-#ifndef xMDBX_DEBUG_SPILLING
-#define xMDBX_DEBUG_SPILLING 0
-#endif /* xMDBX_DEBUG_SPILLING */
-
-#ifndef MDBX_DEBUG_SEARCH_DISPATCHING
-#define MDBX_DEBUG_SEARCH_DISPATCHING MDBX_DEBUG
-#endif /* MDBX_DEBUG_SEARCH_DISPATCHING */
-
-#ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
-#define MDBX_DEBUG_SEARCH_BRANCHLESS 0
-#endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
-
 struct MDBX_cursor {
   int32_t signature;
   union {
@@ -750,7 +738,7 @@ struct MDBX_cursor {
   /* флаги проверки, в том числе биты для проверки типа листовых страниц. */
   uint8_t checking;
 
-#if xMDBX_DEBUG_SPILLING > 0
+#if MDBX_DEBUG_SPILLING > 0
   uint8_t tmp_split_top;
   page_t *tmp_split[CURSOR_STACK_SIZE];
 #define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp)                                                                            \
@@ -768,7 +756,7 @@ struct MDBX_cursor {
 #else
 #define CURSOR_TRACING_TMPPAGE_PUSH(mc, mp) ((void)(mc), (void)(mp))
 #define CURSOR_TRACING_TMPPAGE_POP(mc, mp) ((void)(mc), (void)(mp))
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
 #if MDBX_DEBUG_SEARCH_BRANCHLESS
   unsigned search_step_counter;
@@ -934,9 +922,9 @@ struct MDBX_env {
   pgno_t poison_edge;
 #endif /* ENABLE_MEMCHECK || __SANITIZE_ADDRESS__ */
 
-#if xMDBX_DEBUG_SPILLING == 2
+#if MDBX_DEBUG_SPILLING == 2
   size_t debug_dirtied_est, debug_dirtied_act;
-#endif /* xMDBX_DEBUG_SPILLING */
+#endif /* MDBX_DEBUG_SPILLING */
 
   /* --------------------------------------------------- mostly volatile part */
 

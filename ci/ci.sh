@@ -10,6 +10,7 @@
 
 function failure() {
 	echo "Oops, $* failed ;(" >&2
+	df
 	exit 2
 }
 
@@ -33,11 +34,11 @@ function provide_toolchain {
 	if [ -z "${CMAKE}" -o -z "$(which ninja 2>/dev/null)" ]; then
 		SUDO=$(which sudo 2>&-)
 		if [ -n "$(which apt 2>/dev/null)" ]; then
-			${SUDO} apt update && sudo apt install -y cmake ninja-build libgtest-dev
+			df && ${SUDO} apt update && sudo apt install -y cmake ninja-build libgtest-dev
 		elif [ -n "$(which dnf 2>/dev/null)" ]; then
-			${SUDO} dnf install -y cmake ninja-build gtest-devel
+			df && ${SUDO} dnf install -y cmake ninja-build gtest-devel
 		elif [ -n "$(which yum 2>/dev/null)" ]; then
-			${SUDO} yum install -y cmake ninja-build gtest-devel
+			df && ${SUDO} yum install -y cmake ninja-build gtest-devel
 		fi
 		CMAKE="$(which cmake 2>/dev/null) | echo false"
 	fi
@@ -77,8 +78,9 @@ function default_ci {
 	if [ $skipped = "true" ]; then
 		echo "Skipped since CMAKE_VERSION ($CMAKE_VERSION) < 3.0.2 and no Makefile"
 	elif [ $ok != "true" ]; then
-		exit 1
+		return 1
 	fi
+	return 0
 }
 
 if [ ! -e mdbx.h -o ! -e NOTICE ]; then
@@ -94,4 +96,6 @@ if [ -z "${CI_ACTION:-}" ]; then
 	CI_ACTION=default_ci
 fi
 
+df
 $CI_ACTION || failure $CI_ACTION
+df

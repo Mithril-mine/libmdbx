@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-548-gee87b0d4 at 2026-08-08T00:27:39+03:00),
+/* This file is part of the libmdbx amalgamated source code (v0.14.2-566-ga5a7be06 at 2026-08-09T09:57:43+03:00),
  * it is the template for libmdbx's config.h
  ******************************************************************************/
 
@@ -13,6 +13,11 @@
 #cmakedefine ENABLE_SYSTEMTAP
 #cmakedefine ENABLE_ASAN
 #cmakedefine ENABLE_UBSAN
+
+/* Internal debugging */
+#cmakedefine01 MDBX_DEBUG_SPILLING
+#cmakedefine01 MDBX_DEBUG_SEARCH_DISPATCHING
+#cmakedefine01 MDBX_DEBUG_SEARCH_BRANCHLESS
 
 /* allowing override MDBX_BUILD_CXX=OFF to build the C++ API in "private" mode only for tests */
 #if !defined(MDBX_BUILD_TEST) && !defined(MDBX_BUILD_CXX)
