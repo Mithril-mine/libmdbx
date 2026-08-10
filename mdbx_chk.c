@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-192-gf002e443 at 2026-06-04T18:19:15+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -27,7 +27,7 @@
 
 #include <ctype.h>
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 
 /* Bit of madness for Windows console */
 #define mdbx_strerror mdbx_strerror_ANSI2OEM
@@ -158,7 +158,7 @@ static FILE *prefix(enum MDBX_chk_severity severity) {
 }
 
 static void suffix(size_t cookie, const char *str) {
-  if (cookie == line_count && !line_struct.empty) {
+  if (cookie == line_count && !line_struct.empty && line_output) {
     fprintf(line_output, " %s", str);
     line_struct.empty = false;
     lf();
@@ -192,7 +192,7 @@ static FILE *MDBX_PRINTF_ARGS(2, 3) print_ln(enum MDBX_chk_severity severity, co
 }
 
 static void logger(MDBX_log_level_t level, const char *function, int line, const char *fmt, va_list args) {
-  if (level <= MDBX_LOG_ERROR)
+  if (level <= MDBX_LOG_ERROR && chk.internal)
     mdbx_env_chk_encount_problem(&chk);
 
   const unsigned kind =
@@ -202,7 +202,8 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
   FILE *out = prefix(severity);
   if (out) {
     vfprintf(out, fmt, args);
-    const bool have_lf = fmt[strlen(fmt) - 1] == '\n';
+    const size_t fmt_len = strlen(fmt);
+    const bool have_lf = (fmt_len > 0 && fmt[fmt_len - 1] == '\n');
     if (level == MDBX_LOG_FATAL && function && line) {
       if (have_lf)
         for (size_t i = 0; i < line_struct.scope_depth; ++i)
@@ -328,15 +329,15 @@ static void print_done(MDBX_chk_line_t *line) {
 }
 
 static void print_chars(MDBX_chk_line_t *line, const char *str, size_t len) {
-  if (line->empty)
-    prefix(line->severity);
-  fwrite(str, 1, len, line_output);
+  FILE *const out = line->empty ? prefix(line->severity) : line_output;
+  if (out)
+    fwrite(str, 1, len, out);
 }
 
 static void print_format(MDBX_chk_line_t *line, const char *fmt, va_list args) {
-  if (line->empty)
-    prefix(line->severity);
-  vfprintf(line_output, fmt, args);
+  FILE *const out = line->empty ? prefix(line->severity) : line_output;
+  if (out)
+    vfprintf(out, fmt, args);
 }
 
 static const MDBX_chk_callbacks_t cb = {.check_break = check_break,
@@ -383,7 +384,7 @@ static int conclude(MDBX_chk_context_t *ctx) {
                                 " at txn-id #%" PRIi64 "...",
                                 ctx->result.recent_txnid);
     flush();
-    err = error_fn("walk_pages", mdbx_env_sync_ex(ctx->env, true, false));
+    err = error_fn("mdbx_env_sync_ex", mdbx_env_sync_ex(ctx->env, true, false));
     if (err == MDBX_SUCCESS) {
       ctx->result.problems_meta -= 1;
       ctx->result.total_problems -= 1;
@@ -424,7 +425,7 @@ int main(int argc, char *argv[]) {
   if (argc < 2)
     usage(progname);
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   uint64_t timestamp_start, timestamp_finish;
   timestamp_start = GetMilliseconds();
 #else
@@ -531,7 +532,7 @@ int main(int argc, char *argv[]) {
 
   rc = MDBX_SUCCESS;
   if (stuck_meta >= 0 && (env_flags & MDBX_EXCLUSIVE) == 0) {
-    error_fmt("exclusive mode is required to using specific meta-page(%d) for "
+    error_fmt("exclusive mode is required to use specific meta-page(%d) for "
               "checking.",
               stuck_meta);
     rc = EXIT_INTERRUPTED;
@@ -547,7 +548,7 @@ int main(int argc, char *argv[]) {
       rc = EXIT_INTERRUPTED;
     }
     if (only_table.iov_base || (chk_flags & (MDBX_CHK_SKIP_BTREE_TRAVERSAL | MDBX_CHK_SKIP_KV_TRAVERSAL))) {
-      error_fmt("whole database checking with b-tree traversal are required to turn "
+      error_fmt("whole database checking with b-tree traversal is required to turn "
                 "to the specified meta-page.");
       rc = EXIT_INTERRUPTED;
     }
@@ -555,7 +556,7 @@ int main(int argc, char *argv[]) {
   if (rc)
     exit(rc);
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
 #else
 #ifdef SIGPIPE
@@ -599,7 +600,7 @@ int main(int argc, char *argv[]) {
   } else {
     rc = mdbx_env_open(env, db_pathname, env_flags, 0);
     if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY ||
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
                                          rc == ERROR_LOCK_VIOLATION || rc == ERROR_SHARING_VIOLATION
 #else
                                          rc == EBUSY || rc == EAGAIN
@@ -651,7 +652,7 @@ bailout:
     return EXIT_FAILURE_MDBX;
   }
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   timestamp_finish = GetMilliseconds();
   const uint64_t elapsed_msec = (timestamp_finish - timestamp_start);
 #else

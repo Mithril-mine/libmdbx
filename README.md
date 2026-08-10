@@ -1,3 +1,4 @@
+
 libmdbx
 =======
 
@@ -67,7 +68,7 @@ However, _MithrilDB_ will not be available for countries unfriendly to Russia (i
 
 Nonetheless, I try not to make any promises regarding _MithrilDB_ until release.
 
-Contrary to _MithrilDB_, _libmdbx_ will forever free and open source. Moreover with high-quality support whenever possible. Tu deviens responsible pour toujours de ce que tu as apprivois. So I will continue to comply with the original open license and the principles of constructive cooperation, in spite of outright Github sabotage and sanctions. I will also try to keep (not drop) Windows support, despite it is an unused obsolete technology for us.
+Contrary to _MithrilDB_, _libmdbx_ will forever free and open source. Moreover with high-quality support whenever possible. Tu deviens responsible pour toujours de ce que tu as apprivois. So I will continue to comply with the original open license and the principles of constructive cooperation, in spite of outright GitHub sabotage and sanctions. I will also try to keep (not drop) Windows support, despite it is an unused obsolete technology for us.
 
 <!-- section-end -->
 
@@ -206,7 +207,7 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 * The same database format for 32- and 64-bit builds.
    > _libmdbx_ database format depends only on the [endianness](https://en.wikipedia.org/wiki/Endianness) but not on the [bitness](https://en.wiktionary.org/wiki/bitness).
 
-* The "Big Foot" feature than solves speific performance issues with huge transactions and extra-large page-number-lists.
+* The "Big Foot" feature than solves specific performance issues with huge transactions and extra-large page-number-lists.
 
 * LIFO policy for Garbage Collection recycling. This can significantly increase write performance due write-back disk cache up to several times in a best case scenario.
    > LIFO means that for reuse will be taken the latest becomes unused pages. Therefore the loop of database pages circulation becomes as short as possible. In other words, the set of pages, that are (over)written in memory and on disk during a series of write transactions, will be as small as possible. Thus creates ideal conditions for the battery-backed or flash-backed disk cache efficiency.
@@ -266,10 +267,10 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the [Ligh
 
 Since 2017 _libmdbx_ is used in [Fast Positive Tables](https://sourcecraft.dev/dqdkfa/libfpta), and until 2025 development was funded by [Positive Technologies](https://www.ptsecurity.com). Since 2020 _libmdbx_ is used in Ethereum: [Erigon](https://github.com/erigontech/erigon), [Akula](https://github.com/akula-bft/akula), [Silkworm](https://github.com/erigontech/silkworm), [Reth](https://github.com/paradigmxyz/reth), etc.
 
-On 2022-04-15 the Github administration, without any warning nor explanation, deleted _libmdbx_ along with a lot of other projects, simultaneously blocking access for many developers. Therefore on 2022-04-21 I have migrated to a reliable trusted infrastructure.
-The origin for now is at [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and ~~Github~~ is blacklisted forever to play this role.
+On 2022-04-15 the GitHub administration, without any warning nor explanation, deleted _libmdbx_ along with a lot of other projects, simultaneously blocking access for many developers. Therefore on 2022-04-21 I have migrated to a reliable trusted infrastructure.
+The origin for now is at [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and ~~GitHub~~ is blacklisted forever to play this role.
 
-Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 license. Please refer to the [`COPYRIGHT` file](https://sourcecraft.dev/dqdkfa/libmdbx/blob/raw?file=COPYRIGHT) for license change explanations.
+Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 license. Please refer to the [`COPYRIGHT` file](https://sourcecraft.dev/dqdkfa/libmdbx/blob/raw?file=COPYRIGHT) for license change explanation.
 
 ## Acknowledgments
 Howard Chu <hyc@openldap.org> and Hallvard Furuseth <hallvard@openldap.org> are the authors of _LMDB_, from which _libmdbx_ was forked in 2015.
@@ -287,7 +288,7 @@ Usage
 
 Since December 2025 _libmdbx_ is available only in an amalgamated source code form like [SQLite](https://www.sqlite.org/amalgamation.html), without additional dependencies and internal resources needed only for development of _libmdbx_ itself. Packages support for common Linux distributions is planned in the future, since release the version `1.0`.
 
-The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [Github](https://github.com/Mithril-mine/libmdbx).
+The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
 Please use the `stable` branch or the latest release for production environment through staging and the `master` branch for development a derivative projects.
 
 ## Building and Testing

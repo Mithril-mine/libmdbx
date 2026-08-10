@@ -56,10 +56,17 @@ static bool doit(const mdbx::path &database_pathname) {
 
   auto txn = env.start_write();
   auto map = txn.create_map("table-ordinals", mdbx::key_mode::ordinal, mdbx::value_mode::single);
+  uint64_t zero = 0;
+  txn.insert(map, mdbx::slice::wrap(zero), "0");
   txn.insert(map, buffer::key_from_u64(42), "a");
   txn.insert(map, buffer::key_from_double(0.1), mdbx::slice("b"));
   txn.insert(map, buffer::key_from_jsonInteger(1), buffer("c"));
   txn.insert(map, mdbx::slice::wrap(uint64_t(0xaBad1dea)), buffer::base58("aBad1dea"));
+  mdbx::slice reserve;
+  /* [[may_unused]] */auto value = txn.replace_reserve<buffer>(map, mdbx::slice::wrap(zero), 100, reserve);
+  memset(reserve.data(), 'Z', reserve.size());
+  /* [[may_unused]] */value = txn.replace<buffer>(map, mdbx::slice::wrap(zero), "1");
+  /* [[may_unused]] */value = txn.extract<buffer>(map, mdbx::slice::wrap(zero));
   txn.commit_embark_read();
 
   auto cursor = txn.open_cursor(map);
@@ -82,7 +89,7 @@ static bool doit(const mdbx::path &database_pathname) {
     size_t count = 0;
     cursor.fullscan([&](const mdbx::pair &) -> bool {
       count += 1;
-      return /* continue scan */ false;
+      return /* don't break but continue scanning */ false;
     });
     nested.abort();
 
@@ -101,7 +108,7 @@ static bool doit(const mdbx::path &database_pathname) {
 int main(int, const char *[]) {
   try {
     const mdbx::path bench_database =
-#if !(defined(_WIN32) || defined(_WIN64))
+#if !(defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS))
         "/tmp/"
 #endif /* !Windows */
         "bench_example_database.mdbx";

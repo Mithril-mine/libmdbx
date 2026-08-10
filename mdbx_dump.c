@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-192-gf002e443 at 2026-06-04T18:19:15+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -27,7 +27,7 @@
 
 #include <ctype.h>
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 
 /* Bit of madness for Windows console */
 #define mdbx_strerror mdbx_strerror_ANSI2OEM
@@ -71,7 +71,7 @@ static const flagbit dbflags[] = {{MDBX_REVERSEKEY, "reversekey"},
                                   {0, nullptr}};
 
 static void dumpval(const MDBX_val *v) {
-  static const char digits[] = "0123456789abcdef";
+  const char alpha_offset = 'a' - '9' - 1;
   putchar(' ');
   for (const unsigned char *c = v->iov_base, *end = c + v->iov_len; c < end; ++c) {
     if (mode & PRINT) {
@@ -81,8 +81,10 @@ static void dumpval(const MDBX_val *v) {
       } else
         putchar('\\');
     }
-    putchar(digits[*c >> 4]);
-    putchar(digits[*c & 15]);
+    const int8_t hi = *c >> 4;
+    const int8_t lo = *c & 15;
+    putchar('0' + hi + (((9 - hi) >> 7) & alpha_offset));
+    putchar('0' + lo + (((9 - lo) >> 7) & alpha_offset));
   }
   putchar('\n');
 }
@@ -170,10 +172,8 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
   }
   if (rescue) {
     rc = mdbx_cursor_ignord(cursor);
-    if (unlikely(rc != MDBX_SUCCESS)) {
+    if (unlikely(rc != MDBX_SUCCESS))
       error("mdbx_cursor_ignord", rc);
-      return rc;
-    }
   }
 
   while ((rc = mdbx_cursor_get(cursor, &key, &data, MDBX_NEXT)) == MDBX_SUCCESS) {
@@ -236,8 +236,8 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
-  if (level < MDBX_LOG_DEBUG) {
-    if (function && line)
+  if (level >= 0 && level < MDBX_LOG_DEBUG) {
+    if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
     vfprintf(stderr, fmt, args);
   }
@@ -289,7 +289,6 @@ int main(int argc, char *argv[]) {
       return EXIT_SUCCESS;
     case 'l':
       list = true;
-      /*FALLTHROUGH*/;
       __fallthrough;
     case 'a':
       if (subname)
@@ -336,7 +335,7 @@ int main(int argc, char *argv[]) {
   if (optind != argc - 1)
     usage();
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
 #else
 #ifdef SIGPIPE
@@ -409,10 +408,8 @@ int main(int argc, char *argv[]) {
     }
     if (rescue) {
       err = mdbx_cursor_ignord(cursor);
-      if (unlikely(err != MDBX_SUCCESS)) {
+      if (unlikely(err != MDBX_SUCCESS))
         error("mdbx_cursor_ignord", err);
-        return err;
-      }
     }
 
     bool have_raw = false;
@@ -502,6 +499,7 @@ int main(int argc, char *argv[]) {
   switch (err) {
   case MDBX_NOTFOUND:
     err = MDBX_SUCCESS;
+    __fallthrough;
   case MDBX_SUCCESS:
     break;
   case MDBX_EINTR:

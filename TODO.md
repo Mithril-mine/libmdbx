@@ -49,7 +49,7 @@ Done
  - [Get rid of dirty-pages list in MDBX_WRITEMAP mode](https://libmdbx.dqdkfa.ru/dead-github/issues/193).
 
 Cancelled
---------
+---------
 
  - Внутри `txn_renew()` вынести проверку когерентности mmap за/после изменение размера.
    Потеряло смысл в результате рефакторинга.

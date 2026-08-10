@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.2-192-gf002e443 at 2026-06-04T18:19:15+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -25,7 +25,7 @@
 #define xMDBX_TOOLS /* Avoid using internal ASSERT(), etc */
 #include "mdbx-internals.h"
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 
 /* Bit of madness for Windows console */
 #define mdbx_strerror mdbx_strerror_ANSI2OEM
@@ -98,7 +98,7 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
         fflush(nullptr);
     }
     FILE *out = (level < MDBX_LOG_NOTICE) ? stderr : stdout;
-    if (function && line)
+    if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(out, "%s", prefixes[level]);
     vfprintf(out, fmt, args);
     if (level <= MDBX_LOG_NOTICE)
@@ -123,7 +123,7 @@ static void defrag_report_progress(const MDBX_defrag_result_t *progress, unsigne
       if (progress->pages_retained)
         printf(", retained %zi", progress->pages_retained);
       if (progress->pages_shrinked)
-        printf(", shrinked %zi", progress->pages_shrinked);
+        printf(", shrink %zi", progress->pages_shrinked);
       printf(", left %zi", progress->pages_left);
     }
     for (unsigned i = 0; i < 3 || (i < dots / 8 && i < 64); ++i)
@@ -176,7 +176,7 @@ static int defrag_notify(void *ctx, const MDBX_defrag_result_t *progress) {
     }
 
     if (ctx && tick) {
-      last_report_spenttime = progress->spent_time_dot16;
+      last_report_spenttime = (uint32_t)progress->spent_time_dot16;
       defrag_report_progress(progress, progress_dots++);
     }
     last_progress = *progress;
@@ -281,7 +281,7 @@ int main(int argc, char *argv[]) {
       if (sscanf(optarg, "%zu", &step_size_MiB) != 1) {
         if (!quiet)
           fprintf(stderr, "%s: %s option: expecting %s, but got '%s'\n", prog, "-s",
-                  "unsigned integer value in range 1..100", optarg);
+                  "unsigned integer value in megabytes", optarg);
         return EXIT_FAILURE;
       }
       break;
@@ -300,7 +300,7 @@ int main(int argc, char *argv[]) {
   if (optind != argc - 1)
     usage();
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
   is_console = _isatty(_fileno(stdout)) != 0;
 #else
@@ -332,7 +332,7 @@ int main(int argc, char *argv[]) {
   if (rc == MDBX_SUCCESS)
     rc = mdbx_env_open(env, db_pathname, env_flags, 0);
   if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY ||
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
                                        rc == ERROR_LOCK_VIOLATION || rc == ERROR_SHARING_VIOLATION
 #else
                                        rc == EBUSY || rc == EAGAIN
@@ -371,7 +371,8 @@ int main(int argc, char *argv[]) {
     const size_t preferred_batch = (step_size_MiB > INT_MAX / pages_per_MiB) ? 0 : step_size_MiB * pages_per_MiB;
     const size_t duration_limit_dot16 =
         (time_limit_seconds > SIZE_MAX >> 16) ? /* unlimited */ 0 : time_limit_seconds << /* seconds to dot16 */ 16;
-    const size_t defrag_enough = (wanna_defrag_percent < 100u) ? (info_gc.pages_gc + 99u) / 100u : 0;
+    const size_t defrag_enough =
+        (wanna_defrag_percent < 100u) ? (info_gc.pages_gc * wanna_defrag_percent + 99u) / 100u : 0;
     const intptr_t acceptable_residue =
         acceptable_residue_percent ? (intptr_t)((payload_pages + 99u) / 100u * acceptable_residue_percent) : -1;
 
@@ -411,21 +412,22 @@ int main(int argc, char *argv[]) {
     defrag_notify(nullptr, &result);
 
     if (!MDBX_IS_ERROR(rc)) {
-      rc = MDBX_SUCCESS;
       if (!quiet) {
-        printf("Defragmentation%s: shrinked %zi pages, %u passes, moved %zu pages",
-               (rc == MDBX_SUCCESS) ? "" : " incomplete", result.pages_shrinked, result.cycles, result.pages_moved);
+        printf("Defragmentation%s: shrink %zi pages, %u passes, moved %zu pages",
+               (rc == MDBX_SUCCESS) ? " done" : " incomplete", result.pages_shrinked, result.cycles,
+               result.pages_moved);
         if (result.stopping_reasons)
           printf(", stopping reasons bits 0x%x", result.stopping_reasons);
         printf(", took %s seconds, %s\n",
                mdbx_ratio2digits(result.spent_time_dot16, 65536, 3, ratio_buffer, sizeof(ratio_buffer)),
                stop_reason(&result));
       }
+      rc = MDBX_SUCCESS;
     }
   }
 
   if (txn) {
-    if (MDBX_IS_ERROR(rc))
+    if (rc != MDBX_SUCCESS)
       mdbx_txn_abort(txn);
     else {
       act = "final commit";
@@ -434,12 +436,12 @@ int main(int argc, char *argv[]) {
     txn = nullptr;
   }
 
-  if (!quiet && MDBX_IS_ERROR(rc)) {
+  if (!quiet && rc != MDBX_SUCCESS) {
     fflush(nullptr);
     fprintf(stderr, "%s: %s failed, error %d (%s)\n", progname, act, rc, mdbx_strerror(rc));
   }
 
   mdbx_env_close(env);
   fflush(nullptr);
-  return MDBX_IS_ERROR(rc) ? EXIT_FAILURE : EXIT_SUCCESS;
+  return (rc != MDBX_SUCCESS) ? EXIT_FAILURE : EXIT_SUCCESS;
 }

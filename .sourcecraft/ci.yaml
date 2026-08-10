@@ -1,0 +1,53 @@
+on:
+  push:
+    - workflows: [ci-linux-debug-gcc, ci-linux-debug-clang, ci-linux-release-spilling]
+  pull_request:
+    - workflows: [ci-linux-debug-gcc, ci-linux-debug-clang, ci-linux-release-spilling]
+  schedule:
+    - workflows: [ci-linux-debug-gcc, ci-linux-debug-clang, ci-linux-release-spilling]
+      cron: "42 3 * * *"
+      description: "Ежедневный запуск CI Linux в 03:42 (по умолчанию UTC)"
+
+workflows:
+  ci-linux-debug-gcc:
+    settings:
+      max_cube_duration: 30m # Минимум необходимый для сборки в режиме LTO (make + cmake) и выполнения тестов тестов
+    env:
+      CI: SourceCraft
+      CI_MAKE_TARGET: smoke
+      MDBX_BUILD_OPTIONS: -DMDBX_CHECKING=2 -DMDBX_DEBUG=0
+    tasks:
+      - name: ci-linux-debug-gcc-task
+        cubes:
+          - name: ci-step
+            image: dh-mirror.gitverse.ru/jakoch/cpp-devbox:forky-latest
+            script:
+              - CC=gcc CXX=g++ ci/ci.sh "-DCMAKE_BUILD_TYPE=MinSizeRel|-DMDBX_BUILD_CXX:BOOL=OFF"
+  ci-linux-debug-clang:
+    settings:
+      max_cube_duration: 30m # Минимум необходимый для сборки в режиме LTO (make + cmake) и выполнения тестов тестов
+    env:
+      CI: SourceCraft
+      CI_MAKE_TARGET: smoke
+      MDBX_BUILD_OPTIONS: -DMDBX_CHECKING=2 -DMDBX_DEBUG=0
+    tasks:
+      - name: ci-linux-debug-clang-task
+        cubes:
+          - name: ci-step
+            image: dh-mirror.gitverse.ru/jakoch/cpp-devbox:forky-latest
+            script:
+              - CC=clang CXX=clang++ ci/ci.sh "-DCMAKE_BUILD_TYPE=MinSizeRel|-DMDBX_BUILD_CXX:BOOL=ON"
+  ci-linux-release-spilling:
+    settings:
+      max_cube_duration: 30m # Минимум необходимый для сборки в режиме LTO (make + cmake) и выполнения тестов тестов
+    env:
+      CI: SourceCraft
+      CI_MAKE_TARGET: test
+      MDBX_BUILD_OPTIONS: "-DMDBX_CHECKING=2 -DMDBX_DEBUG=0 -DMDBX_DEBUG_SPILLING=1"
+    tasks:
+      - name: ci-linux-release-spilling-task
+        cubes:
+          - name: ci-step
+            image: dh-mirror.gitverse.ru/jakoch/cpp-devbox:forky-latest
+            script:
+              - ci/ci.sh "-DCMAKE_BUILD_TYPE=RelWithDebInfo"

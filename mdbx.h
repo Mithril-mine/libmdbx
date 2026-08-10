@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.2-192-gf002e443 at 2026-06-04T18:19:15+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -30,7 +30,7 @@ The _libmdbx_ project has been completely relocated to the jurisdiction of the R
 
 \section copyright LICENSE & COPYRIGHT
 \copyright SPDX-License-Identifier: Apache-2.0
-Please refer to the COPYRIGHT file for explanations license change, credits and acknowledgments.
+Please refer to the COPYRIGHT file for explanation of license change, credits and acknowledgments.
 \author Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> \date 2015-2026
 
 *******************************************************************************/
@@ -539,22 +539,22 @@ typedef mode_t mdbx_mode_t;
  *  - the proper implementation of DEFINE_ENUM_FLAG_OPERATORS for C++ required
  *    the constexpr feature which is broken in most old compilers;
  *  - DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK. */
-#if !defined(DEFINE_ENUM_FLAG_OPERATORS) && !defined(DOXYGEN)
+#if !defined(MDBX_DEFINE_ENUM_FLAG_OPERATORS) && !defined(DOXYGEN)
 
 #ifdef __cplusplus
 #if !defined(__cpp_constexpr) || __cpp_constexpr < 200704L || (defined(__LCC__) && __LCC__ < 124) ||                   \
     (defined(__GNUC__) && (__GNUC__ * 100 + __GNUC_MINOR__ < 407) && !defined(__clang__) && !defined(__LCC__)) ||      \
     (defined(_MSC_VER) && _MSC_VER < 1910) || (defined(__clang__) && __clang_major__ < 4)
 /* The constexpr feature is not available or (may be) broken */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
 #else
 /* C always allows these operators for enums */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif /* __cpp_constexpr */
 
 /// Define operator overloads to enable bit operations on enum values that are
 /// used to define flags (based on Microsoft's DEFINE_ENUM_FLAG_OPERATORS).
-#define DEFINE_ENUM_FLAG_OPERATORS(ENUM)                                                                               \
+#define MDBX_DEFINE_ENUM_FLAG_OPERATORS(ENUM)                                                                          \
   extern "C++" {                                                                                                       \
   MDBX_NOSANITIZE_ENUM MDBX_CXX01_CONSTEXPR ENUM operator|(ENUM a, ENUM b) { return ENUM(unsigned(a) | unsigned(b)); } \
   MDBX_NOSANITIZE_ENUM MDBX_CXX14_CONSTEXPR ENUM &operator|=(ENUM &a, ENUM b) { return a = a | b; }                    \
@@ -569,21 +569,21 @@ typedef mode_t mdbx_mode_t;
   }
 #else /* __cplusplus */
 /* nope for C since it always allows these operators for enums */
-#define DEFINE_ENUM_FLAG_OPERATORS(ENUM)
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_DEFINE_ENUM_FLAG_OPERATORS(ENUM)
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif /* !__cplusplus */
 
-#elif !defined(CONSTEXPR_ENUM_FLAGS_OPERATIONS)
+#elif !defined(MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS)
 
 #ifdef __cplusplus
-/* DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
+/* MDBX_DEFINE_ENUM_FLAG_OPERATORS may be defined broken as in the Windows SDK */
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 0
 #else
 /* C always allows these operators for enums */
-#define CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
+#define MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS 1
 #endif
 
-#endif /* DEFINE_ENUM_FLAG_OPERATORS */
+#endif /* MDBX_DEFINE_ENUM_FLAG_OPERATORS */
 
 #ifndef MDBX_LIKELY
 #if defined(DOXYGEN) || (defined(__GNUC__) || __has_builtin(__builtin_expect)) && !defined(__COVERITY__)
@@ -624,8 +624,7 @@ typedef mode_t mdbx_mode_t;
 extern "C" {
 #endif
 
-/* MDBX version 0.14.x, but it is unstable/under-development yet. */
-#define MDBX_VERSION_UNSTABLE
+/* MDBX version 0.14.x */
 #define MDBX_VERSION_MAJOR 0
 #define MDBX_VERSION_MINOR 14
 
@@ -882,6 +881,9 @@ enum MDBX_constants {
  *
  * \see mdbx_setup_debug() \see MDBX_log_level_t */
 typedef enum MDBX_log_level {
+  /** for \ref mdbx_setup_debug() only: Don't change current settings */
+  MDBX_LOG_DONTCHANGE = -1,
+
   /** Critical conditions, i.e. assertion failures.
    * \note libmdbx always produces such messages regardless
    * of \ref MDBX_DEBUG build option. */
@@ -925,12 +927,8 @@ typedef enum MDBX_log_level {
    * \note Requires build libmdbx with \ref MDBX_DEBUG option. */
   MDBX_LOG_EXTRA = 7,
 
-#ifdef ENABLE_UBSAN
-  MDBX_LOG_MAX = 7 /* avoid UBSAN false-positive trap by a tests */,
-#endif /* ENABLE_UBSAN */
-
-  /** for \ref mdbx_setup_debug() only: Don't change current settings */
-  MDBX_LOG_DONTCHANGE = -1
+  /** Avoids UBSAN false-positive issues/traps. */
+  MDBX_LOG_MAX = 7
 } MDBX_log_level_t;
 
 /** \brief Runtime debug flags
@@ -941,6 +939,9 @@ typedef enum MDBX_log_level {
  *
  * \see mdbx_setup_debug() \see MDBX_debug_flags_t */
 typedef enum MDBX_debug_flags {
+  /** for mdbx_setup_debug() only: Don't change current settings */
+  MDBX_DBG_DONTCHANGE = -1,
+
   MDBX_DBG_NONE = 0,
 
   /** Enables costly check of debug-like assertions.
@@ -970,63 +971,88 @@ typedef enum MDBX_debug_flags {
    * \note Nonetheless a new write transactions will use and store the last signature regardless this flag */
   MDBX_DBG_DONT_UPGRADE = 64,
 
-#ifdef ENABLE_UBSAN
-  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 127 /* avoid UBSAN false-positive trap by a tests */,
-#endif /* ENABLE_UBSAN */
-
-  /** for mdbx_setup_debug() only: Don't change current settings */
-  MDBX_DBG_DONTCHANGE = -1
+  /** Avoids UBSAN false-positive issues/traps. */
+  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 127
 } MDBX_debug_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
 
-/** \brief A debug-logger callback function,
- * called before printing the message and aborting.
+/** \brief A log callback function that accepts a format string and arguments passed through the `va_list` pointer.
  * \see mdbx_setup_debug()
  *
- * \param [in] loglevel  The severity of message.
- * \param [in] function  The function name which emits message,
- *                       may be NULL.
- * \param [in] line      The source code line number which emits message,
- *                       may be zero.
- * \param [in] fmt       The printf-like format string with message.
- * \param [in] args      The variable argument list respectively for the
- *                       format-message string passed by `fmt` argument.
- *                       Maybe NULL or invalid if the format-message string
- *                       don't contain `%`-specification of arguments. */
-typedef void (*MDBX_debug_func)(MDBX_log_level_t loglevel, const char *function, int line, const char *fmt,
+ * \param [in] log_level  The severity of message.
+ * \param [in] function   The function name which emits message, may be NULL.
+ * \param [in] line       The source code line number which emits message, may be zero.
+ * \param [in] fmt        The printf-like format string with message.
+ * \param [in] args       The variable argument list respectively for the
+ *                        format-message string passed by `fmt` argument.
+ *                        Maybe NULL or invalid if the format-message string
+ *                        don't contain `%`-specification of arguments. */
+typedef void (*MDBX_debug_func)(MDBX_log_level_t log_level, const char *function, int line, const char *fmt,
                                 va_list args) MDBX_CXX17_NOEXCEPT;
 
 /** \brief The "don't change `logger`" value for mdbx_setup_debug() */
 #define MDBX_LOGGER_DONTCHANGE ((MDBX_debug_func)(intptr_t)-1)
-#define MDBX_LOGGER_NOFMT_DONTCHANGE ((MDBX_debug_func_nofmt)(intptr_t)-1)
 
-/** \brief Setup global log-level, debug options and debug logger.
- * \returns The previously `debug_flags` in the 0-15 bits
- *          and `log_level` in the 16-31 bits.
+/** \brief Setups global log-level, debug options and logger for format string and `va_list`.
+ *
+ * \param [in] log_level     New global log-level or \ref MDBX_LOG_DONTCHANGE.
+ * \param [in] debug_flags   New global debug flags or \ref MDBX_DBG_DONTCHANGE.
+ * \param [in] logger        New global logger callback function with \ref MDBX_debug_func signature
+ *                           or \ref MDBX_LOGGER_DONTCHANGE.
+ *
+ * \returns A non-negative value on success, in which the previous value `debug_flags` is in 0-15 bits,
+ *          and `log_level` is in 16-31 bits.
+ *          Otherwise, a negative value will be returned, indicating that some parameters are invalid.
  *
  * \see MDBX_log_level_t \see MDBX_debug_flags_t */
 LIBMDBX_API int mdbx_setup_debug(MDBX_log_level_t log_level, MDBX_debug_flags_t debug_flags, MDBX_debug_func logger);
 
-typedef void (*MDBX_debug_func_nofmt)(MDBX_log_level_t loglevel, const char *function, int line, const char *msg,
+/** \brief A log callback function that accepts a formatted message with length.
+ * \see mdbx_setup_debug()
+ *
+ * \param [in] log_level  The severity of message.
+ * \param [in] function   The function name which emits message, may be NULL.
+ * \param [in] line       The source code line number which emits message, may be zero.
+ * \param [in] msg        Pointer to the static buffer with formatted message for log.
+ * \param [in] length     Length of formatted message in a chars. */
+typedef void (*MDBX_debug_func_nofmt)(MDBX_log_level_t log_level, const char *function, int line, const char *msg,
                                       unsigned length) MDBX_CXX17_NOEXCEPT;
 
+/** \brief The "don't change `logger`" value for mdbx_setup_debug_nofmt() */
+#define MDBX_LOGGER_NOFMT_DONTCHANGE ((MDBX_debug_func_nofmt)(intptr_t)-1)
+
+/** \brief Setups global log-level, debug options, buffer and logger for plain preformatted messages.
+ *
+ * \param [in] log_level           New global log-level or \ref MDBX_LOG_DONTCHANGE.
+ * \param [in] debug_flags         New global debug flags or \ref MDBX_DBG_DONTCHANGE.
+ * \param [in] logger              New global logger callback function with \ref mdbx_setup_debug_nofmt signature
+ *                                 or \ref MDBX_LOGGER_NOFMT_DONTCHANGE.
+ * \param [in] logger_buffer       A pointer to a static shared buffer that libmdbx will use internally
+ *                                 to format log messages,
+ *                                 either NULL if `logger` is `MDBX_LOGGER_NOFMT_DONTCHANGE` or NULL.
+ * \param [in] logger_buffer_size  The size of passed static shared buffer,
+ *                                 either zero if `logger` is `MDBX_LOGGER_NOFMT_DONTCHANGE` or NULL.
+ *
+ * \returns A non-negative value on success, in which the previous value `debug_flags` is in 0-15 bits,
+ *          and `log_level` is in 16-31 bits.
+ *          Otherwise, a negative value will be returned, indicating that some parameters are invalid.
+ *
+ * \see MDBX_log_level_t \see MDBX_debug_flags_t */
 LIBMDBX_API int mdbx_setup_debug_nofmt(MDBX_log_level_t log_level, MDBX_debug_flags_t debug_flags,
                                        MDBX_debug_func_nofmt logger, char *logger_buffer, size_t logger_buffer_size);
 
-/** \brief A callback function for most assertion failures,
- * called before printing the message and aborting.
+/** \brief A callback function for most assertion failures, that called before printing the message and aborting.
  * \see mdbx_env_set_panic()
  *
- * \param [in] msg       The assertion message, not including newline.
- * \param [in] function  The function name where the assertion check failed,
- *                       may be NULL.
- * \param [in] line      The line number in the source file
- *                       where the assertion check failed, may be zero.
- * \param [in] obj       A handle of object associated with the assertion,
- *                       it could be MDBX_env, MDBX_txn,
- *                       MDBX_cursor or an internal page structure.
- * \param [in] obj_class A value corresponding to the object type:
- *                       `env`, `txn`, `cursor`, etc. */
+ * \param [in] msg        The assertion message, not including newline.
+ * \param [in] function   The function name where the assertion check failed,
+ *                        may be NULL.
+ * \param [in] line       The line number in the source file
+ *                        where the assertion check failed, may be zero.
+ * \param [in] obj        A handle of object associated with the assertion,
+ *                        it could be MDBX_env, MDBX_txn,
+ *                        MDBX_cursor or an internal page structure.
+ * \param [in] obj_class  A value corresponding to the object type: `env`, `txn`, `cursor`, etc. */
 typedef void (*MDBX_panic_func)(const char *msg, const char *function, unsigned line, const void *obj,
                                 const char *obj_class) MDBX_CXX17_NOEXCEPT;
 
@@ -1134,7 +1160,7 @@ typedef enum MDBX_env_flags {
   /** Using database/environment which already opened by another process(es).
    *
    * The `MDBX_ACCEDE` flag is useful to avoid \ref MDBX_INCOMPATIBLE error
-   * while opening the database/environment which is already used by another
+   * while opening a database/environment which is already used by another
    * process(es) with unknown mode/flags. In such cases, if there is a
    * difference in the specified flags (\ref MDBX_NOMETASYNC,
    * \ref MDBX_SAFE_NOSYNC, \ref MDBX_UTTERLY_NOSYNC, \ref MDBX_LIFORECLAIM
@@ -1186,7 +1212,7 @@ typedef enum MDBX_env_flags {
    * Anyway, at a minimum, it is absolutely necessary to ensure that each writing transaction is finished strictly in
    * the same thread of the operating system where it was started.
    *
-   * \note Starting from version 0.13, the `MDBX_NOSTICKYTHREADS` option completely replaces the \ref MDBX_NOTLS option.
+   * \note Starting from version 0.13, the \ref MDBX_NOSTICKYTHREADS option completely replaces the `MDBX_NOTLS` option.
    *
    * When using `MDBX_NOSTICKYTHREADS`, transactions become unrelated to system threads that created ones. Therefore,
    * the API functions do not check the correspondence between the transaction and the current execution thread. Most
@@ -1199,7 +1225,7 @@ typedef enum MDBX_env_flags {
    * particular, for this reason, on Windows, reducing the database file is not possible until the database is closed by
    * the last process working with it or until the database is subsequently opened in read-write mode.
    *
-   * \warning Regardless of \ref MDBX_NOSTICKYTHREADS and \ref MDBX_NOTLS, it is not allowed to use API objects from
+   * \warning Regardless of \ref MDBX_NOSTICKYTHREADS, it is not allowed to use API objects from
    * different execution threads at the same time! It is entirely your responsibility to ensure that API objects are not
    * used simultaneously from different execution threads!
    *
@@ -1226,9 +1252,6 @@ typedef enum MDBX_env_flags {
    *
    * This flag takes effect when the environment is opened and cannot be changed after. */
   MDBX_NOSTICKYTHREADS = UINT32_C(0x200000),
-
-  /** \deprecated Please use \ref MDBX_NOSTICKYTHREADS instead. */
-  MDBX_NOTLS MDBX_DEPRECATED_ENUM = MDBX_NOSTICKYTHREADS,
 
   /** Don't do readahead.
    *
@@ -1273,19 +1296,6 @@ typedef enum MDBX_env_flags {
    *
    * This flag may be changed at any time using `mdbx_env_set_flags()`. */
   MDBX_NOMEMINIT = UINT32_C(0x1000000),
-
-  /** Aims to coalesce a Garbage Collection items.
-   * \deprecated Always enabled since v0.12 and deprecated since v0.13.
-   *
-   * With `MDBX_COALESCE` flag MDBX will aims to coalesce items while recycling
-   * a Garbage Collection. Technically, when possible short lists of pages
-   * will be combined into longer ones, but to fit on one database page. As a
-   * result, there will be fewer items in Garbage Collection and a page lists
-   * are longer, which slightly increases the likelihood of returning pages to
-   * Unallocated space and reducing the database file.
-   *
-   * This flag may be changed at any time using mdbx_env_set_flags(). */
-  MDBX_COALESCE MDBX_DEPRECATED_ENUM = UINT32_C(0x2000000),
 
   /** LIFO policy for recycling a Garbage Collection items.
    *
@@ -1437,13 +1447,6 @@ typedef enum MDBX_env_flags {
    * particular write transaction. */
   MDBX_SAFE_NOSYNC = UINT32_C(0x10000),
 
-  /** \deprecated Please use \ref MDBX_SAFE_NOSYNC instead of `MDBX_MAPASYNC`.
-   *
-   * Since version 0.9.x the `MDBX_MAPASYNC` is deprecated and has the same
-   * effect as \ref MDBX_SAFE_NOSYNC with \ref MDBX_WRITEMAP. This just API
-   * simplification is for convenience and clarity. */
-  MDBX_MAPASYNC = MDBX_SAFE_NOSYNC,
-
   /** Don't sync anything and wipe previous steady commits.
    *
    * Don't flush system buffers to disk when committing a transaction. This
@@ -1489,7 +1492,7 @@ typedef enum MDBX_env_flags {
 
   /** end of sync_modes @} */
 } MDBX_env_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_env_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_env_flags)
 
 /** Transaction flags
  * \ingroup c_transactions
@@ -1514,7 +1517,7 @@ typedef enum MDBX_txn_flags {
  * will be ready for use with \ref mdbx_txn_renew(). This flag allows to
  * preallocate memory and assign a reader slot, thus avoiding these operations
  * at the next start of the transaction. */
-#if CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
+#if MDBX_CONSTEXPR_ENUM_FLAGS_OPERATIONS || defined(DOXYGEN)
   MDBX_TXN_RDONLY_PREPARE = MDBX_RDONLY | MDBX_NOMEMINIT,
 #else
   MDBX_TXN_RDONLY_PREPARE = uint32_t(MDBX_RDONLY) | uint32_t(MDBX_NOMEMINIT),
@@ -1590,7 +1593,7 @@ typedef enum MDBX_txn_flags {
    * but can't be used with \ref mdbx_txn_begin(). */
   MDBX_TXN_BLOCKED = MDBX_TXN_FINISHED | MDBX_TXN_ERROR | MDBX_TXN_HAS_CHILD | MDBX_TXN_PARKED
 } MDBX_txn_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_txn_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_txn_flags)
 
 /** \brief Table flags
  * \ingroup c_dbi
@@ -1640,7 +1643,7 @@ typedef enum MDBX_db_flags {
    * application could determine the actual flags by \ref mdbx_dbi_flags(). */
   MDBX_DB_ACCEDE = MDBX_ACCEDE
 } MDBX_db_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_db_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_db_flags)
 
 /** \brief Data changing flags
  * \ingroup c_crud
@@ -1685,7 +1688,7 @@ typedef enum MDBX_put_flags {
    * Store multiple data items in one call. */
   MDBX_MULTIPLE = UINT32_C(0x80000)
 } MDBX_put_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_put_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_put_flags)
 
 /** \brief Environment copy flags
  * \ingroup c_extra
@@ -1712,7 +1715,7 @@ typedef enum MDBX_copy_flags {
   MDBX_CP_DISPOSE_TXN = 16u,
 
   /** Enable renew/restart read transaction in case it use outdated
-   * MVCC shapshot, otherwise the \ref MDBX_MVCC_RETARDED will be returned
+   * MVCC snapshot, otherwise the \ref MDBX_MVCC_RETARDED will be returned
    * \see mdbx_txn_copy2fd() \see mdbx_txn_copy2pathname() */
   MDBX_CP_RENEW_TXN = 32u,
 
@@ -1721,7 +1724,7 @@ typedef enum MDBX_copy_flags {
   MDBX_CP_OVERWRITE = 64u
 
 } MDBX_copy_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_copy_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_copy_flags)
 
 /** \brief Cursor operations
  * \ingroup c_cursors
@@ -1986,7 +1989,7 @@ typedef enum MDBX_error {
   MDBX_BACKLOG_DEPLETED = -30414,
 
   /** Alternative/Duplicate LCK-file is exists and should be removed manually */
-  MDBX_DUPLICATED_CLK = -30413,
+  MDBX_DUPLICATED_LCK = -30413,
 
   /** Some cursors and/or other resources should be closed before table or
    *  corresponding DBI-handle could be (re)used and/or closed. */
@@ -2016,6 +2019,7 @@ typedef enum MDBX_error {
   MDBX_EIO = ERROR_WRITE_FAULT,
   MDBX_EPERM = ERROR_INVALID_FUNCTION,
   MDBX_EINTR = ERROR_CANCELLED,
+  MDBX_EEXIST = ERROR_FILE_EXISTS,
   MDBX_ENOFILE = ERROR_FILE_NOT_FOUND,
   MDBX_EREMOTE = ERROR_REMOTE_STORAGE_MEDIA_ERROR,
   MDBX_EDEADLK = ERROR_POSSIBLE_DEADLOCK
@@ -2037,6 +2041,7 @@ typedef enum MDBX_error {
   MDBX_EIO = EIO,
   MDBX_EPERM = EPERM,
   MDBX_EINTR = EINTR,
+  MDBX_EEXIST = EEXIST,
   MDBX_ENOFILE = ENOENT,
 #if defined(EREMOTEIO) || defined(DOXYGEN)
   /** Cannot use the database on a network file system or when exporting it via NFS. */
@@ -2047,13 +2052,6 @@ typedef enum MDBX_error {
   MDBX_EDEADLK = EDEADLK
 #endif /* !Windows */
 } MDBX_error_t;
-
-/** MDBX_MAP_RESIZED
- * \ingroup c_err
- * \deprecated Please review your code to use MDBX_UNABLE_EXTEND_MAPSIZE
- * instead. */
-MDBX_DEPRECATED static __inline int MDBX_MAP_RESIZED_is_deprecated(void) { return MDBX_UNABLE_EXTEND_MAPSIZE; }
-#define MDBX_MAP_RESIZED MDBX_MAP_RESIZED_is_deprecated()
 
 /** \brief Return a string describing a given error code.
  * \ingroup c_err
@@ -2444,7 +2442,25 @@ typedef enum MDBX_option {
    *
    * The option value is specified in units of 1/65536 of the page size: minimal 0, maximal 50% (32768),
    * default is 0. */
-  MDBX_opt_split_reserve
+  MDBX_opt_split_reserve,
+  /** \brief Sets threshold in bytes for preliminary flush/sync operation without holding a transaction lock.
+   *
+   * A preparatory data flush/sync operation could be performed if \ref mdbx_env_sync_poll() or \ref mdbx_env_sync_ex()
+   * from a thread that does not own the write transaction. Such a preliminary operation will push the bulk of the data
+   * to disk, which will significantly reduce the time to complete the final stage of flush/sync and update metadata
+   * that requires holding the lock.
+   *
+   * This option sets the volume threshold in bytes of non-synced-to disk data, when exceeded, a pre-sync/flush
+   * operation is performed. A too large threshold will increase the latency spikes, but a too small will increase
+   * number of flush/sync operations and corresponding overheads.
+   *
+   * \see mdbx_env_sync_poll()
+   * \see mdbx_env_sync_ex()
+   * \see MDBX_opt_sync_bytes
+   * \see MDBX_opt_sync_period
+   *
+   * The option value is specified in bytes: minimal 1, maximal 2147483648 (2 GiB), default is 256 KiB. */
+  MDBX_opt_presync_threshold
 } MDBX_option_t;
 
 /** \brief Sets the value of a extra runtime options for an environment.
@@ -2498,23 +2514,27 @@ LIBMDBX_API int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t opt
  * Flags set by mdbx_env_set_flags() are also used:
  *  - \ref MDBX_ENV_DEFAULTS, \ref MDBX_NOSUBDIR, \ref MDBX_RDONLY,
  *    \ref MDBX_EXCLUSIVE, \ref MDBX_WRITEMAP, \ref MDBX_NOSTICKYTHREADS,
- *    \ref MDBX_NORDAHEAD, \ref MDBX_NOMEMINIT, \ref MDBX_COALESCE,
+ *    \ref MDBX_NORDAHEAD, \ref MDBX_NOMEMINIT,
  *    \ref MDBX_LIFORECLAIM. See \ref env_flags section.
  *
  *  - \ref MDBX_SYNC_DURABLE, \ref MDBX_NOMETASYNC, \ref MDBX_SAFE_NOSYNC,
  *    \ref MDBX_UTTERLY_NOSYNC. See \ref sync_modes section.
  *
- * \note `MDB_NOLOCK` flag don't supported by MDBX,
- *       try use \ref MDBX_EXCLUSIVE as a replacement.
+ * \note The `MDB_NOTLS` option in MDBX is superseded by \ref MDBX_NOSTICKYTHREADS.
  *
- * \note MDBX don't allow to mix processes with different \ref MDBX_SAFE_NOSYNC
- *       flags on the same environment.
- *       In such case \ref MDBX_INCOMPATIBLE will be returned.
+ * \note The `MDB_NOSYNC` mode in MDBX is splitted into \ref MDBX_UTTERLY_NOSYNC and \ref MDBX_SAFE_NOSYNC,
+ *       while `MDBX_UTTERLY_NOSYNC` acts basically the same as `MDB_NOSYNC`.
  *
- * If the database is already exist and parameters specified early by
- * \ref mdbx_env_set_geometry() are incompatible (i.e. for instance, different
- * page size) then \ref mdbx_env_open() will return \ref MDBX_INCOMPATIBLE
- * error.
+ * \note The `MDB_NOLOCK` flag don't supported by MDBX, try use \ref MDBX_EXCLUSIVE as a replacement.
+ *
+ * \note MDBX don't allow to mix processes with different \ref MDBX_SAFE_NOSYNC or \ref MDBX_UTTERLY_NOSYNC
+ *       flags on the same environment. In such case \ref MDBX_INCOMPATIBLE will be returned.
+ *       You can try to combine the \ref MDBX_ACCEDE flag to opend a database/environment which is already
+ *       used by another process(es) with unknown mode/flags.
+ *
+ * If the database is already exist and parameters specified early by \ref mdbx_env_set_geometry() are incompatible
+ * (i.e. for instance, different page size) then \ref mdbx_env_open() will return \ref MDBX_INCOMPATIBLE or \ref
+ * MDBX_TOO_LARGE error.
  *
  * \param [in] mode   The UNIX permissions to set on created files.
  *                    Zero value means to open existing, but do not create.
@@ -2603,7 +2623,12 @@ LIBMDBX_API int mdbx_env_delete(const char *pathname, MDBX_env_delete_mode_t mod
  * \note Available only on Windows.
  * \see mdbx_env_delete() */
 LIBMDBX_API int mdbx_env_deleteW(const wchar_t *pathname, MDBX_env_delete_mode_t mode);
+#define mdbx_env_deleteA(pathname, mode) mdbx_env_delete(pathname, mode)
+#ifdef UNICODE
 #define mdbx_env_deleteT(pathname, mode) mdbx_env_deleteW(pathname, mode)
+#else
+#define mdbx_env_deleteT(pathname, mode) mdbx_env_deleteA(pathname, mode)
+#endif /* UNICODE */
 #else
 #define mdbx_env_deleteT(pathname, mode) mdbx_env_delete(pathname, mode)
 #endif /* Windows */
@@ -3266,7 +3291,7 @@ typedef enum MDBX_warmup_flags {
   /** Release the lock that was performed before by \ref MDBX_warmup_lock. */
   MDBX_warmup_release = 16,
 } MDBX_warmup_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_warmup_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_warmup_flags)
 
 /** \brief Warms up the database by loading pages into memory, optionally lock ones.
  * \ingroup c_settings
@@ -5066,7 +5091,7 @@ typedef enum MDBX_dbi_state {
   /** Named-DB handle created in this txn */
   MDBX_DBI_CREAT = 0x08,
 } MDBX_dbi_state_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_dbi_state)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_dbi_state)
 
 /** \brief Retrieve the DB flags and status for a table handle.
  * \ingroup c_statinfo
@@ -5101,7 +5126,7 @@ LIBMDBX_INLINE_API(int, mdbx_dbi_flags, (const MDBX_txn *txn, MDBX_dbi dbi, unsi
  * any transaction(s) running by other thread(s).
  * So the `mdbx_dbi_close()` MUST NOT be called in-parallel/concurrently
  * with any transactions using the closing dbi-handle, nor during other thread
- * commit/abort a write transacton(s). The "next" version of libmdbx (\ref
+ * commit/abort a write transaction(s). The "next" version of libmdbx (\ref
  * MithrilDB) will solve this issue.
  *
  * Handles should only be closed if no other threads are going to reference
@@ -6047,7 +6072,8 @@ typedef int (*MDBX_predicate_func)(void *context, MDBX_val *key, MDBX_val *value
  * carefully consider the batch specifics of passing values through the parameters of the predicative function.
  *
  * \see MDBX_predicate_func
- * \see mdbx_cursor_scan_from
+ * \see mdbx_cursor_scan_from()
+ * \see mdbx_cursor_get_batch()
  *
  * \returns The result of the scan operation, or an error code.
  *
@@ -6119,7 +6145,8 @@ LIBMDBX_API int mdbx_cursor_scan(MDBX_cursor *cursor, MDBX_predicate_func predic
  * carefully consider the batch specifics of passing values through the parameters of the predicative function.
  *
  * \see MDBX_predicate_func
- * \see mdbx_cursor_scan
+ * \see mdbx_cursor_scan()
+ * \see mdbx_cursor_get_batch()
  *
  * \returns The result of the scan operation, or an error code.
  *
@@ -6144,6 +6171,8 @@ LIBMDBX_API int mdbx_cursor_scan_from(MDBX_cursor *cursor, MDBX_predicate_func p
  * refers. The addresses and lengths of the keys and values are returned in the
  * array to which `pairs` refers.
  * \see mdbx_cursor_get()
+ * \see mdbx_cursor_scan()
+ * \see mdbx_cursor_scan_from()
  *
  * \note The memory pointed to by the returned values is owned by the
  * database. The caller MUST not dispose of the memory, and MUST not modify it
@@ -6268,8 +6297,9 @@ LIBMDBX_API int mdbx_cursor_put(MDBX_cursor *cursor, const MDBX_val *key, MDBX_v
  * return the same record after this operation.
  *
  * \param [in] cursor  A cursor handle returned by mdbx_cursor_open().
+ *
  * \param [in] flags   Options for this operation. This parameter must be set
- * to one of the values described here.
+ *                     to one of the values described here.
  *
  *  - \ref MDBX_CURRENT Delete only single entry at current cursor position.
  *  - \ref MDBX_ALLDUPS
@@ -6333,10 +6363,10 @@ LIBMDBX_API int mdbx_cursor_delete_range(MDBX_cursor *begin, MDBX_cursor *end, b
  * kinds of "dupsort" tables. If in doubt, use a deliberately large value such as `INT_MAX` or just the `42`.
  *
  * \param [in] first             Cursor pointing to the first element or NULL to using the begin of a table.
- *                               Either the `first` or the `last` must not be NULL.
+ *                               Either the "first" or the "last" can be NULL, but not both at once.
  *
  * \param [in] last              Cursor pointing to the end of the range or NULL to using the end of a table.
- *                               Either the `first` or the `last` must not be NULL.
+ *                               Either the "first" or the "last" can be NULL, but not both at once.
  *
  * \param [out] distance         The address for storing the result calculated distance.
  *
@@ -6388,6 +6418,10 @@ LIBMDBX_API int mdbx_cursor_scroll(MDBX_cursor *cursor, intptr_t amount, unsigne
 
 /** \brief Distributes cursors for multithreaded range scanning.
  * \ingroup c_cursors
+ *
+ * Places a given set of cursors as evenly as possible for subsequent scanning or parallel processing of data range by
+ * several threads. The function can accept cursors bound to different read transactions, provided that they use the
+ * same MVCC-snapshot of data.
  *
  * The value of the `deepness` parameter has a fundamental effect on the result, since it determines the level of the
  * B-tree at which the cursors distribution are performed, where zero corresponds to the root of the B-tree and
@@ -7100,7 +7134,7 @@ typedef enum MDBX_chk_flags {
    * comparison functions. */
   MDBX_CHK_IGNORE_ORDER = 8
 } MDBX_chk_flags_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_chk_flags)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_chk_flags)
 
 /** \brief Levels of logging/detailing of information supplied via callbacks during a database integrity check.
  * \ingroup c_extra
@@ -7455,7 +7489,7 @@ typedef enum MDBX_defrag_stopping_reasons {
   MDBX_defrag_aborted = 64,          /**< Aborted by user */
   MDBX_defrag_error = 128            /**< An error occurred during defragmentation */
 } MDBX_defrag_stopping_reasons_t;
-DEFINE_ENUM_FLAG_OPERATORS(MDBX_defrag_stopping_reasons)
+MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_defrag_stopping_reasons)
 
 /** \brief The numerical metrics of progress and result of database defragmentation.
  * \ingroup c_extra

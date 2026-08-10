@@ -85,7 +85,7 @@
 #   ...
 #   fun:iov_write*
 #}
-# for((i=0;i<64;++i)); do echo -e "{\n   pwritev-page-flush-$i\n   Memcheck:Param\n   pwritev(vector[$i])\n   ...\n   fun:iov_write*\n}"; done >> valgrind_suppress.txt
+# for((i=0;i<64;++i)); do echo -e "{\n   pwritev-page-flush-$i\n   Memcheck:Param\n   pwritev(vector[$i])\n   ...\n   fun:iov_write*\n}"; done >> valgrind.supp
 {
    pwritev-page-flush-0
    Memcheck:Param
