@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-14-g611955c7 at 2026-08-18T14:20:49+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -3362,9 +3362,6 @@ typedef struct gc_update_context {
   size_t return_reserved_lo, return_reserved_hi;
   txnid_t gc_first;
   intptr_t return_left;
-#ifndef MDBX_DEBUG_GCU
-#define MDBX_DEBUG_GCU 0
-#endif
 #if MDBX_DEBUG_GCU
   struct {
     txnid_t prev;
@@ -3427,7 +3424,7 @@ static inline txnid_t txnid_min(txnid_t a, txnid_t b) { return (a < b) ? a : b; 
 static inline txnid_t txnid_max(txnid_t a, txnid_t b) { return (a > b) ? a : b; }
 
 MDBX_INTERNAL MDBX_cursor *gc_cursor_init(MDBX_txn *txn);
-MDBX_INTERNAL int gc_merge_loose(MDBX_txn *txn);
+MDBX_INTERNAL int gc_merge_loose(MDBX_txn *txn, gcu_t *ctx);
 MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL const char *gc_check_keylen(size_t const key_len);
 MDBX_INTERNAL const char *gc_check_rowdata(const MDBX_txn *const txn, const MDBX_val data);
 
@@ -18402,7 +18399,7 @@ static int defrag_clear_reclaimed(dfc_t *dfc) {
         }
 
         if (txn->wr.loose_count > 0) {
-          rc = gc_merge_loose(txn);
+          rc = gc_merge_loose(txn, nullptr);
           if (unlikely(rc != MDBX_SUCCESS))
             break;
           txn_refund(txn);
@@ -18427,7 +18424,7 @@ static int defrag_clear_reclaimed(dfc_t *dfc) {
 
   if (likely(rc == MDBX_SUCCESS)) {
     if (txn->wr.loose_count > 0)
-      rc = gc_merge_loose(txn);
+      rc = gc_merge_loose(txn, nullptr);
     if (likely(rc == MDBX_SUCCESS))
       txn_refund(txn);
   }
@@ -18977,7 +18974,7 @@ int defrag_cycle(dfc_t *dfc) {
     return rc;
 
   if (txn->wr.loose_count > 0) {
-    rc = gc_merge_loose(txn);
+    rc = gc_merge_loose(txn, nullptr);
     if (unlikely(rc != MDBX_SUCCESS))
       return rc;
   }
@@ -23545,7 +23542,7 @@ static int gc_peekid(const MDBX_val *key, txnid_t *id) {
 #pragma push_macro("LOG_ENABLED")
 #undef LOG_ENABLED
 #define LOG_ENABLED(LVL)                                                                                               \
-  unlikely(MDBX_DEBUG_GCU > 2 || (ctx->loop > 1 && (MDBX_DEBUG_GCU > 1 || LVL < MDBX_LOG_EXTRA)) ||                    \
+  unlikely(MDBX_DEBUG_GCU > 2 || (ctx && ctx->loop > 1 && (MDBX_DEBUG_GCU > 1 || LVL < MDBX_LOG_EXTRA)) ||             \
            LVL <= globals.loglevel)
 #endif /* MDBX_DEBUG_GCU */
 
@@ -23798,7 +23795,8 @@ static int gc_prepare_stockpile4retired(MDBX_txn *txn, gcu_t *ctx) {
   return gc_prepare_stockpile(txn, ctx, for_retired);
 }
 
-int gc_merge_loose(MDBX_txn *txn) {
+int gc_merge_loose(MDBX_txn *txn, gcu_t *ctx) {
+  (void)ctx;
   tASSERT0(txn, txn->wr.loose_count > 0);
   /* Return loose page numbers to wr.repnl, though usually none are left at this point.
    * The pages themselves remain in dirtylist. */
@@ -24981,7 +24979,7 @@ retry:
 
     if (txn->wr.loose_pages) {
       /* merge loose pages into the reclaimed- either retired-list */
-      err = gc_merge_loose(txn);
+      err = gc_merge_loose(txn, ctx);
       if (unlikely(err != MDBX_SUCCESS)) {
         if (err == MDBX_RESULT_TRUE)
           continue;
@@ -31186,7 +31184,10 @@ int osal_fsetsize(mdbx_filehandle_t fd, const uint64_t length) {
 
   const uint64_t allocated = UINT64_C(512) * info.st_blocks;
   if (length > allocated) {
-#if defined(__APPLE__)
+#if defined(FALLOC_FL_ALLOCATE_RANGE) && defined(FALLOC_FL_KEEP_SIZE)
+    /* prefer a low-level non-portable function to avoid glibc emulation if the file system does not support the operation. */
+    int err = fallocate(fd, FALLOC_FL_ALLOCATE_RANGE | FALLOC_FL_KEEP_SIZE, 0, length);
+#elif defined(__APPLE__)
     fstore_t store = {
         .fst_flags = F_ALLOCATECONTIG, .fst_posmode = F_PEOFPOSMODE, .fst_offset = 0, .fst_length = length};
     int err = MDBX_SUCCESS;
@@ -42771,10 +42772,10 @@ __dll_export
         0,
         14,
         3,
-        0,
+        14,
         "", /* pre-release suffix of SemVer
-                                        0.14.3 */
-        {"2026-08-09T13:18:46+03:00", "e4baa5caf1001120895ba9282f645236e2fb160b", "251562b2dc55266d8e6d0e6627ec88ecb410702f", "v0.14.3-0-g251562b2"},
+                                        0.14.3.14 */
+        {"2026-08-18T14:20:49+03:00", "436fe8dad2218c938e5ff6bd4212eb10eb7bbed7", "611955c7f0e8c009e17a89d4d5968c63bbcafbd5", "v0.14.3-14-g611955c7"},
         sourcery};
 
 __dll_export

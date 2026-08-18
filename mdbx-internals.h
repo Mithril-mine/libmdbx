@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-14-g611955c7 at 2026-08-18T14:20:49+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 14e885fd80871dd24641b192913291f81248a2c85c10388a4700a97e68e90f41_v0_14_3_0_g251562b2
+#define MDBX_BUILD_SOURCERY ae128aa00b3ef030991290449f1aec843027863799120a3ce34d45630705dce5_v0_14_3_14_g611955c7
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -2404,6 +2404,10 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #ifndef MDBX_DEBUG_SEARCH_BRANCHLESS
 #define MDBX_DEBUG_SEARCH_BRANCHLESS 0
 #endif /* MDBX_DEBUG_SEARCH_BRANCHLESS */
+
+#ifndef MDBX_DEBUG_GCU
+#define MDBX_DEBUG_GCU 0
+#endif /* MDBX_DEBUG_GCU */
 
 /* Since 2026-04-01 alternatives to MDBX_PNL_ASCENDING = 0 are no longer supported. */
 #define MDBX_PNL_ASCENDING 0

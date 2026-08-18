@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.3-14-g611955c7 at 2026-08-18T14:20:49+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -1336,6 +1336,16 @@ typedef enum MDBX_env_flags {
    * but \ref MDBX_UTTERLY_NOSYNC is exactly match LMDB_NOSYNC. See details
    * below.
    *
+   * TWO CLASSES OF FAILURES:
+   *  - Application failure, only the process crashes. Database integrity is not affected in such cases.
+   *    When only the process crashes, data not yet written to storage remains in the OS kernel page cache.
+   *    Therefore database integrity is not affected regardless of the operating mode: the data remains
+   *    available to the kernel and survives the process crash.
+   *  - System-wide failure: OS kernel panic, power outage, etc.
+   *    In a system-wide failure or power loss the kernel page cache is lost together with all data not yet written to
+   *    storage. Therefore the database may be corrupted or lose the last transactions if an operating mode that does
+   *    not provide full durability (for example, async-write) is chosen.
+   *
    * THE SCENE:
    * - The DAT-file contains several MVCC-snapshots of B-tree at same time,
    *   each of those B-tree has its own root page.
@@ -1354,13 +1364,13 @@ typedef enum MDBX_env_flags {
    *   underlying hardware (e.g. disk) work correctly.
    *
    * TRADE-OFF:
-   * By skipping some stages described above, you can significantly benefit in
-   * speed, while partially or completely losing in the guarantee of data
-   * durability and/or consistency in the event of system or power failure.
-   * Moreover, if for any reason disk write order is not preserved, then at
-   * moment of a system crash, a meta-page with a pointer to the new B-tree may
-   * be written to disk, while the itself B-tree not yet. In that case, the
-   * database will be corrupted!
+   *  - By skipping some stages described above, you can significantly benefit in
+   *    speed, while partially or completely losing in the guarantee of data
+   *    durability and/or consistency in the event of system/kernel or power failure.
+   *  - Besides, if for any reason disk write order is not preserved, then at
+   *    moment of a system crash, a meta-page with a pointer to the new B-tree may
+   *    be written to disk, while the itself B-tree not yet. In that case, the
+   *    database will be corrupted!
    *
    * \see MDBX_SYNC_DURABLE \see MDBX_NOMETASYNC \see MDBX_SAFE_NOSYNC
    * \see MDBX_UTTERLY_NOSYNC

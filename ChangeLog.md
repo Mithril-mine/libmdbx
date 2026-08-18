@@ -3,11 +3,32 @@ ChangeLog
 
 The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
 Please use the `stable` branch or the latest release for production environment through staging, but the `master` branch for development a derivative projects.
-Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
-BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.3 "Китов" (Kitov) at 2026-08-09.
+## v0.14.4 at a release engineering stage
+
+The supporting release of a stable branch with bug fixes.
+
+### Important:
+
+ The project website (libmdbx.dqdkfa.ru)[https://libmdbx.dqdkfa.ru/] has been re-created:
+   - The advice, explanations, questions and answers, from correspondence, forums and other sources have been compiled.
+   - All information has been aggregated into a knowledge base, and the corresponding sections have been compiled on the website.
+   - The documentation generated via Doxgygen has been moved to /doxygen, with old links redirection.
+   - A lot of work has been done using AI.
+
+### Improvements:
+
+ - The "crash" meaning clarified in the documentation.
+ - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
+
+### Fixes:
+
+ - Fixed `entry point _except_handler4 not found in mdbx.dll` in 32-bit build with `MDBX_WITHOUT_MSVC_CRT=ON`.
+
+--------------------------------------------------------------------------------
+
+## v0.14.3 "Китов" (Kitov) at 2026-08-09
 
 The supporting release with a lot of bug fixes,
 in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pioneer of cybernetics and the one of inventors of M-100, which was a most powerful computer of the World in 1958.

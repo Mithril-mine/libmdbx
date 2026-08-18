@@ -26,73 +26,9 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the legen
 
 [![Чат в МАКС](https://libmdbx.dqdkfa.ru/img/MAX-24x24.png)](https://max.ru/join/dKckvyuARxp1vRK-wnPur8zYCEkbR3OUOmpPWkWxp78) [![Telegram: Support | Discussions | News](https://img.shields.io/endpoint?color=scarlet&logo=telegram&label=Support%20%7C%20Discussions%20%7C%20News&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flibmdbx)](https://t.me/libmdbx)
 
-> Please refer to the online [official libmdbx documentation site](https://libmdbx.dqdkfa.ru) with [`C` API description](https://libmdbx.dqdkfa.ru/group__c__api.html) and pay attention to the [`C++` API](https://sourcecraft.dev/dqdkfa/libmdbx/blob?file=mdbx.h%2B%2B#line-num-1). Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
-BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
-> Всё будет хорошо!
-
-Telegram Group archive: [1](https://libmdbx.dqdkfa.ru/tg-archive/messages1.html), [2](https://libmdbx.dqdkfa.ru/tg-archive/messages2.html), [3](https://libmdbx.dqdkfa.ru/tg-archive/messages3.html), [4](https://libmdbx.dqdkfa.ru/tg-archive/messages4.html), [5](https://libmdbx.dqdkfa.ru/tg-archive/messages5.html), [6](https://libmdbx.dqdkfa.ru/tg-archive/messages6.html), [7](https://libmdbx.dqdkfa.ru/tg-archive/messages7.html).
-
-## The Turnpoint
-
-[![Turnpoint'HNY2026](https://libmdbx.dqdkfa.ru/img/Turnpoint-HNY2026.webp)](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf)
-
-### in English
-
-> **To get acquainted with important changes and plans, we recommend reading the compact [presentation "libmdbx: successes, obstacles, goals and roadmap"](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf), which contains important explanations in the form of embedded comments.**
-
-For ease of use and to eliminate potential limitations in both distribution and obstacles in technology development, _libmdbx_ is distributed as an amalgamated source code starting at the end of 2025. The source code of the tests, as well as the internal documentation, will be available only to the team directly involved in the development. The new _libmdbx_ development strategy is [presented](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf), the essence of which is the continuous movement towards the _MithrilDB_. In this regard, some of the information provided below and in other parts of the documentation may be inaccurate or inapplicable. We will try to resolve all discrepancies as quickly as possible.
-
-The _libmdbx_ code will forever remain open and with high-quality free support, as far as the life circumstances of the project participants allow. However, support will be provided only for officially published versions of the code. As an identity criterion, the `git tree hash` must match the signed commit in the _libmdbx_ public repository. For all other cases, paid support will be offered. We will also insist and enforce that all derivative versions comply with the license requirements, including the explicit presence of a notice stating that such derivative modified code originates from _libdmbx_, but is no longer original and supported, and is not subject to any quality guarantees from _libmdbx_.
-
-### на Русском (мой родной язык)
-
-> **Для знакомства с важными изменениями и планами, рекомендуем посмотреть компактную [презентацию "libmdbx: успехи, препятствия, цели и план развития"](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-russian.pdf), в которой важные пояснения даны в виде встроенных комментариев.**
-
-Для удобства использования и устранения потенциальных ограничений как в распространении, так и препятствий в разработке технологий, начиная с конца 2025 года _libmdbx_ распространяется в виде амальгамированного исходного кода. Исходный код тестов, как и внутренняя документация будет доступна только команде непосредственно занимающейся разработкой. Также [представлена](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-russian.pdf) новая стратегия развития _libmdbx_, суть которой в непрерывном движении к _MithrilDB_. В связи с этим часть информации изложенной ниже и в других частях документации может быть неточной или неприменимой. Мы постараемся устранить все несоответствия по-быстрее.
-
-Код _libmdbx_ навсегда останется открытым и с качественной бесплатной поддержкой, насколько это позволят жизненные обстоятельства участников проекта. Однако, поддержка будет оказываться только для официально публикуемых версий кода. В качестве критерия идентичности требуется совпадение `git tree hash` с подписанным коммитом в публичном репозитории _libmdbx_. Для всех остальных случаев будет предлагаться платная поддержка. Также мы будем настаивать и добиваться выполнения всеми производными версиями требований лицензии, включая явное присутствие уведомления о том, что такой производный модифицированный код происходит от _libdmbx_, но уже не является оригинальным и поддерживаемым, и на него не распространяются какие-либо гарантии качества _libmdbx_.
-
-## MithrilDB and Future
-
-<!-- section-begin mithril -->
-
-The next version is under non-public development and will be released as **MithrilDB** and `libmithrildb` for libraries & packages. Admittedly mythical [Mithril](https://en.wikipedia.org/wiki/Mithril) is resembling silver but being stronger and lighter than steel. Therefore _MithrilDB_ is a rightly relevant name.
-
-_MithrilDB_ is radically different from _libmdbx_ by the new database format and API based on C++20. The goal of this revolution is to provide a clearer and robust API, add more features and new valuable properties of the database. All fundamental architectural problems of libmdbx/LMDB have been solved there, but now the active development has been suspended for top-three reasons:
-
-1. For now _libmdbx_ mostly enough and I’m busy for scalability.
-2. Waiting for fresh [Elbrus CPU](https://wiki.elbrus.ru/) of [e2k architecture](https://en.wikipedia.org/wiki/Elbrus_2000), especially with hardware acceleration of [Streebog](https://en.wikipedia.org/wiki/Streebog) and [Kuznyechik](https://en.wikipedia.org/wiki/Kuznyechik), which are required for Merkle tree, etc.
-3. The expectation of needs and opportunities due to the wide use of NVDIMM (aka persistent memory), modern NVMe and [Ангара](https://ru.wikipedia.org/wiki/Ангара_(интерконнект)).
-
-However, _MithrilDB_ will not be available for countries unfriendly to Russia (i.e. acceded the sanctions, devil adepts and/or NATO). But it is not yet known whether such restriction will be implemented only through a license and support, either the source code will not be open at all. Basically I am not inclined to allow my work to contribute to the profit that goes to weapons that kill my relatives and friends. NO OPTIONS.
-
-Nonetheless, I try not to make any promises regarding _MithrilDB_ until release.
-
-Contrary to _MithrilDB_, _libmdbx_ will forever free and open source. Moreover with high-quality support whenever possible. Tu deviens responsible pour toujours de ce que tu as apprivois. So I will continue to comply with the original open license and the principles of constructive cooperation, in spite of outright GitHub sabotage and sanctions. I will also try to keep (not drop) Windows support, despite it is an unused obsolete technology for us.
-
-<!-- section-end -->
+> Please rely on  the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/doxygen/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/doxygen/group__c__api.html) API, etc.
 
 -----
-
-## Table of Contents
-- [Characteristics](#characteristics)
-    - [Features](#features)
-    - [Limitations](#limitations)
-    - [Gotchas](#gotchas)
-    - [Comparison with other databases](#comparison-with-other-databases)
-    - [Improvements beyond LMDB](#improvements-beyond-lmdb)
-    - [History & Acknowledgments](#history)
-- [Usage](#usage)
-    - [Building and Testing](#building-and-testing)
-    - [API description](#api-description)
-    - [Bindings](#bindings)
-- [Performance comparison](#performance-comparison)
-    - [Integral performance](#integral-performance)
-    - [Read scalability](#read-scalability)
-    - [Sync-write mode](#sync-write-mode)
-    - [Lazy-write mode](#lazy-write-mode)
-    - [Async-write mode](#async-write-mode)
-    - [Cost comparison](#cost-comparison)
 
 # Characteristics
 
@@ -177,109 +113,32 @@ For now please refer to [chapter of "BoltDB comparison with other databases"](ht
  - _libmdbx_ provides extra more features compared to BoltDB and/or LMDB.
 
 <!-- section-end -->
-<!-- section-begin improvements -->
 
-Improvements beyond LMDB
-========================
+<!-- section-begin bindings -->
 
-_libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of features and reliability, not inferior in performance. In comparison to _LMDB_, _libmdbx_ make things "just work" perfectly and out-of-the-box, not silently and catastrophically break down. The list below is pruned down to the improvements most notable and obvious from the user's point of view.
+Bindings
+========
 
-## Some Added Features
+| Runtime |  Repo  | Author |
+| ------- | ------ | ------ |
+| Rust    | [libmdbx-rs](https://github.com/vorot93/libmdbx-rs)   | [Artem Vorotnikov](https://github.com/vorot93) |
+| Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
+| Java    | [mdbxjni](https://github.com/castortech/mdbxjni)      | [Castor Technologies](https://castortech.com/) |
+| Go      | [mdbx-go](https://github.com/torquem-ch/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
+| Ruby    | [ruby-mdbx](https://rubygems.org/gems/mdbx/)          | [Mahlon E. Smith](https://github.com/mahlonsmith) |
+| Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |
+| NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
+| .NET    | [libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) | [Anton Maisak](mailto:anton@maisak.ru) |
 
-* Keys could be more than 2 times longer than _LMDB_, support of zero-length for keys and values.
-   > For DB with default page size _libmdbx_ support keys up to 2022 bytes and up to 32742 bytes for 64K page size. _LMDB_ allows key size up to 511 bytes and may silently loses data with large values.
+##### Obsolete/Outdated/Unsupported:
 
-* Up to 30% faster than _LMDB_ in [CRUD](https://en.wikipedia.org/wiki/Create,_read,_update_and_delete) benchmarks.
-   > Benchmarks of the in-[tmpfs](https://en.wikipedia.org/wiki/Tmpfs) scenarios, that tests the speed of the engine itself, showned that _libmdbx_ 10-20% faster than _LMDB_, and up to 30% faster when _libmdbx_ compiled with specific build options which downgrades several runtime checks to be match with LMDB behaviour.
-   >
-   > However, libmdbx may be slower than LMDB on Windows, since uses native file locking API. These locks are really slow, but they prevent an inconsistent backup from being obtained by copying the DB file during an ongoing write transaction. So I think this is the right decision, and for speed, it's better to use Linux, or ask Microsoft to fix up file locks.
-   >
-   > Noted above and other results could be easily reproduced with [ioArena](https://sourcecraft.dev/dqdkfa/ioarena) just by `make bench-quartet` command, including comparisons with [RockDB](https://en.wikipedia.org/wiki/RocksDB) and [WiredTiger](https://en.wikipedia.org/wiki/WiredTiger).
-
-* Automatic on-the-fly database size adjustment, both increment and reduction.
-   > _libmdbx_ manages the database size according to parameters specified by `mdbx_env_set_geometry()` function, ones include the growth step and the truncation threshold.
-   >
-   > Unfortunately, on-the-fly database size adjustment doesn't work under [Wine](https://en.wikipedia.org/wiki/Wine_(software)) due to its internal limitations and unimplemented functions, i.e. the `MDBX_UNABLE_EXTEND_MAPSIZE` error will be returned.
-
-* Automatic continuous zero-overhead database compactification.
-   > During each commit _libmdbx_ merges a freeing pages which adjacent with the unallocated area at the end of file, and then truncates unused space when a lot enough of.
-
-* The same database format for 32- and 64-bit builds.
-   > _libmdbx_ database format depends only on the [endianness](https://en.wikipedia.org/wiki/Endianness) but not on the [bitness](https://en.wiktionary.org/wiki/bitness).
-
-* The "Big Foot" feature than solves specific performance issues with huge transactions and extra-large page-number-lists.
-
-* LIFO policy for Garbage Collection recycling. This can significantly increase write performance due write-back disk cache up to several times in a best case scenario.
-   > LIFO means that for reuse will be taken the latest becomes unused pages. Therefore the loop of database pages circulation becomes as short as possible. In other words, the set of pages, that are (over)written in memory and on disk during a series of write transactions, will be as small as possible. Thus creates ideal conditions for the battery-backed or flash-backed disk cache efficiency.
-
-* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6) to resolve an issues due to long-lived read transactions.
-
-* Fast estimation of range query result volume, i.e. how many items can be found between a `KEY1` and a `KEY2`. This is a prerequisite for build and/or optimize query execution plans.
-   > _libmdbx_ performs a rough estimate based on common B-tree pages of the paths from root to corresponding keys.
-
-* Database integrity check API both with standalone `mdbx_chk` utility.
-
-* Support for opening databases in the exclusive mode, including on a network share.
-
-* Extended information of whole-database, tables/sub-databases, transactions, readers enumeration.
-    > _libmdbx_ provides a lot of information, including dirty and leftover pages for a write transaction, reading lag and holdover space for read transactions.
-
-* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353) with lightweight transparent cache that could provides dramatic acceleration in many cases.
-
-* [Cloning a read transactions](https://libmdbx.dqdkfa.ru/group__c__transactions.html#ga28d3db2426df24b16c0bc40cd0af8187) and [resurrect after fork](https://libmdbx.dqdkfa.ru/group__c__extra.html#gab7d13c1dbf074bc23ebda2d886add02a) feature.
-
-* Automated steady sync-to-disk upon several thresholds and/or timeout via cheap polling.
-
-* Extended update and quick delete operations.
-    > _libmdbx_ allows one _at once_ with [getting previous value](https://libmdbx.dqdkfa.ru/group__c__crud.html#gaad688c4b0fbbcff676f181dc0437befa) and addressing the particular item from multi-value with the same key.
-    > _libmdbx_ support [massive deletion by bunches](https://libmdbx.dqdkfa.ru/group__c__crud.html#gac986d35a3b6b27ac43af881c471a6878) of adjacent elements much faster by cutting off entire pages and branches from a B-tree.
-
-* Ability to determine whether the particular data is on a dirty page or not, that allows to avoid copy-out before updates.
-
-* Sequence generation and three persistent 64-bit vector-clock like markers.
-
-* Useful runtime options for tuning engine to application's requirements and use cases specific.
-
-## Other fixes and specifics
-
-* Fixed more than a dozen bugs, many of which are still present in LMDB, in particular: page leaks, wrong table/sub-database statistics, segfaults in several conditions, nonoptimal page merge strategy, updating an existing item with resizing data (including for a multimap), etc.
-
-* All cursors can be reused and should be closed explicitly, regardless ones were opened within a write or read transaction.
-
-* Opening database handles are spared from race conditions and pre-opening is not needed.
-
-* Returning `MDBX_EMULTIVAL` error in case of ambiguous update or delete.
-
-* Guarantee of database integrity even in asynchronous unordered write-to-disk mode.
-   > _libmdbx_ propose additional trade-off by `MDBX_SAFE_NOSYNC` with append-like manner for updates, that avoids database corruption after a system crash contrary to LMDB.
-   > Nevertheless, the `MDBX_UTTERLY_NOSYNC` mode is available to match LMDB's behaviour for `MDB_NOSYNC`.
-
-* On **MacOS & iOS** the `fcntl(F_FULLFSYNC)` syscall is used _by default_ to synchronize data with the disk, as this is [the only way to guarantee data durability](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html) in case of power failure. Unfortunately, in scenarios with high write intensity, the use of `F_FULLFSYNC` significantly degrades performance compared to LMDB, where the `fsync()` syscall is used. Therefore, _libmdbx_ allows you to override this behavior by defining the `MDBX_OSX_SPEED_INSTEADOF_DURABILITY=1` option while build the library.
-
-* On **Windows** the `LockFileEx()` syscall is used for locking, since it allows place the database on network drives, and provides protection against incompetent user actions (aka [poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)). Therefore _libmdbx_ may be a little lag in performance tests from LMDB where the named mutexes are used.
+| Runtime |  Repo  | Author |
+| ------- | ------ | ------ |
+| Scala   | [mdbx4s](https://github.com/david-bouyssie/mdbx4s) | [David Bouyssié](https://github.com/david-bouyssie) |
+| Haskell | [libmdbx-hs](https://hackage.haskell.org/package/libmdbx) | [Francisco Vallarino](https://github.com/fjvallarino) |
+| Lua     | [lua-libmdbx](https://github.com/mah0x211/lua-libmdbx) | [Masatoshi Fukunaga](https://github.com/mah0x211) |
 
 <!-- section-end -->
-<!-- section-begin history -->
-
-# History
-
-Historically, _libmdbx_ is a deeply revised and extended descendant of the [Lightning Memory-Mapped Database](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database). At first the development was carried out within the [ReOpenLDAP](https://sourcecraft.dev/dqdkfa/reopenldap) project. About a year later _libmdbx_ was separated into a standalone project, which was [presented at Highload++ 2015 conference](http://www.highload.ru/2015/abstracts/1831.html).
-
-Since 2017 _libmdbx_ is used in [Fast Positive Tables](https://sourcecraft.dev/dqdkfa/libfpta), and until 2025 development was funded by [Positive Technologies](https://www.ptsecurity.com). Since 2020 _libmdbx_ is used in Ethereum: [Erigon](https://github.com/erigontech/erigon), [Akula](https://github.com/akula-bft/akula), [Silkworm](https://github.com/erigontech/silkworm), [Reth](https://github.com/paradigmxyz/reth), etc.
-
-On 2022-04-15 the GitHub administration, without any warning nor explanation, deleted _libmdbx_ along with a lot of other projects, simultaneously blocking access for many developers. Therefore on 2022-04-21 I have migrated to a reliable trusted infrastructure.
-The origin for now is at [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and ~~GitHub~~ is blacklisted forever to play this role.
-
-Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 license. Please refer to the [`COPYRIGHT` file](https://sourcecraft.dev/dqdkfa/libmdbx/blob/raw?file=COPYRIGHT) for license change explanation.
-
-## Acknowledgments
-Howard Chu <hyc@openldap.org> and Hallvard Furuseth <hallvard@openldap.org> are the authors of _LMDB_, from which _libmdbx_ was forked in 2015.
-
-Martin Hedenfalk <martin@bzero.se> is the author of `btree.c` code, which was used to begin development of _LMDB_.
-
-<!-- section-end -->
-
---------------------------------------------------------------------------------
 
 Usage
 =====
@@ -378,128 +237,129 @@ To build _libmdbx_ for iOS, please use CMake with the ["toolchain file"](https:/
 
 Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers.
 
-<!-- section-begin bindings -->
+--------------------------------------------------------------------------------
 
-Bindings
-========
+<!-- section-begin history -->
 
-| Runtime |  Repo  | Author |
-| ------- | ------ | ------ |
-| Rust    | [libmdbx-rs](https://github.com/vorot93/libmdbx-rs)   | [Artem Vorotnikov](https://github.com/vorot93) |
-| Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
-| Java    | [mdbxjni](https://github.com/castortech/mdbxjni)      | [Castor Technologies](https://castortech.com/) |
-| Go      | [mdbx-go](https://github.com/torquem-ch/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
-| Ruby    | [ruby-mdbx](https://rubygems.org/gems/mdbx/)          | [Mahlon E. Smith](https://github.com/mahlonsmith) |
-| Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |
-| NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
-| .NET    | [libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) | [Anton Maisak](mailto:anton@maisak.ru) |
+# History
 
-##### Obsolete/Outdated/Unsupported:
+Historically, _libmdbx_ is a deeply revised and extended descendant of the [Lightning Memory-Mapped Database](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database). At first the development was carried out within the [ReOpenLDAP](https://sourcecraft.dev/dqdkfa/reopenldap) project. About a year later _libmdbx_ was separated into a standalone project, which was [presented at Highload++ 2015 conference](http://www.highload.ru/2015/abstracts/1831.html).
 
-| Runtime |  Repo  | Author |
-| ------- | ------ | ------ |
-| Scala   | [mdbx4s](https://github.com/david-bouyssie/mdbx4s) | [David Bouyssié](https://github.com/david-bouyssie) |
-| Haskell | [libmdbx-hs](https://hackage.haskell.org/package/libmdbx) | [Francisco Vallarino](https://github.com/fjvallarino) |
-| Lua     | [lua-libmdbx](https://github.com/mah0x211/lua-libmdbx) | [Masatoshi Fukunaga](https://github.com/mah0x211) |
+Since 2017 _libmdbx_ is used in [Fast Positive Tables](https://sourcecraft.dev/dqdkfa/libfpta), and until 2025 development was funded by [Positive Technologies](https://www.ptsecurity.com). Since 2020 _libmdbx_ is used in Ethereum: [Erigon](https://github.com/erigontech/erigon), [Akula](https://github.com/akula-bft/akula), [Silkworm](https://github.com/erigontech/silkworm), [Reth](https://github.com/paradigmxyz/reth), etc.
+
+On 2022-04-15 the GitHub administration, without any warning nor explanation, deleted _libmdbx_ along with a lot of other projects, simultaneously blocking access for many developers. Therefore on 2022-04-21 I have migrated to a reliable trusted infrastructure.
+The origin for now is at [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and ~~GitHub~~ is blacklisted forever to play this role.
+
+Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 license. Please refer to the [`COPYRIGHT` file](https://sourcecraft.dev/dqdkfa/libmdbx/blob/raw?file=COPYRIGHT) for license change explanation.
+
+## Acknowledgments
+Howard Chu <hyc@openldap.org> and Hallvard Furuseth <hallvard@openldap.org> are the authors of _LMDB_, from which _libmdbx_ was forked in 2015.
+
+Martin Hedenfalk <martin@bzero.se> is the author of `btree.c` code, which was used to begin development of _LMDB_.
+
+<!-- section-end -->
+
+<!-- section-begin improvements -->
+
+Improvements beyond LMDB
+========================
+
+_libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of features and reliability, not inferior in performance. In comparison to _LMDB_, _libmdbx_ make things "just work" perfectly and out-of-the-box, not silently and catastrophically break down. The list below is pruned down to the improvements most notable and obvious from the user's point of view.
+
+## Some Added Features
+
+* Keys could be more than 2 times longer than _LMDB_, support of zero-length for keys and values.
+   > For DB with default page size _libmdbx_ support keys up to 2022 bytes and up to 32742 bytes for 64K page size. _LMDB_ allows key size up to 511 bytes and may silently loses data with large values.
+
+* Up to 30% faster than _LMDB_ in [CRUD](https://en.wikipedia.org/wiki/Create,_read,_update_and_delete) benchmarks.
+   > Benchmarks of the in-[tmpfs](https://en.wikipedia.org/wiki/Tmpfs) scenarios, that tests the speed of the engine itself, showned that _libmdbx_ 10-20% faster than _LMDB_, and up to 30% faster when _libmdbx_ compiled with specific build options which downgrades several runtime checks to be match with LMDB behaviour.
+   >
+   > However, libmdbx may be slower than LMDB on Windows, since uses native file locking API. These locks are really slow, but they prevent an inconsistent backup from being obtained by copying the DB file during an ongoing write transaction. So I think this is the right decision, and for speed, it's better to use Linux, or ask Microsoft to fix up file locks.
+   >
+   > Noted above and other results could be easily reproduced with [ioArena](https://sourcecraft.dev/dqdkfa/ioarena) just by `make bench-quartet` command, including comparisons with [RockDB](https://en.wikipedia.org/wiki/RocksDB) and [WiredTiger](https://en.wikipedia.org/wiki/WiredTiger).
+
+* Automatic on-the-fly database size adjustment, both increment and reduction.
+   > _libmdbx_ manages the database size according to parameters specified by `mdbx_env_set_geometry()` function, ones include the growth step and the truncation threshold.
+   >
+   > Unfortunately, on-the-fly database size adjustment doesn't work under [Wine](https://en.wikipedia.org/wiki/Wine_(software)) due to its internal limitations and unimplemented functions, i.e. the `MDBX_UNABLE_EXTEND_MAPSIZE` error will be returned.
+
+* Automatic continuous zero-overhead database compactification.
+   > During each commit _libmdbx_ merges a freeing pages which adjacent with the unallocated area at the end of file, and then truncates unused space when a lot enough of.
+
+* The same database format for 32- and 64-bit builds.
+   > _libmdbx_ database format depends only on the [endianness](https://en.wikipedia.org/wiki/Endianness) but not on the [bitness](https://en.wiktionary.org/wiki/bitness).
+
+* The "Big Foot" feature than solves specific performance issues with huge transactions and extra-large page-number-lists.
+
+* LIFO policy for Garbage Collection recycling. This can significantly increase write performance due write-back disk cache up to several times in a best case scenario.
+   > LIFO means that for reuse will be taken the latest becomes unused pages. Therefore the loop of database pages circulation becomes as short as possible. In other words, the set of pages, that are (over)written in memory and on disk during a series of write transactions, will be as small as possible. Thus creates ideal conditions for the battery-backed or flash-backed disk cache efficiency.
+
+* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6) to resolve an issues due to long-lived read transactions.
+
+* Fast estimation of range query result volume, i.e. how many items can be found between a `KEY1` and a `KEY2`. This is a prerequisite for build and/or optimize query execution plans.
+   > _libmdbx_ performs a rough estimate based on common B-tree pages of the paths from root to corresponding keys.
+
+* Database integrity check API both with standalone `mdbx_chk` utility.
+
+* Support for opening databases in the exclusive mode, including on a network share.
+
+* Extended information of whole-database, tables/sub-databases, transactions, readers enumeration.
+    > _libmdbx_ provides a lot of information, including dirty and leftover pages for a write transaction, reading lag and holdover space for read transactions.
+
+* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353) with lightweight transparent cache that could provides dramatic acceleration in many cases.
+
+* [Cloning a read transactions](https://libmdbx.dqdkfa.ru/group__c__transactions.html#ga28d3db2426df24b16c0bc40cd0af8187) and [resurrect after fork](https://libmdbx.dqdkfa.ru/group__c__extra.html#gab7d13c1dbf074bc23ebda2d886add02a) feature.
+
+* Automated steady sync-to-disk upon several thresholds and/or timeout via cheap polling.
+
+* Extended update and quick delete operations.
+    > _libmdbx_ allows one _at once_ with [getting previous value](https://libmdbx.dqdkfa.ru/group__c__crud.html#gaad688c4b0fbbcff676f181dc0437befa) and addressing the particular item from multi-value with the same key.
+    > _libmdbx_ support [massive deletion by bunches](https://libmdbx.dqdkfa.ru/group__c__crud.html#gac986d35a3b6b27ac43af881c471a6878) of adjacent elements much faster by cutting off entire pages and branches from a B-tree.
+
+* Ability to determine whether the particular data is on a dirty page or not, that allows to avoid copy-out before updates.
+
+* Sequence generation and three persistent 64-bit vector-clock like markers.
+
+* Useful runtime options for tuning engine to application's requirements and use cases specific.
+
+## Other fixes and specifics
+
+* Fixed more than a dozen bugs, many of which are still present in LMDB, in particular: page leaks, wrong table/sub-database statistics, segfaults in several conditions, nonoptimal page merge strategy, updating an existing item with resizing data (including for a multimap), etc.
+
+* All cursors can be reused and should be closed explicitly, regardless ones were opened within a write or read transaction.
+
+* Opening database handles are spared from race conditions and pre-opening is not needed.
+
+* Returning `MDBX_EMULTIVAL` error in case of ambiguous update or delete.
+
+* Guarantee of database integrity even in asynchronous unordered write-to-disk mode.
+   > _libmdbx_ propose additional trade-off by `MDBX_SAFE_NOSYNC` with append-like manner for updates, that avoids database corruption after a system crash contrary to LMDB.
+   > Nevertheless, the `MDBX_UTTERLY_NOSYNC` mode is available to match LMDB's behaviour for `MDB_NOSYNC`.
+
+* On **MacOS & iOS** the `fcntl(F_FULLFSYNC)` syscall is used _by default_ to synchronize data with the disk, as this is [the only way to guarantee data durability](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html) in case of power failure. Unfortunately, in scenarios with high write intensity, the use of `F_FULLFSYNC` significantly degrades performance compared to LMDB, where the `fsync()` syscall is used. Therefore, _libmdbx_ allows you to override this behavior by defining the `MDBX_OSX_SPEED_INSTEADOF_DURABILITY=1` option while build the library.
+
+* On **Windows** the `LockFileEx()` syscall is used for locking, since it allows place the database on network drives, and provides protection against incompetent user actions (aka [poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)). Therefore _libmdbx_ may be a little lag in performance tests from LMDB where the named mutexes are used.
 
 <!-- section-end -->
 
 --------------------------------------------------------------------------------
 
-<!-- section-begin performance -->
+## MithrilDB and Future
 
-Performance comparison
-======================
+<!-- section-begin mithril -->
 
-Over the past 10 years, _libmdbx_ has had a lot of significant improvements and innovations. _libmdbx_ has become a slightly faster in simple cases and many times faster in complex scenarios, especially with a huge transactions in gigantic databases. Therefore, on the one hand, the results below are outdated. However, on the other hand, these simple benchmarks are evident, easy to reproduce, and are close to the most common use cases.
+The next version is under non-public development and will be released as **MithrilDB** and `libmithrildb` for libraries & packages. Admittedly mythical [Mithril](https://en.wikipedia.org/wiki/Mithril) is resembling silver but being stronger and lighter than steel. Therefore _MithrilDB_ is a rightly relevant name.
 
-The following all benchmark illustrative results were obtained in 2015 by [IOArena](https://sourcecraft.dev/dqdkfa/ioarena) and multiple [scripts](https://github.com/pmwkaa/ioarena/tree/HL%2B%2B2015) runs on my laptop (i7-4600U 2.1 GHz, SSD MZNTD512HAGL-000L1).
+_MithrilDB_ is radically different from _libmdbx_ by the new database format and API based on C++20. The goal of this revolution is to provide a clearer and robust API, add more features and new valuable properties of the database. All fundamental architectural problems of libmdbx/LMDB have been solved there, but now the active development has been suspended for top-three reasons:
 
-## Integral performance
+1. For now _libmdbx_ mostly enough and I’m busy for scalability.
+2. Waiting for fresh [Elbrus CPU](https://wiki.elbrus.ru/) of [e2k architecture](https://en.wikipedia.org/wiki/Elbrus_2000), especially with hardware acceleration of [Streebog](https://en.wikipedia.org/wiki/Streebog) and [Kuznyechik](https://en.wikipedia.org/wiki/Kuznyechik), which are required for Merkle tree, etc.
+3. The expectation of needs and opportunities due to the wide use of NVDIMM (aka persistent memory), modern NVMe and [Ангара](https://ru.wikipedia.org/wiki/Ангара_(интерконнект)).
 
-Here showed sum of performance metrics in 3 benchmarks:
+However, _MithrilDB_ will not be available for countries unfriendly to Russia (i.e. acceded the sanctions, devil adepts and/or NATO). But it is not yet known whether such restriction will be implemented only through a license and support, either the source code will not be open at all. Basically I am not inclined to allow my work to contribute to the profit that goes to weapons that kill my relatives and friends. NO OPTIONS.
 
- - Read/Search on the machine with 4 logical CPUs in HyperThreading mode (i.e. actually 2 physical CPU cores);
+Nonetheless, I try not to make any promises regarding _MithrilDB_ until release.
 
- - Transactions with [CRUD](https://en.wikipedia.org/wiki/CRUD) operations in sync-write mode (fdatasync is called after each transaction);
-
- - Transactions with [CRUD](https://en.wikipedia.org/wiki/CRUD)  operations in lazy-write mode (moment to sync data to persistent storage is decided by OS).
-
-*Reasons why asynchronous mode isn't benchmarked here:*
-
-  1. It doesn't make sense as it has to be done with DB engines, oriented for keeping data in memory e.g. [Tarantool](https://tarantool.io/), [Redis](https://redis.io/)), etc.
-
-  2. Performance gap is too high to compare in any meaningful way.
-
-![Comparison #1: Integral Performance](https://libmdbx.dqdkfa.ru/img/perf-slide-1.png)
-
---------------------------------------------------------------------------------
-
-## Read Scalability
-
-Summary performance with concurrent read/search queries in 1-2-4-8 threads on the machine with 4 logical CPUs in HyperThreading mode (i.e. actually 2 physical CPU cores).
-
-![Comparison #2: Read Scalability](https://libmdbx.dqdkfa.ru/img/perf-slide-2.png)
-
---------------------------------------------------------------------------------
-
-## Sync-write mode
-
- - Linear scale on left and dark rectangles mean arithmetic mean transactions per second;
-
- - Logarithmic scale on right is in seconds and yellow intervals mean execution time of transactions. Each interval shows minimal and maximum execution time, cross marks standard deviation.
-
-**10,000 transactions in sync-write mode**. In case of a crash all data is consistent and conforms to the last successful transaction. The [fdatasync](https://linux.die.net/man/2/fdatasync) syscall is used after each write transaction in this mode.
-
-In the benchmark each transaction contains combined CRUD operations (2 inserts, 1 read, 1 update, 1 delete). Benchmark starts on an empty database and after full run the database contains 10,000 small key-value records.
-
-![Comparison #3: Sync-write mode](https://libmdbx.dqdkfa.ru/img/perf-slide-3.png)
-
---------------------------------------------------------------------------------
-
-## Lazy-write mode
-
- - Linear scale on left and dark rectangles mean arithmetic mean of thousands transactions per second;
-
- - Logarithmic scale on right in seconds and yellow intervals mean execution time of transactions. Each interval shows minimal and maximum execution time, cross marks standard deviation.
-
-**100,000 transactions in lazy-write mode**. In case of a crash all data is consistent and conforms to the one of last successful transactions, but transactions after it will be lost. Other DB engines use [WAL](https://en.wikipedia.org/wiki/Write-ahead_logging) or transaction journal for that, which in turn depends on order of operations in the journaled filesystem. _libmdbx_ doesn't use WAL and hands I/O operations to filesystem and OS kernel (mmap).
-
-In the benchmark each transaction contains combined CRUD operations (2 inserts, 1 read, 1 update, 1 delete). Benchmark starts on an empty database and after full run the database contains 100,000 small key-value records.
-
-![Comparison #4: Lazy-write mode](https://libmdbx.dqdkfa.ru/img/perf-slide-4.png)
-
---------------------------------------------------------------------------------
-
-## Async-write mode
-
- - Linear scale on left and dark rectangles mean arithmetic mean of thousands transactions per second;
-
- - Logarithmic scale on right in seconds and yellow intervals mean execution time of transactions. Each interval shows minimal and maximum execution time, cross marks standard deviation.
-
-**1,000,000 transactions in async-write mode**.
-In case of a crash all data is consistent and conforms to the one of last successful transactions, but lost transaction count is much higher than in lazy-write mode. All DB engines in this mode do as little writes as possible on persistent storage. _libmdbx_ uses [msync(MS_ASYNC)](https://linux.die.net/man/2/msync) in this mode.
-
-In the benchmark each transaction contains combined CRUD operations (2 inserts, 1 read, 1 update, 1 delete). Benchmark starts on an empty database and after full run the database contains 10,000 small key-value records.
-
-![Comparison #5: Async-write mode](https://libmdbx.dqdkfa.ru/img/perf-slide-5.png)
-
---------------------------------------------------------------------------------
-
-## Cost comparison
-
-Summary of used resources during lazy-write mode benchmarks:
-
- - Read and write IOPs;
-
- - Sum of user CPU time and sys CPU time;
-
- - Used space on persistent storage after the test and closed DB, but not waiting for the end of all internal housekeeping operations (LSM compactification, etc).
-
-_ForestDB_ is excluded because benchmark showed it's resource consumption for each resource (CPU, IOPs) much higher than other engines which prevents to meaningfully compare it with them.
-
-All benchmark data is gathered by [getrusage()](http://man7.org/linux/man-pages/man2/getrusage.2.html) syscall and by scanning the data directory.
-
-![Comparison #6: Cost comparison](https://libmdbx.dqdkfa.ru/img/perf-slide-6.png)
+Contrary to _MithrilDB_, _libmdbx_ will forever free and open source. Moreover with high-quality support whenever possible. Tu deviens responsible pour toujours de ce que tu as apprivois. So I will continue to comply with the original open license and the principles of constructive cooperation, in spite of outright GitHub sabotage and sanctions. I will also try to keep (not drop) Windows support, despite it is an unused obsolete technology for us.
 
 <!-- section-end -->
