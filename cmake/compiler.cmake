@@ -432,8 +432,26 @@ if(CMAKE_C_COMPILER_LOADED)
       endif()
     endif()
   endif()
-  if(MSVC)
+  if(MSVC AND NOT CMAKE_COMPILER_IS_CLANG)
     check_c_compiler_flag("/experimental:c11atomics" MSVC_C11_MAD_ATOMICS)
+  endif()
+
+  if((MSVC OR WIN32) AND CMAKE_COMPILER_IS_CLANG)
+    message(CHECK_START "Looking for Clang/LLVM library of builtins")
+    execute_process(
+      COMMAND "${CMAKE_C_COMPILER}" --rtlib=compiler-rt -print-libgcc-file-name
+      OUTPUT_VARIABLE MDBX_CLANG_BUILTINS_LIB
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_VARIABLE _err
+      RESULT_VARIABLE _rc)
+    if(_rc OR _err)
+      message(CHECK_FAIL "message '${_err}', exit code ${_rc}")
+    elseif(EXISTS "${MDBX_CLANG_BUILTINS_LIB}")
+      message(CHECK_PASS "${MDBX_CLANG_BUILTINS_LIB}")
+    else()
+      message(CHECK_FAIL "Absent ${MDBX_CLANG_BUILTINS_LIB}")
+      unset(MDBX_CLANG_BUILTINS_LIB)
+    endif()
   endif()
 endif()
 

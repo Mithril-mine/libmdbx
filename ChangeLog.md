@@ -11,20 +11,29 @@ The supporting release of a stable branch with bug fixes.
 
 ### Important:
 
- The project website (libmdbx.dqdkfa.ru)[https://libmdbx.dqdkfa.ru/] has been re-created:
+ The project website [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru/) has been re-created:
    - The advice, explanations, questions and answers, from correspondence, forums and other sources have been compiled.
    - All information has been aggregated into a knowledge base, and the corresponding sections have been compiled on the website.
    - The documentation generated via Doxgygen has been moved to /doxygen, with old links redirection.
    - A lot of work has been done using AI.
 
+### Appreciations:
+
+ - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bugs reporting and assistant fix ones.
+
 ### Improvements:
 
  - The "crash" meaning clarified in the documentation.
  - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
+ - More CI workflows: CLANG-ARM64 on Windows, MingGW both 32- and 64- bitness, etc.
 
 ### Fixes:
 
  - Fixed `entry point _except_handler4 not found in mdbx.dll` in 32-bit build with `MDBX_WITHOUT_MSVC_CRT=ON`.
+ - Fixed building by CLANG/LLVM on Windows, including Microsoft Clang from Visual Studio.
+ - Fixed `scan4seq_neon()` for LLP4/ARM64-Windows.
+ - Fixed building for Win32 with `MDBX_NATIVE_SEH=OFF` without MASM, including cross-compilation cases.
+ - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default rp_augment_limit.
 
 --------------------------------------------------------------------------------
 

@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.3-14-g611955c7 at 2026-08-18T14:20:49+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.3-39-g7c5cf7f9 at 2026-08-28T11:17:46+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -121,7 +121,7 @@
 #include <span>
 #endif
 
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER)
 #define MDBX_EXTERN_API_TEMPLATE(API_ATTRIBUTES, ...) extern template class API_ATTRIBUTES __VA_ARGS__
 #define MDBX_INSTALL_API_TEMPLATE(API_ATTRIBUTES, ...) template class __VA_ARGS__
 #else
@@ -1496,7 +1496,11 @@ template <typename T, typename A> struct swap_alloc<T, A, true> {
   }
   static MDBX_CXX20_CONSTEXPR void propagate(T &left, T &right) noexcept(is_nothrow()) {
     if MDBX_IF_CONSTEXPR (!is_always_equal())
-      MDBX_CXX20_UNLIKELY ::std::swap(left.get_allocator(), right.get_allocator());
+#if !defined(__cpp_if_constexpr) || __cpp_if_constexpr < 201606L
+      /* Workaround of ms-clang (clang corrupted by microsoft) */
+      MDBX_CXX20_UNLIKELY
+#endif
+    ::std::swap(left.get_allocator(), right.get_allocator());
     else {
       /* gag for buggy compilers */
       (void)left;

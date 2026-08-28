@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.3-14-g611955c7 at 2026-08-18T14:20:49+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.3-39-g7c5cf7f9 at 2026-08-28T11:17:46+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -2199,9 +2199,9 @@ typedef enum MDBX_option {
    * On the other hand, too small threshold will lead to unreasonable database
    * growth, or/and to the inability of put long values.
    *
-   * The `MDBX_opt_rp_augment_limit` controls described limit for the current
-   * process. By default this limit adjusted dynamically to 1/3 of current
-   * quantity of DB pages, which is usually enough for most cases. */
+   * The `MDBX_opt_rp_augment_limit` controls described limit for the current process.
+   * By default, this limit is dynamically adjusted to 1/3 of the number of pages corresponding
+   * to the current size of a database, which is usually sufficient for most cases. */
   MDBX_opt_rp_augment_limit,
 
   /** \brief Controls the in-process limit to grow a cache of dirty

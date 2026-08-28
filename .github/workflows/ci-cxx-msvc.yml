@@ -27,10 +27,8 @@ jobs:
         cxx: [11, 14, 17, 20, 23]
         target: [Win32, x64, ARM64]
         build-type: [Debug, Release]
-        os: [windows-latest, windows-2022, windows-2025-vs2026]
+        os: [windows-latest, windows-2022]
         exclude:
-          - os: windows-2025-vs2026
-            toolset: v143
           - os: windows-latest
             target: ARM64
           - os: windows-2022
