@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-39-g7c5cf7f9 at 2026-08-28T11:17:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-43-g0ec9dc59 at 2026-08-30T12:16:55+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -2610,7 +2610,8 @@ static __always_inline int check_txn(const MDBX_txn *txn, int bad_bits) {
         ((txn->flags & (txn_ro_flat | MDBX_TXN_FINISHED)) == (txn_ro_flat | MDBX_TXN_FINISHED))) &&
       unlikely(txn->owner != osal_thread_self()))
     err = txn->owner ? MDBX_THREAD_MISMATCH
-          : ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+          : ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) ==
+             (txn_ro_flat | MDBX_TXN_OUSTED))
               ? MDBX_OUSTED
               : MDBX_BAD_TXN;
 #endif /* MDBX_TXN_CHECKOWNER */
@@ -30746,30 +30747,30 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 #endif /* O_DIRECT */
 
   int err = MDBX_SUCCESS;
-  if (*fd < 0) {
+  if (unlikely(*fd < 0)) {
     err = errno;
     if (err == EACCES && purpose == MDBX_OPEN_LCK) {
       struct stat unused;
       if (stat(pathname, &unused) == 0 || (err = errno) != ENOENT)
-        err = EACCES /* restore errno if file exists */;
+        err = EACCES /* restore error if file exists */;
     }
   }
 
   /* Safeguard for https://libmdbx.dqdkfa.ru/dead-github/issues/144 */
 #if STDIN_FILENO == 0 && STDOUT_FILENO == 1 && STDERR_FILENO == 2
-  else if (*fd == STDIN_FILENO) {
+  else if (unlikely(*fd == STDIN_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "IN", STDIN_FILENO);
     ASSERT(hazardous_fd0 == -1);
     *fd = dup(hazardous_fd0 = STDIN_FILENO);
     if (*fd < 0)
       err = errno;
-  } else if (*fd == STDOUT_FILENO) {
+  } else if (unlikely(*fd == STDOUT_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "OUT", STDOUT_FILENO);
     ASSERT(hazardous_fd1 == -1);
     *fd = dup(hazardous_fd1 = STDOUT_FILENO);
     if (*fd < 0)
       err = errno;
-  } else if (*fd == STDERR_FILENO) {
+  } else if (unlikely(*fd == STDERR_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "ERR", STDERR_FILENO);
     ASSERT(hazardous_fd2 == -1);
     *fd = dup(hazardous_fd2 = STDERR_FILENO);
@@ -30793,8 +30794,11 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 #error "Unexpected or unsupported UNIX or POSIX system"
 #endif /* STDIN_FILENO == 0 && STDERR_FILENO == 2 */
 
-  if (err != 0)
+  if (unlikely(err != 0)) {
+    if (*fd >= 0)
+      close(*fd);
     return err;
+  }
 
 #if defined(FD_CLOEXEC) && !defined(O_CLOEXEC)
   const int fd_flags = fcntl(*fd, F_GETFD);
@@ -41520,7 +41524,8 @@ int txn_ro_park(MDBX_txn *txn, bool autounpark) {
 int txn_ro_unpark(MDBX_txn *txn) {
   if (unlikely((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_HAS_CHILD | txn_ro_flat | MDBX_TXN_PARKED)) !=
                (txn_ro_flat | MDBX_TXN_PARKED)))
-    return ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+    return ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) ==
+            (txn_ro_flat | MDBX_TXN_OUSTED))
                ? MDBX_OUSTED
                : MDBX_BAD_TXN;
 
@@ -42687,10 +42692,10 @@ __dll_export
         0,
         14,
         3,
-        39,
+        43,
         "", /* pre-release suffix of SemVer
-                                        0.14.3.39 */
-        {"2026-08-28T11:17:46+03:00", "47024fbd78a1797f9f67bb52eff6aaf720f7caa8", "7c5cf7f99cedfcfd52d68de9fe782c7b6a59a0ac", "v0.14.3-39-g7c5cf7f9"},
+                                        0.14.3.43 */
+        {"2026-08-30T12:16:55+03:00", "796a82a63ed72bd1f92ada10b4ccbf5e8a70ea49", "0ec9dc593b055bb44faf2cbce0eaf4c824f50268", "v0.14.3-43-g0ec9dc59"},
         sourcery};
 
 __dll_export

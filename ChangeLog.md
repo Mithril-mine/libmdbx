@@ -33,7 +33,8 @@ The supporting release of a stable branch with bug fixes.
  - Fixed building by CLANG/LLVM on Windows, including Microsoft Clang from Visual Studio.
  - Fixed `scan4seq_neon()` for LLP4/ARM64-Windows.
  - Fixed building for Win32 with `MDBX_NATIVE_SEH=OFF` without MASM, including cross-compilation cases.
- - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default rp_augment_limit.
+ - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
+ - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
 
 --------------------------------------------------------------------------------
 
