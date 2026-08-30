@@ -1,0 +1,51 @@
+name: ci-android
+
+env:
+  CI: GITHUB
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+  schedule:
+    - cron: "42 3 * * *"
+      timezone: "Europe/Moscow"
+  repository_dispatch:
+    types: [dispatch-event]
+
+permissions:
+  contents: read
+
+jobs:
+  ci-job:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        ndk: [r26d, r27d, r29]
+        target: [arm64-v8a, "armeabi-v7a with NEON", x86_64]
+        build-type: [Debug, Release]
+        os: [ubuntu-latest]
+        exclude:
+          - ndk: r26d
+            build-type: Debug
+    steps:
+    - uses: actions/checkout@v7
+      with:
+        fetch-depth: 0
+        fetch-tags: true
+        submodules: true
+    - uses: nttld/setup-ndk@v1
+      id: setup-ndk
+      with:
+        ndk-version: ${{ matrix.ndk }}
+        add-to-path: true
+    - name: ci-step
+      env:
+        ANDROID_NDK_HOME: ${{ steps.setup-ndk.outputs.ndk-path }}
+        CI_MAKE_TARGET: ""
+      shell: bash
+      run: |
+        . ci/ci.sh "-DANDROID_ABI=${{ matrix.target }}|-DCMAKE_TOOLCHAIN_FILE:PATH=${{ steps.setup-ndk.outputs.ndk-path }}/build/cmake/android.toolchain.cmake|-DCMAKE_BUILD_TYPE=${{ matrix.build-type }}"
