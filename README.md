@@ -119,24 +119,17 @@ For now please refer to [chapter of "BoltDB comparison with other databases"](ht
 Bindings
 ========
 
+The full list of all bindings (several dozen) is available in the [Bindings and Projects](https://libmdbx.dqdkfa.ru/#sec-projects) section of the libmdbx homesite; here are only a few high demand.
+
 | Runtime |  Repo  | Author |
 | ------- | ------ | ------ |
 | Rust    | [libmdbx-rs](https://github.com/vorot93/libmdbx-rs)   | [Artem Vorotnikov](https://github.com/vorot93) |
-| Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
-| Java    | [mdbxjni](https://github.com/castortech/mdbxjni)      | [Castor Technologies](https://castortech.com/) |
 | Go      | [mdbx-go](https://github.com/torquem-ch/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
-| Ruby    | [ruby-mdbx](https://rubygems.org/gems/mdbx/)          | [Mahlon E. Smith](https://github.com/mahlonsmith) |
-| Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |
-| NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
 | .NET    | [libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) | [Anton Maisak](mailto:anton@maisak.ru) |
-
-##### Obsolete/Outdated/Unsupported:
-
-| Runtime |  Repo  | Author |
-| ------- | ------ | ------ |
-| Scala   | [mdbx4s](https://github.com/david-bouyssie/mdbx4s) | [David Bouyssié](https://github.com/david-bouyssie) |
-| Haskell | [libmdbx-hs](https://hackage.haskell.org/package/libmdbx) | [Francisco Vallarino](https://github.com/fjvallarino) |
-| Lua     | [lua-libmdbx](https://github.com/mah0x211/lua-libmdbx) | [Masatoshi Fukunaga](https://github.com/mah0x211) |
+| CPython | [PyPi/clibmdbx](https://pypi.org/project/clibmdbx/)   | [@jyj117](https://github.com/jyj117) |
+| Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
+| NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
+| Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |
 
 <!-- section-end -->
 
