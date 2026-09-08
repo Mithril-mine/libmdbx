@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.3-46-gafe26889 at 2026-08-31T10:17:04+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.3-54-gb29502a1 at 2026-09-08T12:52:30+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -1042,7 +1042,7 @@ LIBMDBX_API int mdbx_setup_debug_nofmt(MDBX_log_level_t log_level, MDBX_debug_fl
                                        MDBX_debug_func_nofmt logger, char *logger_buffer, size_t logger_buffer_size);
 
 /** \brief A callback function for most assertion failures, that called before printing the message and aborting.
- * \see mdbx_env_set_panic()
+ * \see mdbx_set_panic()
  *
  * \param [in] msg        The assertion message, not including newline.
  * \param [in] function   The function name where the assertion check failed,

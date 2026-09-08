@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-46-gafe26889 at 2026-08-31T10:17:04+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-54-gb29502a1 at 2026-09-08T12:52:30+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -29312,6 +29312,15 @@ node_t *node_shrink(page_t *mp, size_t indx, node_t *node) {
   return ptr_disp(node, delta);
 }
 
+#if defined(__linux__) || defined(__gnu_linux__)
+#include <sys/sysinfo.h>
+#endif /* Linux */
+
+#if defined(__APPLE__) || defined(__MACH__)
+#include <mach/mach_time.h>
+#include <mach/vm_statistics.h>
+#endif /* Apple */
+
 #if IS_WINDOWS
 
 #include <psapi.h>
@@ -32165,7 +32174,6 @@ __cold void osal_jitter(bool tiny) {
 #if IS_WINDOWS
 static LARGE_INTEGER performance_frequency;
 #elif defined(__APPLE__) || defined(__MACH__)
-#include <mach/mach_time.h>
 static uint64_t ratio_16dot16_to_monotonic;
 #elif defined(__linux__) || defined(__gnu_linux__)
 static clockid_t posix_clockid;
@@ -32766,6 +32774,36 @@ __cold static bin128_t osal_bootid(void) {
   return uuid;
 }
 
+#if defined(__linux__) || defined(__gnu_linux__)
+static intptr_t proc_meminfo_availpages(void) {
+  intptr_t availpages = -1;
+  FILE *const proc_meminfo = fopen("/proc/meminfo", "r");
+  if (!proc_meminfo)
+    return availpages;
+
+  char buf[64], *line;
+  while ((line = fgets(buf, sizeof(buf), proc_meminfo)) != nullptr) {
+    if (strncmp("MemAvailable:", line, 13))
+      continue;
+    size_t value = 0;
+    buf[0] = 0;
+    if (sscanf(line + 13, "%zu %s", &value, buf) < 1)
+      availpages = -1;
+    else {
+      if (!buf[0] || strcasecmp(buf, "b") == 0 || strcasecmp(buf, "bytes") == 0)
+        availpages = value >> globals.sys_pagesize_ln2;
+      else if (strcasecmp(buf, "kb") == 0 || strcasecmp(buf, "kbytes") == 0)
+        availpages = (value << 10) >> globals.sys_pagesize_ln2;
+      else if (strcasecmp(buf, "mb") == 0 || strcasecmp(buf, "mbytes") == 0)
+        availpages = (value << 20) >> globals.sys_pagesize_ln2;
+    }
+    break;
+  }
+  fclose(proc_meminfo);
+  return availpages;
+}
+#endif /* Linux */
+
 __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intptr_t *avail_pages) {
   if (!page_size && !total_pages && !avail_pages)
     return LOG_IFERR(MDBX_EINVAL);
@@ -32783,6 +32821,20 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
   const int log2page = globals.sys_pagesize_ln2;
   ASSERT(pagesize == (INT64_C(1) << log2page));
   (void)log2page;
+
+#if defined(__linux__) || defined(__gnu_linux__)
+  struct sysinfo si;
+  if (sysinfo(&si) == 0) {
+    if (total_pages)
+      *total_pages = si.totalram >> log2page;
+    if (avail_pages) {
+      *avail_pages = proc_meminfo_availpages();
+      if (*avail_pages < 0)
+        *avail_pages = si.freeram >> log2page;
+    }
+    return MDBX_SUCCESS;
+  }
+#endif /* Linux */
 
 #if IS_WINDOWS
   MEMORYSTATUSEX info;
@@ -32844,13 +32896,19 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
       return LOG_IFERR(errno);
 #elif defined(__MACH__)
     mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
-    vm_statistics_data_t vmstat;
     mach_port_t mport = mach_host_self();
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 100600
+    struct vm_statistics64 vmstat;
+    kern_return_t kerr = host_statistics64(mport, HOST_VM_INFO64, (host_info64_t)&vmstat, &count);
+    const intptr_t avail_ram_pages = vmstat.free_count + vmstat.purgeable_count;
+#else
+    vm_statistics_data_t vmstat;
     kern_return_t kerr = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
+    const intptr_t avail_ram_pages = vmstat.free_count;
+#endif
     mach_port_deallocate(mach_task_self(), mport);
     if (unlikely(kerr != KERN_SUCCESS))
       return LOG_IFERR(MDBX_ENOSYS);
-    const intptr_t avail_ram_pages = vmstat.free_count;
 #elif defined(VM_TOTAL) || defined(VM_METER)
     struct vmtotal info;
     size_t len = sizeof(info);
@@ -32870,7 +32928,7 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
       return LOG_IFERR(errno);
     if (len != sizeof(info))
       return LOG_IFERR(MDBX_ENOSYS);
-    const intptr_t avail_ram_pages = info.t_free;
+    const intptr_t avail_ram_pages = info.t_free + info.t_inact / 2;
 #else
 #error "FIXME: Get Available RAM"
 #endif
@@ -42692,10 +42750,10 @@ __dll_export
         0,
         14,
         3,
-        46,
+        54,
         "", /* pre-release suffix of SemVer
-                                        0.14.3.46 */
-        {"2026-08-31T10:17:04+03:00", "f645fbed86e183ca005434b2fd8b933bddfad6c2", "afe268899f2247029d11645353010808baa60564", "v0.14.3-46-gafe26889"},
+                                        0.14.3.54 */
+        {"2026-09-08T12:52:30+03:00", "c2f59e5730e7aa0d6db504fc2887936959703a37", "b29502a1eb2c0b87c028e921de7de0d0e793c132", "v0.14.3-54-gb29502a1"},
         sourcery};
 
 __dll_export

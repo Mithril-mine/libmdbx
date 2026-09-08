@@ -126,7 +126,7 @@ The full list of all bindings (several dozen) is available in the [Bindings and 
 | Rust    | [libmdbx-rs](https://github.com/vorot93/libmdbx-rs)   | [Artem Vorotnikov](https://github.com/vorot93) |
 | Go      | [mdbx-go](https://github.com/torquem-ch/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
 | .NET    | [libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) | [Anton Maisak](mailto:anton@maisak.ru) |
-| CPython | [PyPi/clibmdbx](https://pypi.org/project/clibmdbx/)   | [@jyj117](https://github.com/jyj117) |
+| CPython | [PyPi/clibmdbx](https://pypi.org/project/clibmdbx/)   | [`@jyj117`](https://github.com/jyj117) |
 | Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
 | NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
 | Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |

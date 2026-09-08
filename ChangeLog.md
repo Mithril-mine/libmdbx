@@ -26,6 +26,7 @@ The supporting release of a stable branch with bug fixes.
  - The "crash" meaning clarified in the documentation.
  - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
  - More CI workflows: CLANG-ARM64 on Windows, MingGW both 32- and 64- bitness, etc.
+ - Refined `mdbx_get_sysraminfo()` internals for better `avail_pages` estimation.
 
 ### Fixes:
 
@@ -35,6 +36,7 @@ The supporting release of a stable branch with bug fixes.
  - Fixed building for Win32 with `MDBX_NATIVE_SEH=OFF` without MASM, including cross-compilation cases.
  - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
  - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
+ - Fixed doxygen mis-reference to the `mdbx_set_panic()`.
 
 --------------------------------------------------------------------------------
 
