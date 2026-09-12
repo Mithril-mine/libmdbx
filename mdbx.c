@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-54-gb29502a1 at 2026-09-08T12:52:30+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-58-g9a390eca at 2026-09-12T17:30:30+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -9025,10 +9025,9 @@ __cold int mdbx_env_defrag(MDBX_env *env, size_t defrag_atleast, size_t time_atl
   defrag_milestone(&dfc);
 
 bailout:
-  if (result) {
-    defrag_result(&dfc, result, 0);
+  defrag_result(&dfc, result, 0);
+  if (result)
     result->pages_moved = dfc.total_pages_moved;
-  }
 
   defrag_destroy(&dfc);
   if (txn && txn->userctx == &dfc)
@@ -18093,43 +18092,46 @@ int dbi_close_release(MDBX_env *env, MDBX_dbi dbi) { return dbi_defer_release(en
 static uint64_t defrag_now(uint64_t now_cache) { return now_cache ? now_cache : osal_monotime(); }
 
 uint64_t defrag_result(dfc_t *dfc, MDBX_defrag_result_t *out, uint64_t now_cache) {
-  memset(out, 0, sizeof(*out));
   if (dfc->txn)
     dfc->last_allocated = dfc->txn->geo.first_unallocated;
-  out->pages_shrinked = dfc->before_defrag - dfc->last_allocated;
-  out->pages_moved = dfc->cycle_pages_moved;
-  out->pages_scheduled = dfc->cycle_pages_scheduled;
-  out->pages_retained = dfc->gc_retained_pages;
-  if (dfc->stopor)
-    out->pages_retained += dfc->gc_tree_pages;
+  if (out) {
+    memset(out, 0, sizeof(*out));
+    out->pages_shrinked = (intptr_t)dfc->before_defrag - (intptr_t)dfc->last_allocated;
+    out->pages_moved = dfc->cycle_pages_moved;
+    out->pages_scheduled = dfc->cycle_pages_scheduled;
+    out->pages_retained = dfc->gc_retained_pages;
+    if (dfc->stopor)
+      out->pages_retained += dfc->gc_tree_pages;
 
-  intptr_t pages_left = dfc->last_allocated - (dfc->payload_pages + out->pages_retained);
-  out->pages_left = (pages_left > 0) ? pages_left : 0;
-  out->pages_whole = dfc->before_defrag;
+    intptr_t pages_left = dfc->last_allocated - (dfc->payload_pages + out->pages_retained);
+    out->pages_left = (pages_left > 0) ? pages_left : 0;
+    out->pages_whole = dfc->before_defrag;
 
-  size_t denominator = (dfc->txn ? (size_t)dfc->txn->dbs[FREE_DBI].items + rkl_len(&dfc->txn->wr.gc.ready4reuse) : 0) +
-                       (dfc->cycle ? (dfc->last_allocated - dfc->payload_pages) * 2 + dfc->cycle_preprogress
-                                   : out->pages_whole - NUM_METAS);
-  out->rough_estimation_cycle_progress_permille =
-      (dfc->progress_counter < denominator) ? (unsigned)(dfc->progress_counter * UINT64_C(1000) / denominator) : 1000;
+    size_t denominator =
+        (dfc->txn ? (size_t)dfc->txn->dbs[FREE_DBI].items + rkl_len(&dfc->txn->wr.gc.ready4reuse) : 0) +
+        (dfc->cycle ? (dfc->last_allocated - dfc->payload_pages) * 2 + dfc->cycle_preprogress
+                    : out->pages_whole - NUM_METAS);
+    out->rough_estimation_cycle_progress_permille =
+        (dfc->progress_counter < denominator) ? (unsigned)(dfc->progress_counter * UINT64_C(1000) / denominator) : 1000;
 
-  if (MDBX_DEBUG > 0 && dfc->progress_counter > denominator && dfc->txn) {
-    WARNING("progress_counter %zu > denominator %zu | gc-items %" PRIu64 ", rkl-ready4reuse %zu | "
-            "last_allocated %u, "
-            "payload_pages %zu, cycle_pages_scheduled %u | pages_whole %zu, walk_cutoff %u",
-            dfc->progress_counter, denominator, dfc->txn->dbs[FREE_DBI].items, rkl_len(&dfc->txn->wr.gc.ready4reuse),
-            dfc->last_allocated, dfc->payload_pages, dfc->cycle_pages_scheduled, out->pages_whole, dfc->walk_cutoff);
+    if (MDBX_DEBUG > 0 && dfc->progress_counter > denominator && dfc->txn) {
+      WARNING("progress_counter %zu > denominator %zu | gc-items %" PRIu64 ", rkl-ready4reuse %zu | "
+              "last_allocated %u, "
+              "payload_pages %zu, cycle_pages_scheduled %u | pages_whole %zu, walk_cutoff %u",
+              dfc->progress_counter, denominator, dfc->txn->dbs[FREE_DBI].items, rkl_len(&dfc->txn->wr.gc.ready4reuse),
+              dfc->last_allocated, dfc->payload_pages, dfc->cycle_pages_scheduled, out->pages_whole, dfc->walk_cutoff);
+    }
+
+    out->obstructed_pgno = dfc->stumble_pgno;
+    out->obstructed_span = dfc->stumble_pgno ? dfc->stumble_span : 0;
+    out->obstructed_txnid = dfc->gc_obstacle.txnid;
+    out->obstructor_tid = dfc->gc_obstacle.tid;
+    out->obstructor_pid = dfc->gc_obstacle.pid;
+    out->cycles = dfc->cycle;
+    out->stopping_reasons = dfc->stopping_reasons;
+    out->spent_time_dot16 =
+        osal_monotime_to_16dot16_noUnderflow((now_cache = defrag_now(now_cache)) - dfc->start_timestamp);
   }
-
-  out->obstructed_pgno = dfc->stumble_pgno;
-  out->obstructed_span = dfc->stumble_pgno ? dfc->stumble_span : 0;
-  out->obstructed_txnid = dfc->gc_obstacle.txnid;
-  out->obstructor_tid = dfc->gc_obstacle.tid;
-  out->obstructor_pid = dfc->gc_obstacle.pid;
-  out->cycles = dfc->cycle;
-  out->stopping_reasons = dfc->stopping_reasons;
-  out->spent_time_dot16 =
-      osal_monotime_to_16dot16_noUnderflow((now_cache = defrag_now(now_cache)) - dfc->start_timestamp);
   return now_cache;
 }
 
@@ -31304,14 +31306,31 @@ int osal_check_fs_local(mdbx_filehandle_t handle, int flags) {
   if (GetFileType(handle) != FILE_TYPE_DISK)
     return ERROR_FILE_OFFLINE;
 
+  static const char msg_note[] = "To avoid DB corruption, data loss please, performance degradation, BSOD or resources "
+                                 "leaks in the OS avoid use database on a";
   if (imports.GetFileInformationByHandleEx) {
     FILE_REMOTE_PROTOCOL_INFO RemoteProtocolInfo;
     if (imports.GetFileInformationByHandleEx(handle, FileRemoteProtocolInfo, &RemoteProtocolInfo,
                                              sizeof(RemoteProtocolInfo))) {
-      if ((RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_OFFLINE) && !(flags & MDBX_RDONLY))
+      if ((RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_OFFLINE) && !(flags & MDBX_RDONLY)) {
+        ERROR("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
         return ERROR_FILE_OFFLINE;
-      if (!(RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK) && !(flags & MDBX_EXCLUSIVE))
+      }
+      if (!(RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK) ||
+          !(F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_RDONLY) || F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_UTTERLY_NOSYNC))) {
+        ERROR("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
         return MDBX_EREMOTE;
+      }
+      WARNING("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
     }
   }
 
@@ -31329,8 +31348,15 @@ int osal_check_fs_local(mdbx_filehandle_t handle, int flags) {
     rc = imports.NtFsControlFile(handle, nullptr, nullptr, nullptr, &StatusBlock, FSCTL_GET_EXTERNAL_BACKING, nullptr,
                                  0, &GetExternalBacking_OutputBuffer, sizeof(GetExternalBacking_OutputBuffer));
     if (NT_SUCCESS(rc)) {
-      if (!(flags & MDBX_EXCLUSIVE))
+      if (!F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_RDONLY) && !F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_UTTERLY_NOSYNC)) {
+        ERROR("%s compressed/WOF-enabled or layered volumes: WOF-version %lu, provider %lu", msg_note,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Version,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Provider);
         return MDBX_EREMOTE;
+      }
+      WARNING("%s compressed/WOF-enabled or layered volumes: WOF-version %lu, provider %lu", msg_note,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Version,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Provider);
     } else if (rc != STATUS_OBJECT_NOT_EXTERNALLY_BACKED && rc != STATUS_INVALID_DEVICE_REQUEST &&
                rc != STATUS_NOT_SUPPORTED)
       return osal_ntstatus2errcode(rc);
@@ -42750,10 +42776,10 @@ __dll_export
         0,
         14,
         3,
-        54,
+        58,
         "", /* pre-release suffix of SemVer
-                                        0.14.3.54 */
-        {"2026-09-08T12:52:30+03:00", "c2f59e5730e7aa0d6db504fc2887936959703a37", "b29502a1eb2c0b87c028e921de7de0d0e793c132", "v0.14.3-54-gb29502a1"},
+                                        0.14.3.58 */
+        {"2026-09-12T17:30:30+03:00", "8b40e7da4447021123df94c59b2db4d5374772e4", "9a390eca692bf723118438fd42d064783e43e36f", "v0.14.3-58-g9a390eca"},
         sourcery};
 
 __dll_export

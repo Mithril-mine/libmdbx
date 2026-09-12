@@ -21,13 +21,19 @@ The supporting release of a stable branch with bug fixes.
 
  - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bugs reporting and assistant fix ones.
 
+### Backward compatibility breaks:
+
+ - On Windows now stricter database placement checks on network, shared, and layered volumes to prevent database corruption and data loss.
+   This can lead to a `MDBX_EREMOTE` error (`ERROR_REMOTE_STORAGE_MEDIA_ERROR`) return in dangerous situations when WOF is active (on compressed volumes).
+   Just don't use Windows, let alone WOF, to avoid data loss, or open databases exclusively for reading only (`MDBX_EXCLUSIVE | MDBX_RDONLY`).
+
 ### Improvements:
 
  - The "crash" meaning clarified in the documentation.
  - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
  - More CI workflows: CLANG-ARM64 on Windows, MingGW both 32- and 64- bitness, etc.
  - Refined `mdbx_get_sysraminfo()` internals for better `avail_pages` estimation.
-
+ - Clariied `mdbx_env_defrag()` to eliminate doubts about the non‑impact of `result=nullptr` on the returned code.
 ### Fixes:
 
  - Fixed `entry point _except_handler4 not found in mdbx.dll` in 32-bit build with `MDBX_WITHOUT_MSVC_CRT=ON`.
@@ -37,6 +43,9 @@ The supporting release of a stable branch with bug fixes.
  - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
  - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
  - Fixed doxygen mis-reference to the `mdbx_set_panic()`.
+
+### Misc:
+  - The title of the "MAC chat" link has been changed and the icon has been removed.
 
 --------------------------------------------------------------------------------
 
