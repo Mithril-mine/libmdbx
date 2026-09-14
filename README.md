@@ -24,7 +24,7 @@ _libmdbx_ is an extremely fast, compact, powerful, embedded, transactional [key-
 
 Historically, _libmdbx_ is a deeply revised and extended descendant of the legendary [Lightning Memory-Mapped Database](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database). _libmdbx_ inherits all benefits from _LMDB_, but resolves some issues and adds [a large set of improvements](#improvements-beyond-lmdb).
 
-[![Чат в МАКС](https://libmdbx.dqdkfa.ru/img/MAX-24x24.png)](https://max.ru/join/dKckvyuARxp1vRK-wnPur8zYCEkbR3OUOmpPWkWxp78) [![Telegram: Support | Discussions | News](https://img.shields.io/endpoint?color=scarlet&logo=telegram&label=Support%20%7C%20Discussions%20%7C%20News&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flibmdbx)](https://t.me/libmdbx)
+[![Telegram: Support | Discussions | News](https://img.shields.io/endpoint?color=scarlet&logo=telegram&label=Support%20%7C%20Discussions%20%7C%20News&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flibmdbx)](https://t.me/libmdbx)
 
 > Please rely on  the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/doxygen/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/doxygen/group__c__api.html) API, etc.
 

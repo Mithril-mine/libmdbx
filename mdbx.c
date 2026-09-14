@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-58-g9a390eca at 2026-09-12T17:30:30+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.3-62-ge74f92f8 at 2026-09-14T20:22:12+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -33441,9 +33441,16 @@ __cold int page_check(const MDBX_cursor *const mc, const page_t *const mp) {
           }
 
           const char *const end_of_subpage = data + dsize;
+          const char *const sp_type = is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub";
+          if (unlikely(sp->upper < sp->lower || (sp->lower & 1) || PAGEHDRSZ + sp->upper > dsize)) {
+            rc = bad_page(sp, "invalid %s-page' lower(%u)/upper(%u) with limit %zu\n", sp_type, sp->lower, sp->upper,
+                          dsize - PAGEHDRSZ);
+            continue;
+          }
+
           const intptr_t nsubkeys = page_numkeys(sp);
           if (unlikely(nsubkeys == 0) && !(mc->checking & z_updating) && mc->tree->items)
-            rc = bad_page(mp, "no keys on a %s-page\n", is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub");
+            rc = bad_page(mp, "no keys on a %s-page\n", sp_type);
 
           MDBX_val sub_here, sub_prev = {0, 0};
           for (int ii = 0; ii < nsubkeys; ii++) {
@@ -42776,10 +42783,10 @@ __dll_export
         0,
         14,
         3,
-        58,
+        62,
         "", /* pre-release suffix of SemVer
-                                        0.14.3.58 */
-        {"2026-09-12T17:30:30+03:00", "8b40e7da4447021123df94c59b2db4d5374772e4", "9a390eca692bf723118438fd42d064783e43e36f", "v0.14.3-58-g9a390eca"},
+                                        0.14.3.62 */
+        {"2026-09-14T20:22:12+03:00", "291fd2c73cdd620bc131f4549537377cd45c8841", "e74f92f83814fc6aef32cc3aef23014ce6e08a3f", "v0.14.3-62-ge74f92f8"},
         sourcery};
 
 __dll_export

@@ -43,6 +43,7 @@ The supporting release of a stable branch with bug fixes.
  - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
  - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
  - Fixed doxygen mis-reference to the `mdbx_set_panic()`.
+ - Fixed missing sub-page header check inside `page_check()` what could be causing `SIGSEGV` during checking a corrupted database.
 
 ### Misc:
   - The title of the "MAC chat" link has been changed and the icon has been removed.
