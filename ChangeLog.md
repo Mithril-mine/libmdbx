@@ -5,9 +5,10 @@ The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/lib
 Please use the `stable` branch or the latest release for production environment through staging, but the `master` branch for development a derivative projects.
 Всё будет хорошо!
 
-## v0.14.4 at a release engineering stage
+## v0.14.4 "Skynet Eve" (Накануне Skynet) at 2026-09-18
 
 The supporting release of a stable branch with bug fixes.
+Recommended for use in production.
 
 ### Important:
 
