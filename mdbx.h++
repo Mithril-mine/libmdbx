@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -121,7 +121,7 @@
 #include <span>
 #endif
 
-#if !defined(_MSC_VER) || defined(__clang__)
+#if !defined(_MSC_VER)
 #define MDBX_EXTERN_API_TEMPLATE(API_ATTRIBUTES, ...) extern template class API_ATTRIBUTES __VA_ARGS__
 #define MDBX_INSTALL_API_TEMPLATE(API_ATTRIBUTES, ...) template class __VA_ARGS__
 #else
@@ -450,7 +450,7 @@ using path_char = path_string::value_type;
 using duration = ::std::chrono::duration<unsigned, ::std::ratio<1, 65536>>;
 #endif /* Duration for C++11 */
 
-/// \defgroup cxx_exceptions exceptions and errors
+/// \defgroup cxx_exceptions Exceptions and Errors
 /// @{
 
 /// \brief Transfers C++ exceptions thru C callbacks.
@@ -613,7 +613,7 @@ MDBX_MAYBE_UNUSED static MDBX_CXX14_CONSTEXPR size_t check_length(size_t headroo
 
 //------------------------------------------------------------------------------
 
-/// \defgroup cxx_data slices and buffers
+/// \defgroup cxx_data Slices and Buffers
 /// @{
 
 /// \brief References a data located outside the slice.
@@ -1496,7 +1496,11 @@ template <typename T, typename A> struct swap_alloc<T, A, true> {
   }
   static MDBX_CXX20_CONSTEXPR void propagate(T &left, T &right) noexcept(is_nothrow()) {
     if MDBX_IF_CONSTEXPR (!is_always_equal())
-      MDBX_CXX20_UNLIKELY ::std::swap(left.get_allocator(), right.get_allocator());
+#if !defined(__cpp_if_constexpr) || __cpp_if_constexpr < 201606L
+      /* Workaround of ms-clang (clang corrupted by microsoft) */
+      MDBX_CXX20_UNLIKELY
+#endif
+    ::std::swap(left.get_allocator(), right.get_allocator());
     else {
       /* gag for buggy compilers */
       (void)left;
@@ -2802,6 +2806,9 @@ template <typename ALLOCATOR, typename CAPACITY_POLICY> struct buffer_pair_spec 
 };
 
 /// end of cxx_data @}
+
+/// \defgroup cxx_core Environment, Transactions, Cursors, Key-value tables and map handles
+/// @{
 
 /// \brief Cache entry for get-cached API (initial draft).
 class cache_entry : public MDBX_cache_entry_t {
@@ -4126,7 +4133,7 @@ public:
   void commit();
   /// \brief Commits all changes of the transaction into a database with collecting latencies information.
   void commit(finalization_latency *);
-  /// \brief ommits all changes of the transaction into a database with collecting latencies information.
+  /// \brief Commits all changes of the transaction into a database with collecting latencies information.
   void commit(finalization_latency &latency) { return commit(&latency); }
   /// \brief Commits all changes of the transaction into a database and return latency information.
   /// \returns latency information of commit stages.
@@ -4640,6 +4647,8 @@ public:
   cursor_managed &operator=(const cursor_managed &) = delete;
   ~cursor_managed();
 };
+
+/// end of cxx_core @}
 
 //==============================================================================
 //

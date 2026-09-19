@@ -27,6 +27,7 @@ jobs:
         build-type: [Debug, Release]
         dll: [ON, OFF]
         without_crt: [ON, OFF]
+        bitness: [64, 32]
         os: [windows-latest]
         exclude:
           - build-type: Debug
@@ -46,6 +47,7 @@ jobs:
       env:
         CI_MAKE_TARGET: smoke
       run: |
+        if [ "${{ matrix.bitness }}" = '32' ]; then export CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++; fi && \
         echo "initial-PATH=$PATH" && \
         export "PATH=/c/mingw64/bin:/c/programdata/mingw64/mingw64/bin:$PATH" && \
         export MDBX_BUILD_OPTIONS=$(if [ "${{ matrix.build-type }}" = 'Debug' ]; then echo '-DMDBX_CHECKING=2 -DMDBX_DEBUG=1'; else echo '-DMDBX_CHECKING=0 -DMDBX_DEBUG=0'; fi) && \

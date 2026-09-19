@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -1042,7 +1042,7 @@ LIBMDBX_API int mdbx_setup_debug_nofmt(MDBX_log_level_t log_level, MDBX_debug_fl
                                        MDBX_debug_func_nofmt logger, char *logger_buffer, size_t logger_buffer_size);
 
 /** \brief A callback function for most assertion failures, that called before printing the message and aborting.
- * \see mdbx_env_set_panic()
+ * \see mdbx_set_panic()
  *
  * \param [in] msg        The assertion message, not including newline.
  * \param [in] function   The function name where the assertion check failed,
@@ -1336,6 +1336,16 @@ typedef enum MDBX_env_flags {
    * but \ref MDBX_UTTERLY_NOSYNC is exactly match LMDB_NOSYNC. See details
    * below.
    *
+   * TWO CLASSES OF FAILURES:
+   *  - Application failure, only the process crashes. Database integrity is not affected in such cases.
+   *    When only the process crashes, data not yet written to storage remains in the OS kernel page cache.
+   *    Therefore database integrity is not affected regardless of the operating mode: the data remains
+   *    available to the kernel and survives the process crash.
+   *  - System-wide failure: OS kernel panic, power outage, etc.
+   *    In a system-wide failure or power loss the kernel page cache is lost together with all data not yet written to
+   *    storage. Therefore the database may be corrupted or lose the last transactions if an operating mode that does
+   *    not provide full durability (for example, async-write) is chosen.
+   *
    * THE SCENE:
    * - The DAT-file contains several MVCC-snapshots of B-tree at same time,
    *   each of those B-tree has its own root page.
@@ -1354,13 +1364,13 @@ typedef enum MDBX_env_flags {
    *   underlying hardware (e.g. disk) work correctly.
    *
    * TRADE-OFF:
-   * By skipping some stages described above, you can significantly benefit in
-   * speed, while partially or completely losing in the guarantee of data
-   * durability and/or consistency in the event of system or power failure.
-   * Moreover, if for any reason disk write order is not preserved, then at
-   * moment of a system crash, a meta-page with a pointer to the new B-tree may
-   * be written to disk, while the itself B-tree not yet. In that case, the
-   * database will be corrupted!
+   *  - By skipping some stages described above, you can significantly benefit in
+   *    speed, while partially or completely losing in the guarantee of data
+   *    durability and/or consistency in the event of system/kernel or power failure.
+   *  - Besides, if for any reason disk write order is not preserved, then at
+   *    moment of a system crash, a meta-page with a pointer to the new B-tree may
+   *    be written to disk, while the itself B-tree not yet. In that case, the
+   *    database will be corrupted!
    *
    * \see MDBX_SYNC_DURABLE \see MDBX_NOMETASYNC \see MDBX_SAFE_NOSYNC
    * \see MDBX_UTTERLY_NOSYNC
@@ -2189,9 +2199,9 @@ typedef enum MDBX_option {
    * On the other hand, too small threshold will lead to unreasonable database
    * growth, or/and to the inability of put long values.
    *
-   * The `MDBX_opt_rp_augment_limit` controls described limit for the current
-   * process. By default this limit adjusted dynamically to 1/3 of current
-   * quantity of DB pages, which is usually enough for most cases. */
+   * The `MDBX_opt_rp_augment_limit` controls described limit for the current process.
+   * By default, this limit is dynamically adjusted to 1/3 of the number of pages corresponding
+   * to the current size of a database, which is usually sufficient for most cases. */
   MDBX_opt_rp_augment_limit,
 
   /** \brief Controls the in-process limit to grow a cache of dirty

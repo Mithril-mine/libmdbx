@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.3-0-g251562b2 at 2026-08-09T13:18:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -2054,40 +2054,10 @@ MDBX_INTERNAL node_t *node_shrink(page_t *mp, size_t indx, node_t *node);
 
 #if MDBX_ENABLE_DBI_SPARSE
 
-MDBX_NOTHROW_CONST_FUNCTION MDBX_MAYBE_UNUSED MDBX_INTERNAL size_t dbi_bitmap_ctz_fallback(const MDBX_txn *txn,
-                                                                                           intptr_t bmi);
-
 static inline size_t dbi_bitmap_ctz(const MDBX_txn *txn, intptr_t bmi) {
   tASSERT0(txn, bmi != 0);
   STATIC_ASSERT(sizeof(bmi) >= sizeof(txn->dbi_sparse[0]));
-#if __GNUC_PREREQ(4, 1) || __has_builtin(__builtin_ctzl)
-  if (sizeof(txn->dbi_sparse[0]) <= sizeof(int))
-    return __builtin_ctz((int)bmi);
-  if (sizeof(txn->dbi_sparse[0]) == sizeof(long))
-    return __builtin_ctzl((long)bmi);
-#if (defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ == 8) || __has_builtin(__builtin_ctzll)
-  return __builtin_ctzll(bmi);
-#endif /* have(long long) && long long == uint64_t */
-#endif /* GNU C */
-
-#if defined(_MSC_VER)
-  unsigned long index;
-  if (sizeof(txn->dbi_sparse[0]) > 4) {
-#if defined(_M_AMD64) || defined(_M_ARM64) || defined(_M_X64)
-    _BitScanForward64(&index, bmi);
-    return index;
-#else
-    if (bmi > UINT32_MAX) {
-      _BitScanForward(&index, (uint32_t)((uint64_t)bmi >> 32));
-      return index;
-    }
-#endif
-  }
-  _BitScanForward(&index, (uint32_t)bmi);
-  return index;
-#endif /* MSVC */
-
-  return dbi_bitmap_ctz_fallback(txn, bmi);
+  return (sizeof(txn->dbi_sparse[0]) > 4) ? ctz64((uint64_t)bmi) : ctz32((uint32_t)bmi);
 }
 
 static inline bool dbi_foreach_step(const MDBX_txn *const txn, size_t *bitmap_item, size_t *dbi) {
@@ -2305,7 +2275,7 @@ MDBX_NOTHROW_CONST_FUNCTION static inline size_t valsize_max(size_t pagesize, MD
   if (flags & (MDBX_DUPSORT | MDBX_DUPFIXED | MDBX_REVERSEDUP))
     return keysize_max(pagesize, 0);
 
-  const unsigned page_ln2 = log2n_powerof2(pagesize);
+  const size_t page_ln2 = log2n_powerof2(pagesize);
   const size_t hard = 0x7FF00000ul;
   const size_t hard_pages = hard >> page_ln2;
   STATIC_ASSERT(PAGELIST_LIMIT <= MAX_PAGENO);
@@ -2640,7 +2610,8 @@ static __always_inline int check_txn(const MDBX_txn *txn, int bad_bits) {
         ((txn->flags & (txn_ro_flat | MDBX_TXN_FINISHED)) == (txn_ro_flat | MDBX_TXN_FINISHED))) &&
       unlikely(txn->owner != osal_thread_self()))
     err = txn->owner ? MDBX_THREAD_MISMATCH
-          : ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+          : ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) ==
+             (txn_ro_flat | MDBX_TXN_OUSTED))
               ? MDBX_OUSTED
               : MDBX_BAD_TXN;
 #endif /* MDBX_TXN_CHECKOWNER */
@@ -3362,9 +3333,6 @@ typedef struct gc_update_context {
   size_t return_reserved_lo, return_reserved_hi;
   txnid_t gc_first;
   intptr_t return_left;
-#ifndef MDBX_DEBUG_GCU
-#define MDBX_DEBUG_GCU 0
-#endif
 #if MDBX_DEBUG_GCU
   struct {
     txnid_t prev;
@@ -3427,7 +3395,7 @@ static inline txnid_t txnid_min(txnid_t a, txnid_t b) { return (a < b) ? a : b; 
 static inline txnid_t txnid_max(txnid_t a, txnid_t b) { return (a > b) ? a : b; }
 
 MDBX_INTERNAL MDBX_cursor *gc_cursor_init(MDBX_txn *txn);
-MDBX_INTERNAL int gc_merge_loose(MDBX_txn *txn);
+MDBX_INTERNAL int gc_merge_loose(MDBX_txn *txn, gcu_t *ctx);
 MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL const char *gc_check_keylen(size_t const key_len);
 MDBX_INTERNAL const char *gc_check_rowdata(const MDBX_txn *const txn, const MDBX_val data);
 
@@ -9057,10 +9025,9 @@ __cold int mdbx_env_defrag(MDBX_env *env, size_t defrag_atleast, size_t time_atl
   defrag_milestone(&dfc);
 
 bailout:
-  if (result) {
-    defrag_result(&dfc, result, 0);
+  defrag_result(&dfc, result, 0);
+  if (result)
     result->pages_moved = dfc.total_pages_moved;
-  }
 
   defrag_destroy(&dfc);
   if (txn && txn->userctx == &dfc)
@@ -9511,45 +9478,6 @@ uint32_t mdbx_key_from_ptrfloat(const float *const ieee754_32bit) { return float
 #define IEEE754_DOUBLE_MANTISSA_MASK UINT64_C(0x000FFFFFFFFFFFFF)
 #define IEEE754_DOUBLE_MANTISSA_AMAX UINT64_C(0x001FFFFFFFFFFFFF)
 
-static inline int clz64(uint64_t value) {
-#if __GNUC_PREREQ(4, 1) || __has_builtin(__builtin_clzl)
-  if (sizeof(value) == sizeof(unsigned int))
-    return __builtin_clz((unsigned int)value);
-  if (sizeof(value) == sizeof(unsigned long))
-    return __builtin_clzl((unsigned long)value);
-#if (defined(__SIZEOF_LONG_LONG__) && __SIZEOF_LONG_LONG__ == 8) || __has_builtin(__builtin_clzll)
-  return __builtin_clzll((unsigned long long)value);
-#endif /* have(long long) && long long == uint64_t */
-#endif /* GNU C */
-
-#if defined(_MSC_VER)
-  unsigned long index;
-#if defined(_M_AMD64) || defined(_M_ARM64) || defined(_M_X64)
-  _BitScanReverse64(&index, value);
-  return 63 - index;
-#else
-  if (value > UINT32_MAX) {
-    _BitScanReverse(&index, (uint32_t)(value >> 32));
-    return 31 - index;
-  }
-  _BitScanReverse(&index, (uint32_t)value);
-  return 63 - index;
-#endif
-#endif /* MSVC */
-
-  value |= value >> 1;
-  value |= value >> 2;
-  value |= value >> 4;
-  value |= value >> 8;
-  value |= value >> 16;
-  value |= value >> 32;
-  static const uint8_t debruijn_clz64[64] = {63, 16, 62, 7,  15, 36, 61, 3,  6,  14, 22, 26, 35, 47, 60, 2,
-                                             9,  5,  28, 11, 13, 21, 42, 19, 25, 31, 34, 40, 46, 52, 59, 1,
-                                             17, 8,  37, 4,  23, 27, 48, 10, 29, 12, 43, 20, 32, 41, 53, 18,
-                                             38, 24, 49, 30, 44, 33, 54, 39, 50, 45, 55, 51, 56, 57, 58, 0};
-  return debruijn_clz64[value * UINT64_C(0x03F79D71B4CB0A89) >> 58];
-}
-
 static inline uint64_t round_mantissa(const uint64_t u64, int shift) {
   ASSERT(shift < 0 && u64 > 0);
   shift = -shift;
@@ -9563,7 +9491,7 @@ uint64_t mdbx_key_from_jsonInteger(const int64_t json_integer) {
   const uint64_t bias = UINT64_C(0x8000000000000000);
   if (json_integer > 0) {
     const uint64_t u64 = json_integer;
-    int shift = clz64(u64) - (64 - IEEE754_DOUBLE_MANTISSA_SIZE - 1);
+    int shift = (int)clz64(u64) - (64 - IEEE754_DOUBLE_MANTISSA_SIZE - 1);
     uint64_t mantissa = u64 << shift;
     if (unlikely(shift < 0)) {
       mantissa = round_mantissa(u64, shift);
@@ -9584,7 +9512,7 @@ uint64_t mdbx_key_from_jsonInteger(const int64_t json_integer) {
 
   if (json_integer < 0) {
     const uint64_t u64 = -json_integer;
-    int shift = clz64(u64) - (64 - IEEE754_DOUBLE_MANTISSA_SIZE - 1);
+    int shift = (int)clz64(u64) - (64 - IEEE754_DOUBLE_MANTISSA_SIZE - 1);
     uint64_t mantissa = u64 << shift;
     if (unlikely(shift < 0)) {
       mantissa = round_mantissa(u64, shift);
@@ -9973,7 +9901,7 @@ __cold static pgno_t default_rp_augment_limit(const MDBX_env *env) {
   const size_t minimum = (env->maxgc_large1page * 2 > MDBX_PNL_INITIAL) ? env->maxgc_large1page * 2 : MDBX_PNL_INITIAL;
   const size_t one_third = env->geo_in_bytes.now / 3 >> env->ps2ln;
   const size_t augment_limit =
-      (one_third > minimum) ? minimum + (one_third - minimum) / timeframe * remain_1sec : minimum;
+      (one_third > minimum) ? minimum + (size_t)((uint64_t)(one_third - minimum) * remain_1sec / timeframe) : minimum;
   eASSERT0(env, augment_limit < PAGELIST_LIMIT);
   return pnl_bytes2size(pnl_size2bytes(augment_limit));
 }
@@ -17366,24 +17294,6 @@ int cursor_distribute(const MDBX_cursor *begin, const MDBX_cursor *end, MDBX_cur
 
 static defer_free_item_t *dbi_close_locked(MDBX_env *env, size_t dbi);
 
-#if MDBX_ENABLE_DBI_SPARSE
-size_t dbi_bitmap_ctz_fallback(const MDBX_txn *txn, intptr_t bmi) {
-  tASSERT0(txn, bmi != 0);
-  bmi &= -bmi;
-  if (sizeof(txn->dbi_sparse[0]) > 4) {
-    static const uint8_t debruijn_ctz64[64] = {0,  1,  2,  53, 3,  7,  54, 27, 4,  38, 41, 8,  34, 55, 48, 28,
-                                               62, 5,  39, 46, 44, 42, 22, 9,  24, 35, 59, 56, 49, 18, 29, 11,
-                                               63, 52, 6,  26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
-                                               51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12};
-    return debruijn_ctz64[(UINT64_C(0x022FDD63CC95386D) * (uint64_t)bmi) >> 58];
-  } else {
-    static const uint8_t debruijn_ctz32[32] = {0,  1,  28, 2,  29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4,  8,
-                                               31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6,  11, 5,  10, 9};
-    return debruijn_ctz32[(UINT32_C(0x077CB531) * (uint32_t)bmi) >> 27];
-  }
-}
-#endif /* MDBX_ENABLE_DBI_SPARSE */
-
 struct dbi_snap_result dbi_snap(const MDBX_env *env, const size_t dbi) {
   eASSERT0(env, dbi < env->n_dbi);
   struct dbi_snap_result r;
@@ -18182,43 +18092,46 @@ int dbi_close_release(MDBX_env *env, MDBX_dbi dbi) { return dbi_defer_release(en
 static uint64_t defrag_now(uint64_t now_cache) { return now_cache ? now_cache : osal_monotime(); }
 
 uint64_t defrag_result(dfc_t *dfc, MDBX_defrag_result_t *out, uint64_t now_cache) {
-  memset(out, 0, sizeof(*out));
   if (dfc->txn)
     dfc->last_allocated = dfc->txn->geo.first_unallocated;
-  out->pages_shrinked = dfc->before_defrag - dfc->last_allocated;
-  out->pages_moved = dfc->cycle_pages_moved;
-  out->pages_scheduled = dfc->cycle_pages_scheduled;
-  out->pages_retained = dfc->gc_retained_pages;
-  if (dfc->stopor)
-    out->pages_retained += dfc->gc_tree_pages;
+  if (out) {
+    memset(out, 0, sizeof(*out));
+    out->pages_shrinked = (intptr_t)dfc->before_defrag - (intptr_t)dfc->last_allocated;
+    out->pages_moved = dfc->cycle_pages_moved;
+    out->pages_scheduled = dfc->cycle_pages_scheduled;
+    out->pages_retained = dfc->gc_retained_pages;
+    if (dfc->stopor)
+      out->pages_retained += dfc->gc_tree_pages;
 
-  intptr_t pages_left = dfc->last_allocated - (dfc->payload_pages + out->pages_retained);
-  out->pages_left = (pages_left > 0) ? pages_left : 0;
-  out->pages_whole = dfc->before_defrag;
+    intptr_t pages_left = dfc->last_allocated - (dfc->payload_pages + out->pages_retained);
+    out->pages_left = (pages_left > 0) ? pages_left : 0;
+    out->pages_whole = dfc->before_defrag;
 
-  size_t denominator = (dfc->txn ? (size_t)dfc->txn->dbs[FREE_DBI].items + rkl_len(&dfc->txn->wr.gc.ready4reuse) : 0) +
-                       (dfc->cycle ? (dfc->last_allocated - dfc->payload_pages) * 2 + dfc->cycle_preprogress
-                                   : out->pages_whole - NUM_METAS);
-  out->rough_estimation_cycle_progress_permille =
-      (dfc->progress_counter < denominator) ? (unsigned)(dfc->progress_counter * UINT64_C(1000) / denominator) : 1000;
+    size_t denominator =
+        (dfc->txn ? (size_t)dfc->txn->dbs[FREE_DBI].items + rkl_len(&dfc->txn->wr.gc.ready4reuse) : 0) +
+        (dfc->cycle ? (dfc->last_allocated - dfc->payload_pages) * 2 + dfc->cycle_preprogress
+                    : out->pages_whole - NUM_METAS);
+    out->rough_estimation_cycle_progress_permille =
+        (dfc->progress_counter < denominator) ? (unsigned)(dfc->progress_counter * UINT64_C(1000) / denominator) : 1000;
 
-  if (MDBX_DEBUG > 0 && dfc->progress_counter > denominator && dfc->txn) {
-    WARNING("progress_counter %zu > denominator %zu | gc-items %" PRIu64 ", rkl-ready4reuse %zu | "
-            "last_allocated %u, "
-            "payload_pages %zu, cycle_pages_scheduled %u | pages_whole %zu, walk_cutoff %u",
-            dfc->progress_counter, denominator, dfc->txn->dbs[FREE_DBI].items, rkl_len(&dfc->txn->wr.gc.ready4reuse),
-            dfc->last_allocated, dfc->payload_pages, dfc->cycle_pages_scheduled, out->pages_whole, dfc->walk_cutoff);
+    if (MDBX_DEBUG > 0 && dfc->progress_counter > denominator && dfc->txn) {
+      WARNING("progress_counter %zu > denominator %zu | gc-items %" PRIu64 ", rkl-ready4reuse %zu | "
+              "last_allocated %u, "
+              "payload_pages %zu, cycle_pages_scheduled %u | pages_whole %zu, walk_cutoff %u",
+              dfc->progress_counter, denominator, dfc->txn->dbs[FREE_DBI].items, rkl_len(&dfc->txn->wr.gc.ready4reuse),
+              dfc->last_allocated, dfc->payload_pages, dfc->cycle_pages_scheduled, out->pages_whole, dfc->walk_cutoff);
+    }
+
+    out->obstructed_pgno = dfc->stumble_pgno;
+    out->obstructed_span = dfc->stumble_pgno ? dfc->stumble_span : 0;
+    out->obstructed_txnid = dfc->gc_obstacle.txnid;
+    out->obstructor_tid = dfc->gc_obstacle.tid;
+    out->obstructor_pid = dfc->gc_obstacle.pid;
+    out->cycles = dfc->cycle;
+    out->stopping_reasons = dfc->stopping_reasons;
+    out->spent_time_dot16 =
+        osal_monotime_to_16dot16_noUnderflow((now_cache = defrag_now(now_cache)) - dfc->start_timestamp);
   }
-
-  out->obstructed_pgno = dfc->stumble_pgno;
-  out->obstructed_span = dfc->stumble_pgno ? dfc->stumble_span : 0;
-  out->obstructed_txnid = dfc->gc_obstacle.txnid;
-  out->obstructor_tid = dfc->gc_obstacle.tid;
-  out->obstructor_pid = dfc->gc_obstacle.pid;
-  out->cycles = dfc->cycle;
-  out->stopping_reasons = dfc->stopping_reasons;
-  out->spent_time_dot16 =
-      osal_monotime_to_16dot16_noUnderflow((now_cache = defrag_now(now_cache)) - dfc->start_timestamp);
   return now_cache;
 }
 
@@ -18402,7 +18315,7 @@ static int defrag_clear_reclaimed(dfc_t *dfc) {
         }
 
         if (txn->wr.loose_count > 0) {
-          rc = gc_merge_loose(txn);
+          rc = gc_merge_loose(txn, nullptr);
           if (unlikely(rc != MDBX_SUCCESS))
             break;
           txn_refund(txn);
@@ -18427,7 +18340,7 @@ static int defrag_clear_reclaimed(dfc_t *dfc) {
 
   if (likely(rc == MDBX_SUCCESS)) {
     if (txn->wr.loose_count > 0)
-      rc = gc_merge_loose(txn);
+      rc = gc_merge_loose(txn, nullptr);
     if (likely(rc == MDBX_SUCCESS))
       txn_refund(txn);
   }
@@ -18977,7 +18890,7 @@ int defrag_cycle(dfc_t *dfc) {
     return rc;
 
   if (txn->wr.loose_count > 0) {
-    rc = gc_merge_loose(txn);
+    rc = gc_merge_loose(txn, nullptr);
     if (unlikely(rc != MDBX_SUCCESS))
       return rc;
   }
@@ -22186,31 +22099,6 @@ MDBX_MAYBE_UNUSED static const pgno_t *scan4range_checker(const pnl_t pnl, const
   return nullptr;
 }
 
-#if defined(_MSC_VER) && !defined(__builtin_clz) && !__has_builtin(__builtin_clz)
-MDBX_MAYBE_UNUSED static __always_inline size_t __builtin_clz(uint32_t value) {
-  unsigned long index;
-  ASSERT(value != 0);
-  _BitScanReverse(&index, value);
-  return 31 - index;
-}
-#endif /* _MSC_VER */
-
-#if defined(_MSC_VER) && !defined(__builtin_clzl) && !__has_builtin(__builtin_clzl)
-MDBX_MAYBE_UNUSED static __always_inline size_t __builtin_clzl(size_t value) {
-  unsigned long index;
-  ASSERT(value != 0);
-#ifdef _WIN64
-  ASSERT(sizeof(value) == 8);
-  _BitScanReverse64(&index, value);
-  return 63 - index;
-#else
-  ASSERT(sizeof(value) == 4);
-  _BitScanReverse(&index, value);
-  return 31 - index;
-#endif
-}
-#endif /* _MSC_VER */
-
 #if !MDBX_PNL_ASCENDING
 
 #if !defined(MDBX_ATTRIBUTE_TARGET) && (__has_attribute(__target__) || __GNUC_PREREQ(5, 0))
@@ -22285,7 +22173,7 @@ MDBX_MAYBE_UNUSED __hot MDBX_ATTRIBUTE_TARGET_SSE2 static pgno_t *scan4seq_sse2(
         const unsigned clz_bits = (unsigned)(sizeof(unsigned) * CHAR_BIT);
         const unsigned sse2_lanes = 4;
         const unsigned clz_bias = clz_bits - sse2_lanes; /* 32 - 4 = 28 for 32-bit unsigned */
-        return range + clz_bias - __builtin_clz(mask);
+        return range + clz_bias - clz32(mask);
       }
       range -= 4;
     } while (range > detent + 3);
@@ -22353,7 +22241,7 @@ MDBX_MAYBE_UNUSED __hot MDBX_ATTRIBUTE_TARGET_AVX2 static pgno_t *scan4seq_avx2(
 #if !defined(ENABLE_MEMCHECK) && !defined(__SANITIZE_ADDRESS__)
       found:
 #endif /* !ENABLE_MEMCHECK && !__SANITIZE_ADDRESS__ */
-        return range + 24 - __builtin_clz(mask);
+        return range + 24 - clz32(mask);
       }
       range -= 8;
     } while (range > detent + 7);
@@ -22380,7 +22268,7 @@ MDBX_MAYBE_UNUSED __hot MDBX_ATTRIBUTE_TARGET_AVX2 static pgno_t *scan4seq_avx2(
   if (range - 3 > detent) {
     mask = diffcmp2mask_sse2avx(range - 3, offset, *(const __m128i *)&pattern);
     if (mask)
-      return range + 28 - __builtin_clz(mask);
+      return range + 28 - clz32(mask);
     range -= 4;
   }
   while (range > detent) {
@@ -22419,7 +22307,7 @@ MDBX_MAYBE_UNUSED __hot MDBX_ATTRIBUTE_TARGET_AVX512BW static pgno_t *scan4seq_a
 #if !defined(ENABLE_MEMCHECK) && !defined(__SANITIZE_ADDRESS__)
       found:
 #endif /* !ENABLE_MEMCHECK && !__SANITIZE_ADDRESS__ */
-        return range + 16 - __builtin_clz(mask);
+        return range + 16 - clz32(mask);
       }
       range -= 16;
     } while (range > detent + 15);
@@ -22446,13 +22334,13 @@ MDBX_MAYBE_UNUSED __hot MDBX_ATTRIBUTE_TARGET_AVX512BW static pgno_t *scan4seq_a
   if (range - 7 > detent) {
     mask = diffcmp2mask_avx2(range - 7, offset, *(const __m256i *)&pattern);
     if (mask)
-      return range + 24 - __builtin_clz(mask);
+      return range + 24 - clz32(mask);
     range -= 8;
   }
   if (range - 3 > detent) {
     mask = diffcmp2mask_sse2avx(range - 3, offset, *(const __m128i *)&pattern);
     if (mask)
-      return range + 28 - __builtin_clz(mask);
+      return range + 28 - clz32(mask);
     range -= 4;
   }
   while (range > detent) {
@@ -22496,7 +22384,7 @@ __hot static pgno_t *scan4seq_neon(pgno_t *range, const size_t len, const size_t
 #endif /* !ENABLE_MEMCHECK && !__SANITIZE_ADDRESS__ */
         /* The sizeof(size_t) here is used correctly, since both the lane size, and the width and format of mask,
          * is also depend on the platform bitness. */
-        return ptr_disp(range, -(__builtin_clzl(mask) >> sizeof(size_t) / 4));
+        return ptr_disp(range, -(clz_uintptr(mask) >> sizeof(size_t) / 4));
       }
       range -= 4;
     } while (range > detent + 3);
@@ -22675,6 +22563,7 @@ __hot static pgno_t repnl_get_single(MDBX_txn *txn) {
         pnl_setsize(txn->wr.repnl, len - 1);
         while (++scan <= target)
           scan[-1] = *scan;
+        ASSERT(pgno >= NUM_METAS);
         return pgno;
 #endif
       }
@@ -22692,6 +22581,7 @@ __hot static pgno_t repnl_get_single(MDBX_txn *txn) {
   /* перемещать хвост не нужно, просто усекаем список */
   pnl_setsize(txn->wr.repnl, len - 1);
 #endif /* MDBX_PNL_ASCENDING */
+  ASSERT(pgno >= NUM_METAS);
   return pgno;
 }
 
@@ -22730,6 +22620,7 @@ static pgno_t gc_repnl_scan_sequence_reserve(const MDBX_txn *txn, const size_t n
         } while (target[step] - target[0] == 1);
         /* продолжаем поиск дальше */
         target = scan4seq_impl(target, left, seq);
+        ASSERT(target == scan4range_checker(txn->wr.repnl, seq));
         continue;
       }
       /* найденная последовательность ровно необходимой длины */
@@ -22777,6 +22668,7 @@ __hot pgno_t gc_repnl_get_sequence(MDBX_txn *txn, const size_t num, uint8_t flag
         } while (target[step] - target[0] == 1);
         /* продолжаем поиск дальше */
         target = scan4seq_impl(target, left, seq);
+        ASSERT(target == scan4range_checker(txn->wr.repnl, seq));
         continue;
       }
       /* найденная последовательность ровно необходимой длины */
@@ -23545,7 +23437,7 @@ static int gc_peekid(const MDBX_val *key, txnid_t *id) {
 #pragma push_macro("LOG_ENABLED")
 #undef LOG_ENABLED
 #define LOG_ENABLED(LVL)                                                                                               \
-  unlikely(MDBX_DEBUG_GCU > 2 || (ctx->loop > 1 && (MDBX_DEBUG_GCU > 1 || LVL < MDBX_LOG_EXTRA)) ||                    \
+  unlikely(MDBX_DEBUG_GCU > 2 || (ctx && ctx->loop > 1 && (MDBX_DEBUG_GCU > 1 || LVL < MDBX_LOG_EXTRA)) ||             \
            LVL <= globals.loglevel)
 #endif /* MDBX_DEBUG_GCU */
 
@@ -23798,7 +23690,8 @@ static int gc_prepare_stockpile4retired(MDBX_txn *txn, gcu_t *ctx) {
   return gc_prepare_stockpile(txn, ctx, for_retired);
 }
 
-int gc_merge_loose(MDBX_txn *txn) {
+int gc_merge_loose(MDBX_txn *txn, gcu_t *ctx) {
+  (void)ctx;
   tASSERT0(txn, txn->wr.loose_count > 0);
   /* Return loose page numbers to wr.repnl, though usually none are left at this point.
    * The pages themselves remain in dirtylist. */
@@ -24981,7 +24874,7 @@ retry:
 
     if (txn->wr.loose_pages) {
       /* merge loose pages into the reclaimed- either retired-list */
-      err = gc_merge_loose(txn);
+      err = gc_merge_loose(txn, ctx);
       if (unlikely(err != MDBX_SUCCESS)) {
         if (err == MDBX_RESULT_TRUE)
           continue;
@@ -25490,7 +25383,7 @@ __dll_export
 #endif /* MDBX_BUILD_TARGET */
 
 #ifdef MDBX_BUILD_TYPE
-# if defined(_MSC_VER)
+# if defined(_MSC_VER) && !defined(__clang__)
 #   pragma message("Configuration-depended MDBX_BUILD_TYPE: " MDBX_BUILD_TYPE)
 # endif
     "-" MDBX_BUILD_TYPE
@@ -29421,6 +29314,15 @@ node_t *node_shrink(page_t *mp, size_t indx, node_t *node) {
   return ptr_disp(node, delta);
 }
 
+#if defined(__linux__) || defined(__gnu_linux__)
+#include <sys/sysinfo.h>
+#endif /* Linux */
+
+#if defined(__APPLE__) || defined(__MACH__)
+#include <mach/mach_time.h>
+#include <mach/vm_statistics.h>
+#endif /* Apple */
+
 #if IS_WINDOWS
 
 #include <psapi.h>
@@ -30856,30 +30758,30 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 #endif /* O_DIRECT */
 
   int err = MDBX_SUCCESS;
-  if (*fd < 0) {
+  if (unlikely(*fd < 0)) {
     err = errno;
     if (err == EACCES && purpose == MDBX_OPEN_LCK) {
       struct stat unused;
       if (stat(pathname, &unused) == 0 || (err = errno) != ENOENT)
-        err = EACCES /* restore errno if file exists */;
+        err = EACCES /* restore error if file exists */;
     }
   }
 
   /* Safeguard for https://libmdbx.dqdkfa.ru/dead-github/issues/144 */
 #if STDIN_FILENO == 0 && STDOUT_FILENO == 1 && STDERR_FILENO == 2
-  else if (*fd == STDIN_FILENO) {
+  else if (unlikely(*fd == STDIN_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "IN", STDIN_FILENO);
     ASSERT(hazardous_fd0 == -1);
     *fd = dup(hazardous_fd0 = STDIN_FILENO);
     if (*fd < 0)
       err = errno;
-  } else if (*fd == STDOUT_FILENO) {
+  } else if (unlikely(*fd == STDOUT_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "OUT", STDOUT_FILENO);
     ASSERT(hazardous_fd1 == -1);
     *fd = dup(hazardous_fd1 = STDOUT_FILENO);
     if (*fd < 0)
       err = errno;
-  } else if (*fd == STDERR_FILENO) {
+  } else if (unlikely(*fd == STDERR_FILENO)) {
     WARNING("Got STD%s_FILENO/%d, avoid using it by dup(fd)", "ERR", STDERR_FILENO);
     ASSERT(hazardous_fd2 == -1);
     *fd = dup(hazardous_fd2 = STDERR_FILENO);
@@ -30903,8 +30805,11 @@ int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
 #error "Unexpected or unsupported UNIX or POSIX system"
 #endif /* STDIN_FILENO == 0 && STDERR_FILENO == 2 */
 
-  if (err != 0)
+  if (unlikely(err != 0)) {
+    if (*fd >= 0)
+      close(*fd);
     return err;
+  }
 
 #if defined(FD_CLOEXEC) && !defined(O_CLOEXEC)
   const int fd_flags = fcntl(*fd, F_GETFD);
@@ -31186,7 +31091,11 @@ int osal_fsetsize(mdbx_filehandle_t fd, const uint64_t length) {
 
   const uint64_t allocated = UINT64_C(512) * info.st_blocks;
   if (length > allocated) {
-#if defined(__APPLE__)
+#if defined(FALLOC_FL_ALLOCATE_RANGE) && defined(FALLOC_FL_KEEP_SIZE)
+    /* prefer a low-level non-portable function to avoid glibc emulation
+     * if the file system does not support the operation. */
+    int err = fallocate(fd, FALLOC_FL_ALLOCATE_RANGE | FALLOC_FL_KEEP_SIZE, 0, length);
+#elif defined(__APPLE__)
     fstore_t store = {
         .fst_flags = F_ALLOCATECONTIG, .fst_posmode = F_PEOFPOSMODE, .fst_offset = 0, .fst_length = length};
     int err = MDBX_SUCCESS;
@@ -31397,14 +31306,31 @@ int osal_check_fs_local(mdbx_filehandle_t handle, int flags) {
   if (GetFileType(handle) != FILE_TYPE_DISK)
     return ERROR_FILE_OFFLINE;
 
+  static const char msg_note[] = "To avoid DB corruption, data loss please, performance degradation, BSOD or resources "
+                                 "leaks in the OS avoid use database on a";
   if (imports.GetFileInformationByHandleEx) {
     FILE_REMOTE_PROTOCOL_INFO RemoteProtocolInfo;
     if (imports.GetFileInformationByHandleEx(handle, FileRemoteProtocolInfo, &RemoteProtocolInfo,
                                              sizeof(RemoteProtocolInfo))) {
-      if ((RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_OFFLINE) && !(flags & MDBX_RDONLY))
+      if ((RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_OFFLINE) && !(flags & MDBX_RDONLY)) {
+        ERROR("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
         return ERROR_FILE_OFFLINE;
-      if (!(RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK) && !(flags & MDBX_EXCLUSIVE))
+      }
+      if (!(RemoteProtocolInfo.Flags & REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK) ||
+          !(F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_RDONLY) || F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_UTTERLY_NOSYNC))) {
+        ERROR("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
         return MDBX_EREMOTE;
+      }
+      WARNING("%s remote or shared volumes: remote protocol id 0x%08lX, version %u.%u.%u, flags 0x%lx", msg_note,
+              RemoteProtocolInfo.Protocol, RemoteProtocolInfo.ProtocolMajorVersion,
+              RemoteProtocolInfo.ProtocolMajorVersion, RemoteProtocolInfo.ProtocolRevision,
+              (unsigned long)RemoteProtocolInfo.Flags);
     }
   }
 
@@ -31422,8 +31348,15 @@ int osal_check_fs_local(mdbx_filehandle_t handle, int flags) {
     rc = imports.NtFsControlFile(handle, nullptr, nullptr, nullptr, &StatusBlock, FSCTL_GET_EXTERNAL_BACKING, nullptr,
                                  0, &GetExternalBacking_OutputBuffer, sizeof(GetExternalBacking_OutputBuffer));
     if (NT_SUCCESS(rc)) {
-      if (!(flags & MDBX_EXCLUSIVE))
+      if (!F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_RDONLY) && !F_ISSET(flags, MDBX_EXCLUSIVE | MDBX_UTTERLY_NOSYNC)) {
+        ERROR("%s compressed/WOF-enabled or layered volumes: WOF-version %lu, provider %lu", msg_note,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Version,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Provider);
         return MDBX_EREMOTE;
+      }
+      WARNING("%s compressed/WOF-enabled or layered volumes: WOF-version %lu, provider %lu", msg_note,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Version,
+              (unsigned long)GetExternalBacking_OutputBuffer.wof_info.Provider);
     } else if (rc != STATUS_OBJECT_NOT_EXTERNALLY_BACKED && rc != STATUS_INVALID_DEVICE_REQUEST &&
                rc != STATUS_NOT_SUPPORTED)
       return osal_ntstatus2errcode(rc);
@@ -32267,7 +32200,6 @@ __cold void osal_jitter(bool tiny) {
 #if IS_WINDOWS
 static LARGE_INTEGER performance_frequency;
 #elif defined(__APPLE__) || defined(__MACH__)
-#include <mach/mach_time.h>
 static uint64_t ratio_16dot16_to_monotonic;
 #elif defined(__linux__) || defined(__gnu_linux__)
 static clockid_t posix_clockid;
@@ -32868,6 +32800,36 @@ __cold static bin128_t osal_bootid(void) {
   return uuid;
 }
 
+#if defined(__linux__) || defined(__gnu_linux__)
+static intptr_t proc_meminfo_availpages(void) {
+  intptr_t availpages = -1;
+  FILE *const proc_meminfo = fopen("/proc/meminfo", "r");
+  if (!proc_meminfo)
+    return availpages;
+
+  char buf[64], *line;
+  while ((line = fgets(buf, sizeof(buf), proc_meminfo)) != nullptr) {
+    if (strncmp("MemAvailable:", line, 13))
+      continue;
+    size_t value = 0;
+    buf[0] = 0;
+    if (sscanf(line + 13, "%zu %s", &value, buf) < 1)
+      availpages = -1;
+    else {
+      if (!buf[0] || strcasecmp(buf, "b") == 0 || strcasecmp(buf, "bytes") == 0)
+        availpages = value >> globals.sys_pagesize_ln2;
+      else if (strcasecmp(buf, "kb") == 0 || strcasecmp(buf, "kbytes") == 0)
+        availpages = (value << 10) >> globals.sys_pagesize_ln2;
+      else if (strcasecmp(buf, "mb") == 0 || strcasecmp(buf, "mbytes") == 0)
+        availpages = (value << 20) >> globals.sys_pagesize_ln2;
+    }
+    break;
+  }
+  fclose(proc_meminfo);
+  return availpages;
+}
+#endif /* Linux */
+
 __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intptr_t *avail_pages) {
   if (!page_size && !total_pages && !avail_pages)
     return LOG_IFERR(MDBX_EINVAL);
@@ -32885,6 +32847,20 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
   const int log2page = globals.sys_pagesize_ln2;
   ASSERT(pagesize == (INT64_C(1) << log2page));
   (void)log2page;
+
+#if defined(__linux__) || defined(__gnu_linux__)
+  struct sysinfo si;
+  if (sysinfo(&si) == 0) {
+    if (total_pages)
+      *total_pages = si.totalram >> log2page;
+    if (avail_pages) {
+      *avail_pages = proc_meminfo_availpages();
+      if (*avail_pages < 0)
+        *avail_pages = si.freeram >> log2page;
+    }
+    return MDBX_SUCCESS;
+  }
+#endif /* Linux */
 
 #if IS_WINDOWS
   MEMORYSTATUSEX info;
@@ -32946,13 +32922,19 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
       return LOG_IFERR(errno);
 #elif defined(__MACH__)
     mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
-    vm_statistics_data_t vmstat;
     mach_port_t mport = mach_host_self();
+#if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 100600
+    struct vm_statistics64 vmstat;
+    kern_return_t kerr = host_statistics64(mport, HOST_VM_INFO64, (host_info64_t)&vmstat, &count);
+    const intptr_t avail_ram_pages = vmstat.free_count + vmstat.purgeable_count;
+#else
+    vm_statistics_data_t vmstat;
     kern_return_t kerr = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
+    const intptr_t avail_ram_pages = vmstat.free_count;
+#endif
     mach_port_deallocate(mach_task_self(), mport);
     if (unlikely(kerr != KERN_SUCCESS))
       return LOG_IFERR(MDBX_ENOSYS);
-    const intptr_t avail_ram_pages = vmstat.free_count;
 #elif defined(VM_TOTAL) || defined(VM_METER)
     struct vmtotal info;
     size_t len = sizeof(info);
@@ -32972,7 +32954,7 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
       return LOG_IFERR(errno);
     if (len != sizeof(info))
       return LOG_IFERR(MDBX_ENOSYS);
-    const intptr_t avail_ram_pages = info.t_free;
+    const intptr_t avail_ram_pages = info.t_free + info.t_inact / 2;
 #else
 #error "FIXME: Get Available RAM"
 #endif
@@ -33459,9 +33441,16 @@ __cold int page_check(const MDBX_cursor *const mc, const page_t *const mp) {
           }
 
           const char *const end_of_subpage = data + dsize;
+          const char *const sp_type = is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub";
+          if (unlikely(sp->upper < sp->lower || (sp->lower & 1) || PAGEHDRSZ + sp->upper > dsize)) {
+            rc = bad_page(sp, "invalid %s-page' lower(%u)/upper(%u) with limit %zu\n", sp_type, sp->lower, sp->upper,
+                          dsize - PAGEHDRSZ);
+            continue;
+          }
+
           const intptr_t nsubkeys = page_numkeys(sp);
           if (unlikely(nsubkeys == 0) && !(mc->checking & z_updating) && mc->tree->items)
-            rc = bad_page(mp, "no keys on a %s-page\n", is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub");
+            rc = bad_page(mp, "no keys on a %s-page\n", sp_type);
 
           MDBX_val sub_here, sub_prev = {0, 0};
           for (int ii = 0; ii < nsubkeys; ii++) {
@@ -41626,7 +41615,8 @@ int txn_ro_park(MDBX_txn *txn, bool autounpark) {
 int txn_ro_unpark(MDBX_txn *txn) {
   if (unlikely((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_HAS_CHILD | txn_ro_flat | MDBX_TXN_PARKED)) !=
                (txn_ro_flat | MDBX_TXN_PARKED)))
-    return ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) == MDBX_TXN_OUSTED)
+    return ((txn->flags & (MDBX_TXN_FINISHED | MDBX_TXN_OUSTED | MDBX_TXN_ERROR | txn_ro_flat)) ==
+            (txn_ro_flat | MDBX_TXN_OUSTED))
                ? MDBX_OUSTED
                : MDBX_BAD_TXN;
 
@@ -42153,7 +42143,48 @@ MDBX_txn *txn_alloc(const unsigned flags, MDBX_env *env) {
   return txn;
 }
 
-MDBX_NOTHROW_CONST_FUNCTION MDBX_MAYBE_UNUSED unsigned ceil_log2n(size_t value_uintptr) {
+size_t clz64_fallback(uint64_t value) {
+  value |= value >> 1;
+  value |= value >> 2;
+  value |= value >> 4;
+  value |= value >> 8;
+  value |= value >> 16;
+  value |= value >> 32;
+  static const uint8_t deBruijn_clz64[64] = {63, 16, 62, 7,  15, 36, 61, 3,  6,  14, 22, 26, 35, 47, 60, 2,
+                                             9,  5,  28, 11, 13, 21, 42, 19, 25, 31, 34, 40, 46, 52, 59, 1,
+                                             17, 8,  37, 4,  23, 27, 48, 10, 29, 12, 43, 20, 32, 41, 53, 18,
+                                             38, 24, 49, 30, 44, 33, 54, 39, 50, 45, 55, 51, 56, 57, 58, 0};
+  return deBruijn_clz64[value * UINT64_C(0x03F79D71B4CB0A89) >> 58];
+}
+
+size_t clz32_fallback(uint32_t value) {
+  value |= value >> 1;
+  value |= value >> 2;
+  value |= value >> 4;
+  value |= value >> 8;
+  value |= value >> 16;
+  static const uint8_t deBruijn_clz32[32] = {31, 22, 30, 21, 18, 10, 29, 2,  20, 17, 15, 13, 9, 6,  28, 1,
+                                             23, 19, 11, 3,  16, 14, 7,  24, 12, 4,  8,  25, 5, 26, 27, 0};
+  return deBruijn_clz32[value * UINT32_C(0x07C4ACDD) >> 27];
+}
+
+size_t ctz64_fallback(uint64_t value) {
+  static const uint8_t deBruijn_ctz64[64] = {0,  1,  2,  53, 3,  7,  54, 27, 4,  38, 41, 8,  34, 55, 48, 28,
+                                             62, 5,  39, 46, 44, 42, 22, 9,  24, 35, 59, 56, 49, 18, 29, 11,
+                                             63, 52, 6,  26, 37, 40, 33, 47, 61, 45, 43, 21, 23, 58, 17, 10,
+                                             51, 25, 36, 32, 60, 20, 57, 16, 50, 31, 19, 15, 30, 14, 13, 12};
+  return deBruijn_ctz64[(UINT64_C(0x022FDD63CC95386D) * value) >> 58];
+}
+
+size_t ctz32_fallback(uint32_t value) {
+  static const uint8_t deBruijn_ctz32[32] = {0,  1,  28, 2,  29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4,  8,
+                                             31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6,  11, 5,  10, 9};
+  return deBruijn_ctz32[(UINT32_C(0x077CB531) * value) >> 27];
+}
+
+//------------------------------------------------------------------------------
+
+size_t ceil_log2n(size_t value_uintptr) {
   ASSERT(value_uintptr > 0 && value_uintptr < INT32_MAX);
   value_uintptr -= 1;
   value_uintptr |= value_uintptr >> 1;
@@ -42164,26 +42195,7 @@ MDBX_NOTHROW_CONST_FUNCTION MDBX_MAYBE_UNUSED unsigned ceil_log2n(size_t value_u
   return log2n_powerof2(value_uintptr + 1);
 }
 
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION unsigned log2n_powerof2(size_t value_uintptr) {
-  ASSERT(value_uintptr > 0 && value_uintptr < INT32_MAX && is_powerof2(value_uintptr));
-  ASSERT((value_uintptr & -(intptr_t)value_uintptr) == value_uintptr);
-  const uint32_t value_uint32 = (uint32_t)value_uintptr;
-#if __GNUC_PREREQ(4, 1) || __has_builtin(__builtin_ctz)
-  STATIC_ASSERT(sizeof(value_uint32) <= sizeof(unsigned));
-  return __builtin_ctz(value_uint32);
-#elif defined(_MSC_VER)
-  unsigned long index;
-  STATIC_ASSERT(sizeof(value_uint32) <= sizeof(long));
-  _BitScanForward(&index, value_uint32);
-  return index;
-#else
-  static const uint8_t debruijn_ctz32[32] = {0,  1,  28, 2,  29, 14, 24, 3, 30, 22, 20, 15, 25, 17, 4,  8,
-                                             31, 27, 13, 23, 21, 19, 16, 7, 26, 12, 18, 6,  11, 5,  10, 9};
-  return debruijn_ctz32[(uint32_t)(value_uint32 * 0x077CB531ul) >> 27];
-#endif
-}
-
-MDBX_NOTHROW_CONST_FUNCTION uint64_t rrxmrrxmsx_0(uint64_t v) {
+uint64_t rrxmrrxmsx_0(uint64_t v) {
   /* Pelle Evensen's mixer, https://bit.ly/2HOfynt */
   v ^= (v << 39 | v >> 25) ^ (v << 14 | v >> 50);
   v *= UINT64_C(0xA24BAED4963EE407);
@@ -42770,11 +42782,11 @@ __dll_export
     const struct MDBX_version_info mdbx_version = {
         0,
         14,
-        3,
+        4,
         0,
         "", /* pre-release suffix of SemVer
-                                        0.14.3 */
-        {"2026-08-09T13:18:46+03:00", "e4baa5caf1001120895ba9282f645236e2fb160b", "251562b2dc55266d8e6d0e6627ec88ecb410702f", "v0.14.3-0-g251562b2"},
+                                        0.14.4 */
+        {"2026-09-18T22:53:42+03:00", "4b437ab251d578093abf92b5f65c568bf01004ac", "716ce9d5ae5458fa1de44097dc6e8f80ed1e4809", "v0.14.4-0-g716ce9d5"},
         sourcery};
 
 __dll_export

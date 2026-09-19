@@ -26,10 +26,20 @@ set -euxo pipefail
 
 function provide_toolchain {
 	set +ex
-	export CC="$((which ${CC:-cc} || which gcc || which clang || which true) 2>/dev/null)"
-	export CXX="$((which ${CXX:-c++} || which g++ || which clang++ || which true) 2>/dev/null)"
-	echo "CC: ${CC} => $($CC --version | head -1)"
-	echo "CXX: ${CXX} => $($CXX --version | head -1)"
+	if [[ "${CC:=cc}" =~ [\ /] ]]; then
+		true
+	else
+		export CC="$(which \"$CC\" || which gcc || which clang || which true)"
+	fi
+	if [[ "${CXX:=c++}" =~ [\ /] ]]; then
+		true
+	else
+		export CXX="$(which \"$CXX\" || which g++ || which clang++ || which true)"
+	fi
+	CC_INFO=$("$CC" --version | head -1)
+	echo "CC: ${CC} => ${CC_INFO}"
+	CXX_INFO=$("$CXX" --version | head -1)
+	echo "CXX: ${CXX} => ${CXX_INFO}"
 	CMAKE="$(which cmake 2>/dev/null)"
 	if [ -z "${CMAKE}" -o -z "$(which ninja 2>/dev/null)" ]; then
 		SUDO=$(which sudo 2>&-)

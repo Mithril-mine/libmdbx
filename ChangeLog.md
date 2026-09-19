@@ -3,11 +3,55 @@ ChangeLog
 
 The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
 Please use the `stable` branch or the latest release for production environment through staging, but the `master` branch for development a derivative projects.
-Donations are welcome to ETH `0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A`,
-BTC `bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu`, SOL `FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi`.
 Всё будет хорошо!
 
-## v0.14.3 "Китов" (Kitov) at 2026-08-09.
+## v0.14.4 "Skynet Eve" (Накануне Skynet) at 2026-09-18
+
+The supporting release of a stable branch with bug fixes.
+Recommended for use in production.
+
+### Important:
+
+ The project website [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru/) has been re-created:
+   - The advice, explanations, questions and answers, from correspondence, forums and other sources have been compiled.
+   - All information has been aggregated into a knowledge base, and the corresponding sections have been compiled on the website.
+   - The documentation generated via Doxgygen has been moved to /doxygen, with old links redirection.
+   - A lot of work has been done using AI.
+
+### Appreciations:
+
+ - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bugs reporting and assistant fix ones.
+
+### Backward compatibility breaks:
+
+ - On Windows now stricter database placement checks on network, shared, and layered volumes to prevent database corruption and data loss.
+   This can lead to a `MDBX_EREMOTE` error (`ERROR_REMOTE_STORAGE_MEDIA_ERROR`) return in dangerous situations when WOF is active (on compressed volumes).
+   Just don't use Windows, let alone WOF, to avoid data loss, or open databases exclusively for reading only (`MDBX_EXCLUSIVE | MDBX_RDONLY`).
+
+### Improvements:
+
+ - The "crash" meaning clarified in the documentation.
+ - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
+ - More CI workflows: CLANG-ARM64 on Windows, MingGW both 32- and 64- bitness, etc.
+ - Refined `mdbx_get_sysraminfo()` internals for better `avail_pages` estimation.
+ - Clariied `mdbx_env_defrag()` to eliminate doubts about the non‑impact of `result=nullptr` on the returned code.
+### Fixes:
+
+ - Fixed `entry point _except_handler4 not found in mdbx.dll` in 32-bit build with `MDBX_WITHOUT_MSVC_CRT=ON`.
+ - Fixed building by CLANG/LLVM on Windows, including Microsoft Clang from Visual Studio.
+ - Fixed `scan4seq_neon()` for LLP4/ARM64-Windows.
+ - Fixed building for Win32 with `MDBX_NATIVE_SEH=OFF` without MASM, including cross-compilation cases.
+ - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
+ - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
+ - Fixed doxygen mis-reference to the `mdbx_set_panic()`.
+ - Fixed missing sub-page header check inside `page_check()` what could be causing `SIGSEGV` during checking a corrupted database.
+
+### Misc:
+  - The title of the "MAC chat" link has been changed and the icon has been removed.
+
+--------------------------------------------------------------------------------
+
+## v0.14.3 "Китов" (Kitov) at 2026-08-09
 
 The supporting release with a lot of bug fixes,
 in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pioneer of cybernetics and the one of inventors of M-100, which was a most powerful computer of the World in 1958.
