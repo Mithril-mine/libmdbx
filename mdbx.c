@@ -4,7 +4,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 183c1d490880cf26022164bc32c0ead32de47d91b204a36f92cb2acb1ce1bda1_v0_13_12_154_g9ca22c60
+#define MDBX_BUILD_SOURCERY 66b709f51a75e4768d4900bbe763b83ba1e0cc0c2de0a37691c626d926a05779_v0_13_12_164_g7aca4951
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -5210,8 +5210,6 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool eq_fast_slowpath(const uint8_t *a,
 MDBX_NOTHROW_PURE_FUNCTION static inline bool eq_fast(const MDBX_val *a, const MDBX_val *b) {
   return unlikely(a->iov_len == b->iov_len) && eq_fast_slowpath(a->iov_base, b->iov_base, a->iov_len);
 }
-
-MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b);
 
 MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL int cmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b);
 
@@ -14914,7 +14912,14 @@ __cold static int chk_handle_kv(MDBX_chk_scope_t *const scope, MDBX_chk_table_t 
                                 const MDBX_val *key, const MDBX_val *data) {
   MDBX_chk_internal_t *const chk = scope->internal;
   int err = MDBX_SUCCESS;
-  assert(tbl->cookie);
+/* cookie == nullptr means the table was filtered out by the user (see the
+   * table_filter callback, e.g. `mdbx_chk -s <table>`); no per-record user
+   * processing for such tables. In particular the MAIN table always carries a
+   * cookie only when it passes the filter, so this is not an invariant to
+   * assert on (issue #49: ASSERT(tbl->cookie) crashed mdbx_chk -s on DBs
+   * whose main table holds ordinary records). */
+  if (!tbl->cookie)
+    return err;
   if (chk->cb->table_handle_kv)
     err = chk->cb->table_handle_kv(chk->usr, tbl, record_number, key, data);
   return err ? err : chk_check_break(scope);
@@ -14937,11 +14942,16 @@ __cold static int chk_db(MDBX_chk_scope_t *const scope, MDBX_dbi dbi, MDBX_chk_t
   }
 
   if (0 > (int)dbi) {
-    err = dbi_open(txn, &tbl->name, MDBX_DB_ACCEDE, &dbi,
-                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? cmp_equal_or_greater : nullptr,
-                   (chk->flags & MDBX_CHK_IGNORE_ORDER) ? cmp_equal_or_greater : nullptr);
+    /* Opening a named table with custom comparators is not possible via
+     * MDBX_DB_ACCEDE: the engine refuses to bind different comparators to an
+     * already-bound/valid table (MDBX_INCOMPATIBLE), which made `mdbx_chk -i`
+     * fail/crash on any database containing named sub-tables. Order-tolerance
+     * for MDBX_CHK_IGNORE_ORDER is provided by the z_ignord cursor flag and by
+     * the IGNORE_ORDER guards around the order-error reporting below, so no
+     * custom comparators are needed here. */
+    err = dbi_open(txn, &tbl->name, MDBX_DB_ACCEDE, &dbi, nullptr, nullptr);
     if (unlikely(err)) {
-      tASSERT(txn, dbi >= txn->env->n_dbi || (txn->env->dbs_flags[dbi] & DB_VALID) == 0);
+      chk_error_rc(scope, err, "mdbx_dbi_open");
       chk_error_rc(scope, err, "mdbx_dbi_open");
       goto bailout;
     }
@@ -15936,8 +15946,6 @@ MDBX_NOTHROW_PURE_FUNCTION __hot bool eq_fast_slowpath(const uint8_t *a, const u
     return tail3le(a, l) == tail3le(b, l);
   return true;
 }
-
-int cmp_equal_or_greater(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : 1; }
 
 int cmp_equal_or_wrong(const MDBX_val *a, const MDBX_val *b) { return eq_fast(a, b) ? 0 : -1; }
 
@@ -22968,7 +22976,12 @@ depleted_gc:
         goto fail;
       if (prefer_steady.ptr_c != meta_prefer_steady(env, &txn->tw.troika).ptr_c)
         goto retry_gc_refresh_oldest;
-      eASSERT(env, env->incore);
+      /* The steady point was not advanced by dxb_sync_locked(), e.g. because it
+       * already covers the recent txnid, or the database is in-core and the sync
+       * was skipped. Both are legitimate: fall through to allocate from the
+       * unallocated part of the file. Do NOT assert env->incore here —
+       * osal_check_fs_incore() returns MDBX_RESULT_FALSE unconditionally on
+       * Windows, so env->incore is always false there (issue #52). */
     }
   }
 
@@ -28589,6 +28602,7 @@ int osal_ioring_add(osal_ioring_t *ior, const size_t offset, void *data, const s
       if (use_gather &&
           ((bytes | (uintptr_t)data | ior->last_bytes | (uintptr_t)(uint64_t)item->sgv[0].Buffer) &
            ior_alignment_mask) == 0 &&
+          (item->single.iov_len & ior_WriteFile_flag) == 0 &&
           ior->last_sgvcnt + (size_t)segments < OSAL_IOV_MAX) {
         assert(ior->overlapped_fd);
         assert((item->single.iov_len & ior_WriteFile_flag) == 0);
@@ -28828,7 +28842,13 @@ osal_ioring_write_result_t osal_ioring_write(osal_ioring_t *ior, mdbx_filehandle
 
   assert(ior->async_waiting > ior->async_completed && ior->async_waiting == INT_MAX);
   ior->async_waiting = async_started;
-  if (async_started > ior->async_completed && end_wait_for == wait_for) {
+  if (async_started > ior->async_completed) {
+    /* Spare slot for async_done is preallocated (end_wait_for =
+     * event_pool + allocated + 1); pushing it last keeps it among the first
+     * MAXIMUM_WAIT_OBJECTS handles. Without this, a MIXED batch that has no
+     * gather events waits on the gather events alone and returns while
+     * WriteFileEx APCs are still in flight -> STATUS_PENDING read as an error,
+     * ring reset under a live APC (issue #47 defect 2). */
     assert(wait_for > ior->event_pool + ior->event_stack);
     *--wait_for = ior->async_done;
   }
@@ -31791,9 +31811,16 @@ __cold int page_check(const MDBX_cursor *const mc, const page_t *const mp) {
           }
 
           const char *const end_of_subpage = data + dsize;
+          const char *const sp_type = is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub";
+          if (unlikely(sp->upper < sp->lower || (sp->lower & 1) || PAGEHDRSZ + sp->upper > dsize)) {
+            rc = bad_page(sp, "invalid %s-page' lower(%u)/upper(%u) with limit %zu\n", sp_type, sp->lower, sp->upper,
+                          dsize - PAGEHDRSZ);
+            continue;
+          }
+
           const intptr_t nsubkeys = page_numkeys(sp);
           if (unlikely(nsubkeys == 0) && !(mc->checking & z_updating) && mc->tree->items)
-            rc = bad_page(mp, "no keys on a %s-page\n", is_dupfix_leaf(sp) ? "leaf2-sub" : "leaf-sub");
+            rc = bad_page(mp, "no keys on a %s-page\n", sp_type);
 
           MDBX_val sub_here, sub_prev = {0, 0};
           for (int ii = 0; ii < nsubkeys; ii++) {
@@ -32151,12 +32178,17 @@ int iov_page(MDBX_txn *txn, iov_ctx_t *ctx, page_t *dp, size_t npages) {
       }
       err = iov_write(ctx);
       tASSERT(txn, iov_empty(ctx));
-      if (likely(err == MDBX_SUCCESS)) {
-        err = osal_ioring_add(ctx->ior, pgno2bytes(env, dp->pgno), dp, pgno2bytes(env, npages));
-        if (unlikely(err != MDBX_SUCCESS)) {
-          iov_complete(ctx);
-          return ctx->err = err;
-        }
+      if (unlikely(err != MDBX_SUCCESS)) {
+        /* Propagate the mid-commit flush failure: previously dropped here,
+         * so the commit reported MDBX_SUCCESS while the dirty page was never
+         * queued for writing (issue #47 defect 3, all platforms). */
+        iov_complete(ctx);
+        return ctx->err = err;
+      }
+      err = osal_ioring_add(ctx->ior, pgno2bytes(env, dp->pgno), dp, pgno2bytes(env, npages));
+      if (unlikely(err != MDBX_SUCCESS)) {
+        iov_complete(ctx);
+        return ctx->err = err;
       }
       tASSERT(txn, ctx->err == MDBX_SUCCESS);
     }
@@ -37839,10 +37871,10 @@ __dll_export
         0,
         13,
         12,
-        154,
+        164,
         "", /* pre-release suffix of SemVer
-                                        0.13.12.154 */
-        {"2026-08-30T11:22:54+03:00", "b0f4daadeb4e3e91f31936a27bc8b6e6f7ec20a5", "9ca22c60b484a991bbc2632a3a4a0c2a5f0c2d56", "v0.13.12-154-g9ca22c60"},
+                                        0.13.12.164 */
+        {"2026-09-25T00:20:17Z", "6c109a176fc861f80db3409fcfe7ff2d4ca9e852", "7aca495194b90c4556ef4fcab86fd50d8c0fc4c2", "v0.13.12-164-g7aca4951"},
         sourcery};
 
 __dll_export

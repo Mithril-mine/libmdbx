@@ -33,6 +33,11 @@ A long-term support phase with periodic releases as fixes accumulate.
 
 ### Fixes:
 
+ - Fixed `mdbx_load` failing with `ENOENT` when the dump is fed through the standard input: the man page advertises stdin as the default input, but `-f <file>` consumed the sole argument, and the remaining dbpath argument was then treated as the input file (issue #50) (backport).
+ - Fixed `mdbx_chk` crashes on databases with named sub-tables: with `-i` the checker passed custom comparators to an already-bound table via `MDBX_DB_ACCEDE` (rejected as `MDBX_INCOMPATIBLE`), and with `-s <table>` it asserted on a NULL table cookie for filtered-out tables (issues #49, #51) (backport).
+ - Fixed wrong `env->incore` assertion in `gc_alloc_ex()`: the asserted state (steady point not advanced by `dxb_sync_locked()`) is legitimate on any filesystem, and on Windows `osal_check_fs_incore()` always reports not-in-core, so the assertion could never hold. It is removed and allocation falls through to the unallocated part of the file (issue #52) (backport).
+ - Fixed the missed propagation of a mid-commit flush error in `iov_page()` on all platforms — a failed `iov_write()` previously reported `MDBX_SUCCESS` while the dirty page was never queued for writing, with a risk of silent data loss (backport).
+ - Fixed Windows ioring corruption when committing large write-mapped durable transactions: gather segments were appended to a `WriteFileEx` single item and outstanding `WriteFileEx` writes in a mixed batch were not awaited before reading `STATUS_PENDING` as an error, which could reset the ring under a live APC and crash in `ior_wocr()` with `hEvent == NULL` (backport).
  - Fixed using `[[maybe_unused]] const` as workaround for MSVC bug (backport).
  - Fixed minor copy&paste mistakes and other typos across codebase (backport).
  - Fixed a lot of typos and a few minor bugs detected by CodeQL (backport).
@@ -52,6 +57,7 @@ A long-term support phase with periodic releases as fixes accumulate.
     - Fixed extra rdt-unlock in the failure path of `dxb_resize()` (backport).
     - Fixed NULL deference in `walk_pgno()` when operating on a corrupted DB, which also affects `mdbx_chk` utility (backport).
     - Fixed loosing of global init and thread-local-storage destructors in static library build by MinGW toolchain in particular cases (backport).
+    - Fixed missing sub-page header check inside `page_check()` what could be causing `SIGSEGV` during checking a corrupted database.
 
  - Resource leaks:
     - Fixed `mach_port_t` leak inside `mdbx_get_sysraminfo()` (backport).
