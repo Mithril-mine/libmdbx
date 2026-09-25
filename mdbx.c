@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -23233,7 +23233,12 @@ depleted_gc:
         goto fail;
       if (prefer_steady.ptr_c != meta_prefer_steady(env, &txn->wr.troika).ptr_c)
         goto retry_gc_refresh_detent;
-      eASSERT0(env, env->incore);
+      /* The steady point was not advanced by dxb_sync_locked(), e.g. because it
+       * already covers the recent txnid, or the database is in-core and the sync
+       * was skipped. Both are legitimate: fall through to allocate from the
+       * unallocated part of the file. Do NOT assert env->incore here —
+       * osal_check_fs_incore() returns MDBX_RESULT_FALSE unconditionally on
+       * Windows, so env->incore is always false there (issue #52). */
     }
   }
 
@@ -30054,6 +30059,7 @@ int osal_ioring_add(osal_ioring_t *ior, const size_t offset, void *data, const s
       if (use_gather &&
           ((bytes | (uintptr_t)data | ior->last_bytes | (uintptr_t)(uint64_t)item->sgv[0].Buffer) &
            ior_alignment_mask) == 0 &&
+          (item->single.iov_len & ior_WriteFile_flag) == 0 &&
           ior->last_sgvcnt + (size_t)segments < OSAL_IOV_MAX) {
         ASSERT(ior->overlapped_fd);
         ASSERT((item->single.iov_len & ior_WriteFile_flag) == 0);
@@ -30304,7 +30310,13 @@ osal_ioring_write_result_t osal_ioring_write(osal_ioring_t *ior, mdbx_filehandle
 
   ASSERT(ior->async_waiting > ior->async_completed && ior->async_waiting == INT_MAX);
   ior->async_waiting = async_started;
-  if (async_started > ior->async_completed && end_wait_for == wait_for) {
+  if (async_started > ior->async_completed) {
+    /* Spare slot for async_done is preallocated (end_wait_for =
+     * event_pool + allocated + 1); pushing it last keeps it among the first
+     * MAXIMUM_WAIT_OBJECTS handles. Without this, a MIXED batch that has no
+     * gather events waits on the gather events alone and returns while
+     * WriteFileEx APCs are still in flight -> STATUS_PENDING read as an error,
+     * ring reset under a live APC (issue #47 defect 2). */
     ASSERT(wait_for > ior->event_pool + ior->event_stack);
     *--wait_for = ior->async_done;
   }
@@ -32921,14 +32933,16 @@ __cold int mdbx_get_sysraminfo(intptr_t *page_size, intptr_t *total_pages, intpt
     if (avail_ram_pages == -1)
       return LOG_IFERR(errno);
 #elif defined(__MACH__)
-    mach_msg_type_number_t count = HOST_VM_INFO_COUNT;
+    mach_msg_type_number_t count;
     mach_port_t mport = mach_host_self();
 #if defined(__ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__) && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ >= 100600
     struct vm_statistics64 vmstat;
+    count = HOST_VM_INFO64_COUNT;
     kern_return_t kerr = host_statistics64(mport, HOST_VM_INFO64, (host_info64_t)&vmstat, &count);
     const intptr_t avail_ram_pages = vmstat.free_count + vmstat.purgeable_count;
 #else
     vm_statistics_data_t vmstat;
+    count = HOST_VM_INFO_COUNT;
     kern_return_t kerr = host_statistics(mport, HOST_VM_INFO, (host_info_t)&vmstat, &count);
     const intptr_t avail_ram_pages = vmstat.free_count;
 #endif
@@ -33819,12 +33833,17 @@ int iov_page(MDBX_txn *txn, iov_ctx_t *ctx, page_t *dp, size_t npages) {
       }
       err = iov_write(ctx);
       tASSERT0(txn, iov_empty(ctx));
-      if (likely(err == MDBX_SUCCESS)) {
-        err = osal_ioring_add(ctx->ior, pgno2bytes(env, dp->pgno), dp, pgno2bytes(env, npages));
-        if (unlikely(err != MDBX_SUCCESS)) {
-          iov_complete(ctx);
-          return ctx->err = err;
-        }
+      if (unlikely(err != MDBX_SUCCESS)) {
+        /* Propagate the mid-commit flush failure: previously dropped here,
+         * so the commit reported MDBX_SUCCESS while the dirty page was never
+         * queued for writing (issue #47 defect 3, all platforms). */
+        iov_complete(ctx);
+        return ctx->err = err;
+      }
+      err = osal_ioring_add(ctx->ior, pgno2bytes(env, dp->pgno), dp, pgno2bytes(env, npages));
+      if (unlikely(err != MDBX_SUCCESS)) {
+        iov_complete(ctx);
+        return ctx->err = err;
       }
       tASSERT0(txn, ctx->err == MDBX_SUCCESS);
     }
@@ -40172,7 +40191,7 @@ static int basal_start_locked(MDBX_txn *txn, unsigned flags) {
     return MDBX_EPERM;
 #endif /* Windows */
 
-  txn->flags = flags & ~txn_rw_already_locked;
+  txn->flags = flags & ~(txn_rw_already_locked | MDBX_TXN_TRY);
   txn->nested = nullptr;
   txn->wr.loose_pages = nullptr;
   txn->wr.loose_count = 0;
@@ -42758,7 +42777,7 @@ void windows_import(void) {
  ******************************************************************************/
 
 #if !defined(MDBX_VERSION_UNSTABLE) &&                                                                                 \
-    (MDBX_VERSION_MAJOR != 0 || MDBX_VERSION_MINOR != 14)
+    (MDBX_VERSION_MAJOR != 0 || MDBX_VERSION_MINOR != 15)
 #error "API version mismatch! Had `git fetch --tags` done?"
 #endif
 
@@ -42781,12 +42800,12 @@ __dll_export
 #endif
     const struct MDBX_version_info mdbx_version = {
         0,
-        14,
-        4,
+        15,
         0,
+        4,
         "", /* pre-release suffix of SemVer
-                                        0.14.4 */
-        {"2026-09-18T22:53:42+03:00", "4b437ab251d578093abf92b5f65c568bf01004ac", "716ce9d5ae5458fa1de44097dc6e8f80ed1e4809", "v0.14.4-0-g716ce9d5"},
+                                        0.15.0.4 */
+        {"2026-09-24T13:41:28Z", "88b2cf401fed0e455fd22570473d35c828d4d895", "789861bbebd01442c5fef306e9d1c33ef2f9cda9", "v0.15.0-4-g789861bb"},
         sourcery};
 
 __dll_export

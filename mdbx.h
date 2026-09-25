@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -624,9 +624,10 @@ typedef mode_t mdbx_mode_t;
 extern "C" {
 #endif
 
-/* MDBX version 0.14.x */
+/* MDBX version 0.15.x, but it is unstable/under-development yet. */
+#define MDBX_VERSION_UNSTABLE
 #define MDBX_VERSION_MAJOR 0
-#define MDBX_VERSION_MINOR 14
+#define MDBX_VERSION_MINOR 15
 
 #ifndef LIBMDBX_API
 #if defined(LIBMDBX_EXPORTS) || defined(DOXYGEN)
@@ -927,7 +928,7 @@ typedef enum MDBX_log_level {
    * \note Requires build libmdbx with \ref MDBX_DEBUG option. */
   MDBX_LOG_EXTRA = 7,
 
-  /** Avoids UBSAN false-positive issues/traps. */
+  /** The maximum log-level value. */
   MDBX_LOG_MAX = 7
 } MDBX_log_level_t;
 
@@ -2098,26 +2099,30 @@ LIBMDBX_API const char *mdbx_strerror(int errnum);
  * restriction if the returned string points to the supplied buffer.
  * \see mdbx_strerror()
  *
- * mdbx_liberr2str() returns string describing only MDBX error numbers but NULL
- * for non-MDBX error codes. This function is thread-safe since return pointer
- * to constant non-localized strings.
- *
  * \param [in] errnum  The error code.
  * \param [in,out] buf Buffer to store the error message.
  * \param [in] buflen The size of buffer to store the message.
  *
  * \returns "error message" The description of the error. */
 LIBMDBX_API const char *mdbx_strerror_r(int errnum, char *buf, size_t buflen);
+
+/** \brief Returns a string describing only MDBX error numbers.
+ *
+ * \details Returns `NULL` for non-MDBX error codes. This function is
+ * thread-safe since it returns pointers to constant non-localized strings.
+ * \ingroup c_err
+ * \see mdbx_strerror() mdbx_strerror_r()
+ * \param [in] errnum  The error code. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API const char *mdbx_liberr2str(int errnum);
 
 #if defined(_WIN32) || defined(_WIN64) || defined(DOXYGEN)
-/** Bit of Windows' madness. The similar to \ref mdbx_strerror() but returns
+/** Bit of Windows' madness. \brief Similar to \ref mdbx_strerror() but returns
  * Windows error-messages in the OEM-encoding for console utilities.
  * \ingroup c_err
  * \see mdbx_strerror_r_ANSI2OEM() */
 LIBMDBX_API const char *mdbx_strerror_ANSI2OEM(int errnum);
 
-/** Bit of Windows' madness. The similar to \ref mdbx_strerror_r() but returns
+/** Bit of Windows' madness. \brief Similar to \ref mdbx_strerror_r() but returns
  * Windows error-messages in the OEM-encoding for console utilities.
  * \ingroup c_err
  * \see mdbx_strerror_ANSI2OEM() */
@@ -2504,8 +2509,8 @@ LIBMDBX_API int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t opt
  * be called later to discard the \ref MDBX_env handle and release associated
  * resources.
  *
- * \todo Добавить в API возможность установки обратного вызова для ревизии опций
- * работы с БД в процессе её открытия (при удержании блокировок).
+ * \todo Add to the API a possibility to install a callback for reviewing the
+ * database options during its opening (while holding locks).
  *
  * \note On Windows the \ref mdbx_env_openW() is recommended to use.
  *
@@ -2989,7 +2994,7 @@ MDBX_DEPRECATED LIBMDBX_INLINE_API(int, mdbx_env_info, (const MDBX_env *env, MDB
  *
  * Unless the environment was opened with no-sync flags (\ref MDBX_NOMETASYNC,
  * \ref MDBX_SAFE_NOSYNC and \ref MDBX_UTTERLY_NOSYNC), then
- * data is always written an flushed to disk when \ref mdbx_txn_commit() is
+ * data is always written and flushed to disk when \ref mdbx_txn_commit() is
  * called. Otherwise \ref mdbx_env_sync() may be called to manually write and
  * flush unsynced data to disk.
  *
@@ -3157,7 +3162,7 @@ LIBMDBX_INLINE_API(int, mdbx_env_get_syncperiod, (const MDBX_env *env, unsigned 
  * \param [in] env        An environment handle returned by
  *                        \ref mdbx_env_create().
  *
- * \param [in] dont_sync  A dont'sync flag, if non-zero the last checkpoint
+ * \param [in] dont_sync  A `dont_sync` flag, if non-zero the last checkpoint
  *                        will be kept "as is" and may be still "weak" in the
  *                        \ref MDBX_SAFE_NOSYNC or \ref MDBX_UTTERLY_NOSYNC
  *                        modes. Such "weak" checkpoint will be ignored on
@@ -3168,7 +3173,7 @@ LIBMDBX_INLINE_API(int, mdbx_env_get_syncperiod, (const MDBX_env *env, unsigned 
  * \returns A non-zero error value on failure and 0 on success,
  *          some possible errors are:
  * \retval MDBX_BUSY   The write transaction is running by other thread,
- *                     in such case \ref MDBX_env instance has NOT be destroyed
+ *                     in such case the \ref MDBX_env instance has NOT been destroyed
  *                     not released!
  *                     \note If any OTHER error code was returned then
  *                     given MDBX_env instance has been destroyed and released.
@@ -3691,7 +3696,7 @@ MDBX_NOTHROW_CONST_FUNCTION LIBMDBX_API intptr_t mdbx_limits_valsize4page_max(in
  * \ingroup c_statinfo */
 MDBX_NOTHROW_CONST_FUNCTION LIBMDBX_API intptr_t mdbx_limits_txnsize_max(intptr_t pagesize);
 
-/** \brief Set the maximum number of threads/reader slots for for all processes
+/** \brief Set the maximum number of threads/reader slots for all processes
  * interacts with the database.
  * \ingroup c_settings
  *
@@ -4254,7 +4259,7 @@ struct MDBX_commit_latency {
       uint64_t volume;
       uint32_t calls;
     } pnl_merge_work, pnl_merge_self;
-    /** \brief The maximum observed difference between the latest and oldest readed MVCC-snapshots. */
+    /** \brief The maximum observed difference between the latest and oldest read MVCC-snapshots. */
     uint32_t max_reader_lag;
     /** \brief The maximum noticed number of pages withheld from reclaimed due to reading old MVCC-snapshots. */
     uint32_t max_retained_pages;
@@ -4759,7 +4764,7 @@ LIBMDBX_API int mdbx_txn_renew(MDBX_txn *txn);
  * \retval MDBX_EINVAL           Transaction handle is NULL. */
 LIBMDBX_API int mdbx_txn_refresh(MDBX_txn *txn);
 
-/** \brief The fours integers markers (aka "canary") associated with the
+/** \brief The four integer markers (aka "canary") associated with the
  * environment.
  * \ingroup c_crud
  * \see mdbx_canary_put()
@@ -4782,7 +4787,7 @@ typedef struct MDBX_canary MDBX_canary;
  * \see mdbx_canary_get()
  *
  * \param [in] txn     A transaction handle returned by \ref mdbx_txn_begin()
- * \param [in] canary  A optional pointer to \ref MDBX_canary structure for `x`,
+ * \param [in] canary  An optional pointer to a \ref MDBX_canary structure for `x`,
  *              `y` and `z` values from.
  *            - If canary is NOT NULL then the `x`, `y` and `z` values will be
  *              updated from given canary argument, but the `v` be always set
@@ -4797,7 +4802,7 @@ typedef struct MDBX_canary MDBX_canary;
  * \returns A non-zero error value on failure and 0 on success. */
 LIBMDBX_API int mdbx_canary_put(MDBX_txn *txn, const MDBX_canary *canary);
 
-/** \brief Returns fours integers markers (aka "canary") associated with the
+/** \brief Returns four integer markers (aka "canary") associated with the
  * environment.
  * \ingroup c_crud
  * \see mdbx_canary_put()
@@ -5088,7 +5093,7 @@ LIBMDBX_API int mdbx_dbi_stat(const MDBX_txn *txn, MDBX_dbi dbi, MDBX_stat *stat
  * \retval MDBX_RESULT_TRUE  The dbi isn't a dupsort (multi-value) table. */
 LIBMDBX_API int mdbx_dbi_dupsort_depthmask(const MDBX_txn *txn, MDBX_dbi dbi, uint32_t *mask);
 
-/** \brief DBI state bits returted by \ref mdbx_dbi_flags_ex()
+/** \brief DBI state bits returned by \ref mdbx_dbi_flags_ex()
  * \ingroup c_statinfo
  * \see mdbx_dbi_flags_ex() */
 typedef enum MDBX_dbi_state {
@@ -5233,12 +5238,12 @@ LIBMDBX_API int mdbx_get(const MDBX_txn *txn, MDBX_dbi dbi, const MDBX_val *key,
  * \retval MDBX_EINVAL    An invalid parameter was specified. */
 LIBMDBX_API int mdbx_get_ex(const MDBX_txn *txn, MDBX_dbi dbi, MDBX_val *key, MDBX_val *data, size_t *values_count);
 
-/** \brief Get equal or great item from a table.
+/** \brief Get equal or greater item from a table.
  * \ingroup c_crud
  *
  * Briefly this function does the same as \ref mdbx_get() with a few
  * differences:
- * 1. Return equal or great (due comparison function) key-value
+ * 1. Return an equal-or-great (by the comparison function) key-value
  *    pair, but not only exactly matching with the key.
  * 2. On success return \ref MDBX_SUCCESS if key found exactly,
  *    and \ref MDBX_RESULT_TRUE otherwise. Moreover, for tables with
@@ -5361,7 +5366,7 @@ typedef enum MDBX_cache_status {
    * the result is correct until the value is explicitly changed or the transaction is completed. */
   MDBX_CACHE_CONFIRMED = 3,
 
-  /** \brief The result of getting a value is correct and corresponds to the fresh data readed from the database,
+  /** \brief The result of getting a value is correct and corresponds to the fresh data read from the database,
    *  which also putted into the cache entry.
    *  \details After the last check, either the value of the requested pair itself changed,
    *  or it was moved to a new page due to the updating of neighboring items.
@@ -6050,7 +6055,7 @@ typedef int (*MDBX_predicate_func)(void *context, MDBX_val *key, MDBX_val *value
  *
  * The function accepts a cursor, which should be bound to some transaction and a table DBI-descriptor,
  * performs the initial cursor positioning determined by the `start_op` argument. Next, each key-value pair
- * is probed using the predicative function `predict` provided by you, and then, if necessary, move on to
+ * is probed using the predicate function provided by you, and then, if necessary, move on to
  * the next using the `turn_op` operation, until one of the four events occurs:
  *  - the end of data is reached;
  *  - an error occurs when positioning the cursor;
@@ -6074,7 +6079,7 @@ typedef int (*MDBX_predicate_func)(void *context, MDBX_val *key, MDBX_val *value
  *                          Acceptable values are \ref MDBX_NEXT, \ref MDBX_NEXT_DUP,
  *                          \ref MDBX_NEXT_NODUP, \ref MDBX_PREV,
  *                          \ref MDBX_PREV_DUP, \ref MDBX_PREV_NODUP, and also
- *                          \ref MDBX_NEXT_MULTIPLE и \ref MDBX_PREV_MULTIPLE.
+ *                          \ref MDBX_NEXT_MULTIPLE and \ref MDBX_PREV_MULTIPLE.
  * \param [in,out] arg      An auxiliary argument to the predicative function,
  *                          which is fully prepared and controlled by you.
  *
@@ -6096,7 +6101,7 @@ typedef int (*MDBX_predicate_func)(void *context, MDBX_val *key, MDBX_val *value
 LIBMDBX_API int mdbx_cursor_scan(MDBX_cursor *cursor, MDBX_predicate_func predicate, void *context,
                                  MDBX_cursor_op start_op, MDBX_cursor_op turn_op, void *arg);
 
-/** Scans a table using the given predicate, starting with the given key-value pair,
+/** \brief Scans a table using the given predicate, starting with the given key-value pair,
  *  and reduces an associated overhead.
  * \ingroup c_crud
  *
@@ -6147,7 +6152,7 @@ LIBMDBX_API int mdbx_cursor_scan(MDBX_cursor *cursor, MDBX_predicate_func predic
  *                           Acceptable values are \ref MDBX_NEXT, \ref MDBX_NEXT_DUP,
  *                           \ref MDBX_NEXT_NODUP, \ref MDBX_PREV,
  *                           \ref MDBX_PREV_DUP, \ref MDBX_PREV_NODUP, and also
- *                           \ref MDBX_NEXT_MULTIPLE и \ref MDBX_PREV_MULTIPLE.
+ *                           \ref MDBX_NEXT_MULTIPLE and \ref MDBX_PREV_MULTIPLE.
  * \param [in,out] arg       An auxiliary argument to the predicative function,
  *                           which is fully prepared and controlled by you.
  *
@@ -6878,7 +6883,7 @@ LIBMDBX_API int mdbx_reader_check(MDBX_env *env, int *dead);
  * \ingroup c_statinfo
  *
  * Returns an information for estimate how much given read-only
- * transaction is lagging relative the to actual head.
+ * transaction is lagging relative to the actual head.
  * \deprecated Please use \ref mdbx_txn_info() instead.
  *
  * \param [in] txn       A transaction handle returned by \ref mdbx_txn_begin().
@@ -7092,8 +7097,8 @@ LIBMDBX_API int mdbx_env_turn_for_recovery(MDBX_env *env, unsigned target_meta);
  * adjusting the options for working with the database before opening it, as well as in scripts, file managers and other
  * auxiliary utilities.
  *
- * \todo Добавить в API возможность установки обратного вызова для ревизии опций
- * работы с БД в процессе её открытия (при удержании блокировок).
+ * \todo Add to the API a possibility to install a callback for reviewing the
+ * database options during its opening (while holding locks).
  *
  * \param [in]  pathname  The path to the directory or database file.
  * \param [out] info      A pointer to the \ref MDBX_envinfo structure to get information.
@@ -7192,7 +7197,7 @@ typedef struct MDBX_chk_line {
   char *begin, *end, *out;
 } MDBX_chk_line_t;
 
-/** \brief An issue problem was discovered during a database integrity check.
+/** \brief An issue was discovered during a database integrity check.
  * \ingroup c_extra
  * \see mdbx_env_chk() */
 typedef struct MDBX_chk_issue {
@@ -7481,7 +7486,7 @@ LIBMDBX_API int mdbx_gc_info(MDBX_txn *txn, MDBX_gc_info_t *info, size_t bytes, 
                              void *iter_ctx);
 
 /** \brief The returned reasons for stopping database defragmentation.
- * \details Any number of individual values could be OR'ed together while while returning actual set of reasons.
+ * \details Any number of individual values could be OR'ed together while returning actual set of reasons.
  * \ingroup c_extra
  * \see MDBX_defrag_result_t
  * \see mdbx_env_defrag() */
