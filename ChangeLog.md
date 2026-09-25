@@ -2,8 +2,33 @@ ChangeLog
 =========
 
 The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
-Please use the `stable` branch or the latest release for production environment through staging, but the `master` branch for development a derivative projects.
+Please use the `stable` branch or the latest release for production environments through staging, and the `master` branch for development of derivative projects.
 Всё будет хорошо!
+
+## v0.14.5 at a release engineering stage
+
+The supporting release of a stable branch with bug fixes.
+
+### Important:
+
+The development of subsequent releases in the v0.14.x version line will continue in the `stable` branch.
+In the `master` branch, development of version v0.15 will begin, with the technical version tag set to v0.15.0.
+
+### Improvements:
+
+ - Minor clarification/refining README and doxygen API descriptons.
+
+### Fixes:
+
+ - Fixed `mdbx_load` failing with `ENOENT` when the dump is fed through the standard input: the man page advertises stdin as the default input, but `-f <file>` consumed the sole argument, and the remaining dbpath argument was then treated as the input file (issue #50) (backport).
+ - Fixed `mdbx_chk` crashes on databases with named sub-tables: with `-i` the checker passed custom comparators to an already-bound table via `MDBX_DB_ACCEDE` (rejected as `MDBX_INCOMPATIBLE`), and with `-s <table>` it asserted on a NULL table cookie for filtered-out tables (issues #49, #51) (backport).
+ - Fixed wrong `env->incore` assertion in `gc_alloc_ex()`: the asserted state (steady point not advanced by `dxb_sync_locked()`) is legitimate on any filesystem, and on Windows `osal_check_fs_incore()` always reports not-in-core, so the assertion could never hold. It is removed and allocation falls through to the unallocated part of the file (issue #52) (backport).
+ - Fixed the missed propagation of a mid-commit flush error in `iov_page()` on all platforms — a failed `iov_write()` previously reported `MDBX_SUCCESS` while the dirty page was never queued for writing, with a risk of silent data loss (backport).
+ - Fixed Windows ioring corruption when committing large write-mapped durable transactions: gather segments were appended to a `WriteFileEx` single item and outstanding `WriteFileEx` writes in a mixed batch were not awaited before reading `STATUS_PENDING` as an error, which could reset the ring under a live APC and crash in `ior_wocr()` with `hEvent == NULL` (backport).
+ - Fixed typos in the ChangeLog.
+ - Fixed `MDBX_TXN_TRY` leakage into a transaction state flags.
+
+--------------------------------------------------------------------------------
 
 ## v0.14.4 "Skynet Eve" (Накануне Skynet) at 2026-09-18
 
@@ -15,12 +40,12 @@ Recommended for use in production.
  The project website [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru/) has been re-created:
    - The advice, explanations, questions and answers, from correspondence, forums and other sources have been compiled.
    - All information has been aggregated into a knowledge base, and the corresponding sections have been compiled on the website.
-   - The documentation generated via Doxgygen has been moved to /doxygen, with old links redirection.
+   - The documentation generated via Doxygen has been moved to /doxygen, with old links redirection.
    - A lot of work has been done using AI.
 
 ### Appreciations:
 
- - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bugs reporting and assistant fix ones.
+ - [Andrea Lanfranchi](https://github.com/AndreaLanfranchi) for bug reporting and assistance with fixing ones.
 
 ### Backward compatibility breaks:
 
@@ -32,22 +57,23 @@ Recommended for use in production.
 
  - The "crash" meaning clarified in the documentation.
  - Prefer to use non-portable `fallocate()` to avoid emulation in glibc.
- - More CI workflows: CLANG-ARM64 on Windows, MingGW both 32- and 64- bitness, etc.
+ - More CI workflows: CLANG-ARM64 on Windows, MinGW both 32- and 64-bit bitness, etc.
  - Refined `mdbx_get_sysraminfo()` internals for better `avail_pages` estimation.
- - Clariied `mdbx_env_defrag()` to eliminate doubts about the non‑impact of `result=nullptr` on the returned code.
+ - Clarified `mdbx_env_defrag()` to eliminate doubts about the non‑impact of `result=nullptr` on the returned code.
+
 ### Fixes:
 
  - Fixed `entry point _except_handler4 not found in mdbx.dll` in 32-bit build with `MDBX_WITHOUT_MSVC_CRT=ON`.
  - Fixed building by CLANG/LLVM on Windows, including Microsoft Clang from Visual Studio.
- - Fixed `scan4seq_neon()` for LLP4/ARM64-Windows.
+ - Fixed `scan4seq_neon()` for LLP64/ARM64-Windows.
  - Fixed building for Win32 with `MDBX_NATIVE_SEH=OFF` without MASM, including cross-compilation cases.
- - Fixed division truncation/underflow in the `default_rp_augment_limit()` which lead to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
- - Fixed regression leads returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
- - Fixed doxygen mis-reference to the `mdbx_set_panic()`.
- - Fixed missing sub-page header check inside `page_check()` what could be causing `SIGSEGV` during checking a corrupted database.
+- Fixed division truncation/underflow in the `default_rp_augment_limit()` which led to too low and "stepwise" default `MDBX_opt_rp_augment_limit`.
+- Fixed regression leading to returning `MDBX_BAD_TXN` instead of `MDBX_OUSTED` in particular cases.
+- Fixed doxygen mis-reference to the `mdbx_set_panic()`.
+- Fixed missing sub-page header check inside `page_check()` which could cause `SIGSEGV` when checking a corrupted database.
 
 ### Misc:
-  - The title of the "MAC chat" link has been changed and the icon has been removed.
+ - The title of the "MAC chat" link has been changed and the icon has been removed.
 
 --------------------------------------------------------------------------------
 
@@ -71,7 +97,7 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
 
 ### Backward compatibility breaks:
 
- - Now API functions that do not receive a transaction in arguments, but require a write lock, always checks that the current thread owns (launched) the writing transaction.
+ - Now API functions that do not receive a transaction in arguments, but require a write lock, always check that the current thread owns (launched) the writing transaction.
    If the current thread does NOT own the writing transaction (did not start it), then the write-transaction lock will be acquired.
    This can lead to deadlock in `MDBX_NOSTICKYTHREADS` mode!
 
@@ -94,20 +120,20 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
 
  - Restructured project directories, renamed `ut_and_examples` into `examples`, etc.
 
- - The `mdbx_replace_ex()` now returns only previous data from a DB, but never new ones, even it has the same value.
+ - The `mdbx_replace_ex()` now returns only previous data from a DB, but never new ones, even if it has the same value.
 
 ### Improvements:
 
  - Deferred invalidation of the dbi-handles of dropped tables has been implemented until the corresponding transactions are committed.
 
-   Previously, libmdbx implemented the behavior historically inherited from LMDB, when handles of a dropped tables were immediately closed, regardless of the possible subsequent abortion of such transactions.
-   Now, when tables are dropped, both ones associated handles and data remain available for other transactions running in parallel within the current process.
+   Previously, libmdbx implemented the behavior historically inherited from LMDB, when handles of dropped tables were immediately closed, regardless of the possible subsequent abortion of such transactions.
+   Now, when tables are dropped, both their associated handles and data remain available for other transactions running in parallel within the current process.
 
-   This improvement has been asking for a long time, but it required a lot of preparation and refactoring which are done step-by-step during a few last releases.
+   This improvement has been requested for a long time, but it required a lot of preparation and refactoring which are done step-by-step during a few last releases.
 
  - Embarcadero C++ Builder now could be used to build libmdbx on Windows.
 
- - Allowed to use cursors bonded to the same table/DBI, but to different read-only transaction, in an API with multiple cursors in the parameters.
+ - Allowed to use cursors bonded to the same table/DBI, but to different read-only transactions, in an API with multiple cursors in the parameters.
 
  - Added the missing recipe for Conan to an amalgamated source code.
 
@@ -136,17 +162,17 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
 
  - Fixed `ERROR_LOCK_VIOLATION` during defrag on Windows in operation modes using overlapped I/O.
 
- - Fixed the regression/bug in the copy-without-compaction code, which leads to produce a copy without a payload.
+ - Fixed the regression/bug in the copy-without-compaction code, which led to producing a copy without a payload.
 
  - Fixed `env_owned_wrtxn()` to avoid by-pass locking in the `MDBX_NOSTICKYTHREADS` mode.
 
- - Fixed unreasonably high memory 2GB consumption in `mdbx_load` utility due to leftover debug changes.
+ - Fixed unreasonably high 2GB memory consumption in `mdbx_load` utility due to leftover debug changes.
 
  - Fixed loss of `mincore()` cache due erase/overwrite on insert.
 
  - Fixed a lot of typos and a few bugs detected by CodeQL.
 
- - Fixed loosing of global init and thread-local-storage destructors in static library build by MinGW toolchain in particular cases.
+ - Fixed losing of global init and thread-local-storage destructors in static library build by MinGW toolchain in particular cases.
 
  - Rare or specific conditions:
     - Fixed major typo in condition inside `latch_maindb_locked()`.
@@ -155,18 +181,18 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
     - Fixed potential buffer over-read by `fgets()` in `mdbx_load` utility.
     - Fixed missing `return` statement in one of the error paths inside `mdbx_cursor_bind()`.
     - Fixed extra rdt-unlock in the failure path of `dxb_resize()`.
-    - Fixed NULL deference in `walk_pgno()` when operating on a corrupted DB, which also affects `mdbx_chk` utility.
+    - Fixed NULL dereference in `walk_pgno()` when operating on a corrupted DB, which also affects `mdbx_chk` utility.
 
  - Resource leaks:
     - Fixed `mach_port_t` leak inside `mdbx_get_sysraminfo()`.
     - Fixed Windows section handle leak inside `osal_mresize()` in unsuccessful case.
-    - Fixed a leak of the table name in the failure path of `dbi_open_locked()` in a specific cases.
+    - Fixed a leak of the table name in the failure path of `dbi_open_locked()` in specific cases.
     - Fixed minor leaks/non-cleanup when `defrag_init()` failed.
     - Fixed `cond_pair` leak in the failure path of `copy_with_compacting()`.
 
  - Spilling:
     - Fixed spurious assertion inside `spill_cursor_keep()`.
-    - Fixed committing a pure nested transaction has a spilled pages.
+    - Fixed committing a pure nested transaction that has spilled pages.
     - Fixed a case when a prepared GC-slots are spilled-out during `gc_update()`.
     - Fixed a leak of spilled pages list on a nested transaction abort.
     - Reworked internal cursors cloning to be compatible with subsequent pages tracking before spilling.
@@ -176,7 +202,7 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
     - Fixed spilling/accounting for `MDBX_AVOID_MSYNC=ON`.
 
  - C++ API:
-    - Fixed ODR violations warnings from modern GCC while both LTO and UBSAN are enabled.
+    - Fixed ODR violation warnings from modern GCC while both LTO and UBSAN are enabled.
     - Fixed UTF-8 U+100000..U+10FFFF range checking/decoding inside `mdbx::slice::is_printable()`.
     - Fixed missing headroom reservation in several `mdbx::buffer<>` methods.
     - Fixed missing `enable_validation(flags & MDBX_VALIDATION)` inside `mdbx::env::operate_options::operate_options()`.
@@ -185,18 +211,18 @@ in memory of [Anatoly Kitov](https://en.wikipedia.org/wiki/Anatoly_Kitov), a pio
     - Fixed UB in case empty array passed to `mdbx::cursor::distribute()`.
     - Fixed `enable_validation` in the `std::ostream &operator<<(::std::ostream &, const env::operate_options &)`.
     - Added missing `mdbx::cursor::estimate(move_operation operation, const slice &key)`, `mdbx::env::extra_runtime_option::presync_threshold` and `mdbx::env::geometry::&operator=()`.
-    - Fixed using wide characher count instead of bytes in `mdbx::slice` and `mdbx::buffer<>` methods.
+    - Fixed using wide character count instead of bytes in `mdbx::slice` and `mdbx::buffer<>` methods.
     - Fixed `mdbx::buffer::reserve()` and `mdbx::buffer::assign()` for cases when buffer hold a reference to external data.
     - Fixed `mdbx::txn::extract()`, `mdbx::txn::replace()` and `mdbx::txn::replace_reserve()`.
     - Re-enabled `mdbx::buffer(std::basic_string<>, ...)` constructors.
 
  - Minors:
     - Fixed assertions triggering in specific scenarios of creating and renaming tables within nested transactions.
-    - Fixed handling a returned intermediate error codes in `meta_wipe_steady()`.
+    - Fixed handling returned intermediate error codes in `meta_wipe_steady()`.
     - Fixed UBSAN issue inside thread-local storage destructor callback when DB opened in a without-lck (exclusive read-only) mode.
     - Fixed the exit status of `mdbx_load` for specific error cases.
     - Fixed running `ctest -T memcheck` by adding workaround of CTest/CMake bugs for Valgrind parameters.
-    - Fixed/removed leftover usage of float point in `mdbx_stat` utility.
+    - Fixed/removed leftover usage of floating point in `mdbx_stat` utility.
     - Fixed `mdbx_defrag` for `-f` option handling.
     - Fixed MSVC warnings of implicit narrow type-casting.
     - Added compile-time guard for C11 atomics to avoid wrong code generation on non-x86 platforms by MSVC.
@@ -348,7 +374,7 @@ The forward-looking release with new major features and internal refactoring.
 
 ### Fixes:
 
- - Almost all of these fixes were included in previous releases of the stable branch version 0.13.x. Therefore, should not assume that these fixes are related specifically to release 0.14.2.
+ - Almost all of these fixes were included in previous releases of the stable branch version 0.13.x. Therefore, one should not assume that these fixes are related specifically to release 0.14.2.
 
  - Fixed a critical error in the `mdbx_env_resurrect_after_fork()` functionality when using SysV semaphores.
 
@@ -416,9 +442,9 @@ English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__ch
 
  - [Erigon](https://erigon.tech/) за спонсорство.
  - [Alain Picard](https://github.com/castortech) for support [Java bindings](https://github.com/castortech/mdbxjni) and MacOS universal binaries patch for CMake build scenario,
-   also for bug reporting (put-`MDBX_MULTIPLE` regression). Big thank for assistance with debugging and testing.
+   also for bug reporting (put-`MDBX_MULTIPLE` regression). Big thanks for assistance with debugging and testing.
  - [Alex Sharov](https://github.com/AskAlexSharov) за сообщение об ошибках и тестирование.
- - [Виктору Логунову](https://t.me/vl_username) за сообщение об опечатки в имени переменной в Conan-рецепте.
+ - [Виктору Логунову](https://t.me/vl_username) за сообщение об опечатке в имени переменной в Conan-рецепте.
  - [Илье Михееву](https://t.me/IlyaMkhv) за сообщение о лишнем/ненужном предупреждении несоответствия файла БД новому размеру.
  - [maxc0d3r](https://gitflic.ru/user/maxc0d3r) for bug reporting and testing.
  - [Алексею Костюку (aka Keller)](https://t.me/keller18306) за сообщения о проблеме копирования на NFS.
@@ -449,7 +475,7 @@ English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__ch
    одновременно позволяет работать новому коду обновления GC только по
    самому простому и быстрому пути.
 
-   Тем не менее, при намеренном отключении «Big Foot», либо при работы с БД
+   Тем не менее, при намеренном отключении «Big Foot», либо при работе с БД
    от старых версий движка без «Big Foot», возможны сложные ситуации, когда
    в GC могут огромные списки страниц, которые желательно дробить при
    возвращении неиспользованных переработанных остатков. В таких сценариях
@@ -577,7 +603,7 @@ English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__ch
    что существенно уменьшало накладные расходы при старте и завершении вложенных транзакций в сценариях с большим количеством курсоров.
    Однако, была допущена логическая ошибка, вследствие которой отложенная инициализация и затенение выполнялись при использовании dbi-дескрипторов, но не курсора открытого в родительской транзакции.
    В результате, родительские курсоры во вложенных транзакциях могли не затеняться, что приводило к неконсистентному состоянию в случае
-   прерывания/откате вложенной транзакции и в соответствующей таблицы были изменения в рамках прерванной вложенной транзакции.
+   прерывания/откате вложенной транзакции и в соответствующей таблице были изменения в рамках прерванной вложенной транзакции.
    Проблема не реализовывалась в тестовых сценариях и не была замечена при эксплуатации, но была обнаружена при расширении тестов.
    Ошибка присутствует в версиях 0.13.x и последующих, начиная с коммита `e6af7d7c53428ca2892bcbf7eec1c2acee06fd44` от 2023-11-05.
 
@@ -600,9 +626,9 @@ English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__ch
    курсоров в читающих и пишущих транзакций стал использоваться общий код.
    Причем за основу, был взят соответствующий фрагмент относящийся к
    пишущим транзакциям, в которых пользователю не позволяется
-   использоваться курсоры для DBI=0 и поэтому эта итераций пропускалась.
+   использоваться курсоры для DBI=0 и поэтому эта итерация пропускалась.
 
-   В результате, при завершении читающих транзакциях, курсоры связанные с
+   В результате, при завершении читающих транзакций, курсоры связанные с
    DBI=0 не завершались должным образом, а при их повторном использовании
    или явном закрытии после завершения читающей транзакции происходило
    обращение к уже освобожденной памяти. Если же такие курсоры
@@ -669,10 +695,10 @@ English version [by liar Google](https://libmdbx-dqdkfa-ru.translate.goog/md__ch
 
 2. Явная дефрагментация БД. В API будет добавлена функция с двумя парами параметров:
     - минимальный (требуемый) объём дефрагментации (уменьшения БД) и минимальное время, которое следует потратить;
-    - максимальный (ограничивающий) объём дефрагментации и максимальной время, которое допустимо потратить.
+    - максимальный (ограничивающий) объём дефрагментации и максимальное время, которое допустимо потратить.
 
     Упрощенно, алгоритмически явная дефрагментация сводится к сканированию b-tree с формированием списка страниц расположенных близко к концу БД, а затем копирование этих страниц в не-используемые, но расположенные ближе к началу БД.
-    В результате, после фиксации дефрагментирующей транзакции оригиналы скопированных страниц становятся не-используемыми, а размер БД может быть уменьшен за счет отсечения ни-используемых страниц в конце используемого пространства.
+    В результате, после фиксации дефрагментирующей транзакции оригиналы скопированных страниц становятся не-используемыми, а размер БД может быть уменьшен за счет отсечения не-используемых страниц в конце используемого пространства.
     Будет реализовано в 0.14.2.
 
 3. Нелинейная переработка GC, без остановки переработки мусора на старом MVCC-снимке используемом долгой транзакцией чтения.

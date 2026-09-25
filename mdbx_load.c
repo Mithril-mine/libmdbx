@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-16-g4983e31a at 2026-09-25T00:13:12Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -503,6 +503,7 @@ int main(int argc, char *argv[]) {
   MDBX_cursor *mc = nullptr;
   MDBX_dbi dbi;
   char *envname = nullptr;
+  char *input_file = nullptr;
   int envflags = MDBX_SAFE_NOSYNC | MDBX_ACCEDE, putflags = MDBX_UPSERT;
   bool rescue = false;
   bool purge = false;
@@ -551,11 +552,7 @@ int main(int argc, char *argv[]) {
       putflags |= MDBX_APPEND;
       break;
     case 'f':
-      if (freopen(optarg, "r", stdin) == nullptr) {
-        if (!quiet)
-          fprintf(stderr, "%s: %s: open: %s\n", prog, optarg, mdbx_strerror(errno));
-        return EXIT_FAILURE;
-      }
+      input_file = optarg;
       break;
     case 'n':
       envflags |= MDBX_NOSUBDIR;
@@ -615,8 +612,20 @@ int main(int argc, char *argv[]) {
     }
   }
 
-  if (optind != argc - 1)
-    usage();
+  if (optind != argc - 1) {
+    /* The man page promises the standard input by default and requires
+     * dbpath as the last argument. When '-f' consumed the only remaining
+     * argument as its file, treat that argument as the dbpath and fall
+     * back to stdin (issue #50). */
+    if (input_file && optind == argc) {
+      envname = input_file;
+      input_file = nullptr;
+    } else {
+      usage();
+    }
+  } else {
+    envname = argv[optind];
+  }
 
 #if IS_WINDOWS
   SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
@@ -631,7 +640,13 @@ int main(int argc, char *argv[]) {
   signal(SIGTERM, signal_handler);
 #endif /* !WINDOWS */
 
-  envname = argv[optind];
+  if (input_file) {
+    if (freopen(input_file, "r", stdin) == nullptr) {
+      if (!quiet)
+        fprintf(stderr, "%s: %s: open: %s\n", prog, input_file, mdbx_strerror(errno));
+      return EXIT_FAILURE;
+    }
+  }
   if (!quiet) {
     printf("mdbx_load %s (%s, T-%s)\nRunning for %s...\n", mdbx_version.git.describe, mdbx_version.git.datetime,
            mdbx_version.git.tree, envname);

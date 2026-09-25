@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-0-g716ce9d5 at 2026-09-18T22:53:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-16-g4983e31a at 2026-09-25T00:13:12Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 571ec970123acacadaf0d5c6322948f08060cbc5ad47e04264dfa375e0355469_v0_14_4_0_g716ce9d5
+#define MDBX_BUILD_SOURCERY d9c8b9cddff61d59e2c0ba6c3daa6ef0f1622fe50706c9b99d3f3a13e02ac7a0_v0_14_4_16_g4983e31a
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
