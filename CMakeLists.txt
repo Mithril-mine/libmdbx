@@ -1070,6 +1070,7 @@ if(MDBX_BUILD_TOOLS)
       FILES "${MDBX_SOURCE_DIR}/man1/mdbx_chk.1" "${MDBX_SOURCE_DIR}/man1/mdbx_stat.1"
             "${MDBX_SOURCE_DIR}/man1/mdbx_copy.1" "${MDBX_SOURCE_DIR}/man1/mdbx_dump.1"
             "${MDBX_SOURCE_DIR}/man1/mdbx_load.1" "${MDBX_SOURCE_DIR}/man1/mdbx_drop.1"
+            "${MDBX_SOURCE_DIR}/man1/mdbx_defrag.1"
       DESTINATION ${MDBX_MAN_INSTALL_DESTINATION}
       COMPONENT doc)
   endif()

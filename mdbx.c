@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-16-g4983e31a at 2026-09-25T00:13:12Z).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-19-g253b2d56 at 2026-10-14T12:30:50+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -25188,6 +25188,8 @@ __cold static size_t assume_ram_pages(void) {
   }
 
   size_t result = (size_t)(total_ram_pages + avail_ram_pages) / 2;
+  if (MDBX_WORDBITS < 64 && result > (SIZE_MAX >> globals.sys_pagesize_ln2))
+    result = SIZE_MAX >> globals.sys_pagesize_ln2;
   if (RUNNING_ON_ASAN)
     result >>= 1;
   if (mdbx_running_on_Valgrind())
@@ -25218,9 +25220,11 @@ __cold static size_t mmap_limit(void) {
 __cold static size_t reasonable_db_maxsize(void) {
   ASSERT(globals.assume_ram_pages > 0 && globals.sys_pagesize_ln2 && globals.mmap_limit);
   /* Suggesting should not be more than golden ratio of the size of RAM. */
-  size_t result = (globals.assume_ram_pages * 207 >> 7) << globals.sys_pagesize_ln2;
-  if (result > globals.mmap_limit / 2)
-    result = globals.mmap_limit / 2;
+  size_t result = globals.assume_ram_pages * 207 >> 7;
+  const size_t limit = globals.mmap_limit >> (globals.sys_pagesize_ln2 + (MDBX_WORDBITS < 64));
+  if (result > limit)
+    result = limit;
+  result <<= globals.sys_pagesize_ln2;
 
   /* Round to the nearest human-readable granulation. */
   for (size_t unit = MEGABYTE; unit; unit <<= 5) {
@@ -33082,23 +33086,28 @@ bin128_t osal_guid(const MDBX_env *env) {
 const char *osal_getenv_singlethreaded(const char *name, bool secure) {
   (void)secure;
 #if IS_WINDOWS
-  /* We sure this function never calls in a multithreaded cases, since used at initialization stage only. */
-  static char buf[42];
+  /* We sure this function never calls in a multithreaded cases, since used at initialization stage only.
+   * NB: values longer than the previous fixed 42-byte buffer (e.g. long build paths via MDBX_PROBE_CTL)
+   * were silently rejected; query the required size first and grow the static buffer accordingly. */
+  static char *buf = nullptr;
   SetLastError(ERROR_OUT_OF_PAPER);
-  const size_t len = GetEnvironmentVariableA(name, buf, sizeof(buf));
-  if (len >= sizeof(buf))
-    /* no idea how to handle */
-    return nullptr;
-  if (len != 0)
-    return buf;
-  switch (GetLastError()) {
-  case ERROR_OUT_OF_PAPER:
-    return "";
-  default:
-    /* no idea to do in case of other error */
-  case ERROR_ENVVAR_NOT_FOUND:
-    return nullptr;
+  const DWORD size = GetEnvironmentVariableA(name, nullptr, 0);
+  if (size == 0) {
+    switch (GetLastError()) {
+    case ERROR_OUT_OF_PAPER:
+      return "";
+    default:
+      /* no idea to do in case of other error */
+    case ERROR_ENVVAR_NOT_FOUND:
+      return nullptr;
+    }
   }
+  buf = (char *)osal_realloc(buf, size);
+  if (!buf)
+    return nullptr;
+  if (GetEnvironmentVariableA(name, buf, size) == 0)
+    return nullptr;
+  return buf;
 #else
 #if defined(_GNU_SOURCE) && __GLIBC_PREREQ(2, 17)
   if (secure)
@@ -36075,8 +36084,16 @@ int rkl_push(rkl_t *rkl, const txnid_t id) {
       continue;
     }
     if (unlikely(id == rkl->list[i - 1])) {
-      while (++i < rkl->list_length)
-        rkl->list[i - 1] = rkl->list[i];
+      /* Откат сдвигов, сделанных при поиске места вставки: дубликат уже
+       * присутствует, вставлять не нужно. Раньше цикл начинался с ++i и
+       * недовосстанавливал один сдвинутый элемент (off-by-one), из-за чего
+       * хвост списка терялся и структура становилась невалидной
+       * (rkl_check() == false). */
+      while (i < rkl->list_length) {
+        rkl->list[i] = rkl->list[i + 1];
+        ++i;
+      }
+      ASSERT(rkl_check(rkl));
       return MDBX_RESULT_TRUE;
     }
     break;
@@ -42809,10 +42826,10 @@ __dll_export
         0,
         14,
         4,
-        16,
+        19,
         "", /* pre-release suffix of SemVer
-                                        0.14.4.16 */
-        {"2026-09-25T00:13:12Z", "1394fa52f273bce12bb6fbf072d748c3b8ab431d", "4983e31a3c6b9be5f21d0bc37550d6fbbfd20c8d", "v0.14.4-16-g4983e31a"},
+                                        0.14.4.19 */
+        {"2026-10-14T12:30:50+03:00", "a929a723a7cc6ceb25b1bae7790f770235e1fb4f", "253b2d5605129b5f4931639fffd6a3c3b0719852", "v0.14.4-19-g253b2d56"},
         sourcery};
 
 __dll_export

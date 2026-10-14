@@ -16,7 +16,8 @@ In the `master` branch, development of version v0.15 will begin, with the techni
 
 ### Improvements:
 
- - Minor clarification/refining README and doxygen API descriptons.
+ - Minor clarification/refining README and doxygen API descriptons (backport).
+ - Added the man page for the `mdbx_defrag` utility (backport).
 
 ### Fixes:
 
@@ -25,8 +26,11 @@ In the `master` branch, development of version v0.15 will begin, with the techni
  - Fixed wrong `env->incore` assertion in `gc_alloc_ex()`: the asserted state (steady point not advanced by `dxb_sync_locked()`) is legitimate on any filesystem, and on Windows `osal_check_fs_incore()` always reports not-in-core, so the assertion could never hold. It is removed and allocation falls through to the unallocated part of the file (issue #52) (backport).
  - Fixed the missed propagation of a mid-commit flush error in `iov_page()` on all platforms — a failed `iov_write()` previously reported `MDBX_SUCCESS` while the dirty page was never queued for writing, with a risk of silent data loss (backport).
  - Fixed Windows ioring corruption when committing large write-mapped durable transactions: gather segments were appended to a `WriteFileEx` single item and outstanding `WriteFileEx` writes in a mixed batch were not awaited before reading `STATUS_PENDING` as an error, which could reset the ring under a live APC and crash in `ior_wocr()` with `hEvent == NULL` (backport).
+ - Fixed an arithmetic overflow in `reasonable_db_maxsize()` on 32-bit builds on 64-bit machines with large RAM (backport).
+ - Fixed `osal_getenv_singlethreaded()` on Windows silently rejecting long environment values, e.g. long build paths via `MDBX_PROBE_CTL` (backport).
+ - Fixed an off-by-one in `rkl_push()` while rolling back a duplicate insertion: the tail of the internal list was lost, making the structure invalid. The defect was unreachable in current usage scenarios, but could be triggered by specific crafted internal sequences (backport).
+ - Fixed `MDBX_TXN_TRY` leakage into a transaction state flags (backport).
  - Fixed typos in the ChangeLog.
- - Fixed `MDBX_TXN_TRY` leakage into a transaction state flags.
 
 --------------------------------------------------------------------------------
 
