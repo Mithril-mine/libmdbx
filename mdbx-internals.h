@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 193b764e6db0bf72b801f9adab47c7eb64b016385a9bf5a1ab9988abf516a28f_v0_15_0_4_g789861bb
+#define MDBX_BUILD_SOURCERY 63c8b00f13e146b34ec7dffe5d67912ad053a2326a567ab98b2b4d2b827e4a5a_v0_15_0_54_g62f07cfe
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1285,6 +1285,7 @@ typedef pthread_mutex_t osal_fastmutex_t;
 #define osal_realloc realloc
 #define osal_free free
 #define osal_strdup strdup
+
 #endif /* Platform */
 
 #if __GLIBC_PREREQ(2, 12) || defined(__FreeBSD__) || defined(malloc_usable_size)
@@ -2538,6 +2539,20 @@ typedef union {
 #endif /* __cplusplus */
 } mdbx_atomic_uint64_t;
 
+/* Word-size atomic, i.e. 32-bit on 32-bit platforms and 64-bit on 64-bit ones.
+ * Derived from size_t so it naturally follows the address-space width: the
+ * probe-bus counters only need to track operations bounded by the address
+ * space / DB geometry, and avoiding a 64-bit RMW on 32-bit platforms keeps the
+ * instrumentation cheap. */
+typedef union {
+  volatile size_t weak;
+#if defined(__cplusplus)
+  std::atomic<size_t> c11a;
+#elif defined(MDBX_HAVE_C11ATOMICS)
+  volatile _Atomic size_t c11a;
+#endif /* MDBX_HAVE_C11ATOMICS */
+} mdbx_atomic_size_t;
+
 #ifdef MDBX_HAVE_C11ATOMICS
 
 /* Crutches for C11 atomic compiler's bugs */
@@ -3357,6 +3372,18 @@ MDBX_MAYBE_UNUSED static inline const void *env2obj(const MDBX_env *env) { retur
 #define cASSERT1(mc, expr) CHECK1_OBJ(cursor2obj(mc), expr)
 #define cASSERT2(mc, expr) CHECK2_OBJ(cursor2obj(mc), expr)
 
+/* "Deviant-caller" assertions: guard situations that are valid-but-deviant in
+ * the CALLER rather than invariant violations of the engine. In dev/test
+ * builds (MDBX_PROBES) they become controllable probe-sites (see the
+ * probe-bus block below); otherwise they reduce exactly to CHECK0(), i.e. the
+ * historical ASSERT() semantics, so dist/amalgamated builds are unchanged. */
+#ifndef DEV_ASSERT
+#define DEV_ASSERT(expr) CHECK0(expr)
+#endif
+#ifndef DEV_ASSERT_T
+#define DEV_ASSERT_T(tag, expr) CHECK0(expr)
+#endif
+
 /* --------------------------------------------------------------------------------------------------------------- */
 
 #ifndef __cplusplus
@@ -3471,6 +3498,24 @@ MDBX_MAYBE_UNUSED static inline char sanitizer_kind_of_poison(const void *addr, 
   }
   return 0;
 }
+
+/* --------------------------------------------------------------------------------------------------------------- */
+
+/* Non-probe fallbacks: keep amalgamated/dist sources compiling even though the
+ * probe-bus implementation is dev-only (cut off from the amalgamation). These
+ * are zero-cost no-ops unless MDBX_PROBES is defined. */
+#ifndef MPROBE_COLLECT
+#define MPROBE_COLLECT(name, value) ((void)(value))
+#endif
+#ifndef MPROBE_WATCH
+#define MPROBE_WATCH(name, value) ((void)(value))
+#endif
+#ifndef MPROBE_WATCH_IF
+#define MPROBE_WATCH_IF(cond, name, value) do { } while (0)
+#endif
+#ifndef MPROBE_FAULT
+#define MPROBE_FAULT(name, var) ((void)(var))
+#endif
 
 /* Test if the flags f are set in a flag word w. */
 #define F_ISSET(w, f) (((w) & (f)) == (f))

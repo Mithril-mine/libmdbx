@@ -1,0 +1,127 @@
+.\" Copyright 2015-2026 Leonid Yuriev <leo@yuriev.ru>.
+.\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
+.TH MDBX_DEFRAG 1 "2026-10-14" "MDBX 0.15"
+.SH NAME
+mdbx_defrag \- MDBX database defragmentation tool
+.SH SYNOPSIS
+.B mdbx_defrag
+[\c
+.BR \-V ]
+[\c
+.BR \-v [ v [ v [ ... ]]]]
+[\c
+.BR \-q ]
+[\c
+.BR \-1 | \-2 | \-3 | \-4 | \-5 | \-6 | \-7 | \-8 | \-9 ]
+[\c
+.BI \-t \ seconds\fR]
+[\c
+.BI \-f \ percent\fR]
+[\c
+.BI \-r \ percent\fR]
+[\c
+.BI \-s \ megabytes\fR]
+[\c
+.BR \-c ]
+[\c
+.BR \-u ]
+[\c
+.BR \-U ]
+[\c
+.BR \-h ]
+[\c
+.BR \-\-help ]
+.BR \ db_pathname
+.SH DESCRIPTION
+The
+.B mdbx_defrag
+utility performs online defragmentation of an MDBX database,
+moving pages to pack the database and reclaiming unused space.
+The database file is shrunk as pages become free, reducing its
+size on disk.
+Defragmentation proceeds in cycles while the environment is
+opened for writing; it may be limited by a number of cycles,
+a duration, or by the amount of space to be freed.
+The database remains fully usable during defragmentation,
+both for reading and for concurrent writes by other processes.
+.PP
+By default the environment is opened in exclusive/monopolistic
+read-write mode. If the environment is already used by another
+process(s), the tool falls back to cooperative mode.
+The cooperative mode could be forced by the
+.B \-c
+option.
+.PP
+Several interacting processes may run defragmentation in
+cooperative mode simultaneously; only a single one performs
+actual work at a time while the others wait for their turn.
+.PP
+Defragmentation may be interrupted by sending a signal such as
+SIGINT (Ctrl-C) to the utility. The process aborts gracefully,
+preserving the database consistency, and reports the reason of
+stopping as well as the amount of already performed work.
+.SH OPTIONS
+.TP
+.BR \-V
+Write the library version number to the standard output, and exit.
+.TP
+.BR \-v
+Produce more verbose output. Could be repeated up to 9 times for
+extra details from debug-enabled builds.
+.TP
+.BR \-q
+Be quiet; do not output anything except errors.
+.TP
+.BR \-1
+Perform a single quick defragmentation cycle without two-stage moves.
+.TP
+.BR \-2 | \-3 | \-4 | \-5 | \-6 | \-7 | \-8 | \-9
+Limit the number of defragmentation cycles to the given value.
+.TP
+.BI \-t \ seconds
+Limit the duration of defragmentation to the given number of seconds.
+.TP
+.BI \-f \ percent
+Defragment until free up the given percentage of unused space.
+The value must be in the range from 1 to 100 (100 by default).
+.TP
+.BI \-r \ percent
+Acceptable undefragmented residue in percent of the used space
+(0 by default). The value must be in the range from 1 to 100.
+.TP
+.BI \-s \ megabytes
+Preferred defragmentation step/transaction size, i.e. the maximal
+amount of pages processed per step, in megabytes.
+.TP
+.BR \-c
+Force cooperative mode while opening the environment, i.e. don't
+try to open it in exclusive/monopolistic mode.
+.TP
+.BR \-u
+Warm up the database before defragmentation via notifying the OS
+kernel of subsequent access to the database pages.
+.TP
+.BR \-U
+Warm up the database before defragmentation, notifying the OS
+kernel of subsequent access to the database pages, then forcibly
+load ones by sequential access and tries to lock database pages
+in memory.
+.TP
+.BR \-h ", " \-\-help
+Print a usage message and exit.
+.SH DIAGNOSTICS
+Exit status is zero if no errors occur.
+Errors result in a non-zero exit status and
+a diagnostic message being written to standard error.
+Successful but incomplete defragmentation (stopped due to a time
+limit, a cycles limit, a threshold or an interference with readers)
+is not considered an error, but the reason of stopping is reported.
+.SH "SEE ALSO"
+.BR mdbx_chk (1),
+.BR mdbx_copy (1),
+.BR mdbx_dump (1),
+.BR mdbx_load (1),
+.BR mdbx_drop (1),
+.BR mdbx_stat (1)
+.SH AUTHOR
+Leonid Yuriev <https://libmdbx.dqdkfa.ru>

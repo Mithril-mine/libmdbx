@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -144,7 +144,7 @@ MDBX_MAYBE_UNUSED static inline void *bcopy_4(void *const __restrict dst, const 
 
 MDBX_MAYBE_UNUSED static inline void *bcopy_8(void *const __restrict dst, const void *const __restrict src) {
   uint8_t *__restrict d = (uint8_t *)dst;
-  const uint8_t *__restrict s = (uint8_t *)src;
+  const uint8_t *__restrict s = (const uint8_t *)src;
   d[0] = s[0];
   d[1] = s[1];
   d[2] = s[2];
@@ -154,6 +154,11 @@ MDBX_MAYBE_UNUSED static inline void *bcopy_8(void *const __restrict dst, const 
   d[6] = s[6];
   d[7] = s[7];
   return d;
+}
+
+MDBX_MAYBE_UNUSED static inline void *bcopy_16(void *const __restrict dst, const void *const __restrict src) {
+  bcopy_8(dst, src);
+  return bcopy_8((uint8_t *)dst + 8, (const uint8_t *)src + 8);
 }
 
 MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline uint16_t unaligned_peek_u16(const size_t expected_alignment,
@@ -2236,7 +2241,7 @@ __cold MDBX_env_flags_t env::operate_parameters::make_flags(bool accede, bool us
   if (options.enable_validation)
     flags |= MDBX_VALIDATION;
 
-  if (mode != readonly) {
+  if (mode != env::mode::readonly) {
     if (options.nested_transactions)
       flags &= ~MDBX_WRITEMAP;
     if (reclaiming.lifo)
@@ -2482,6 +2487,45 @@ __cold env_managed::env_managed(const MDBX_STD_FILESYSTEM_PATH &pathname, const 
 
 //------------------------------------------------------------------------------
 
+__cold env_managed env_managed::open_for_recovery(const char *pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  env_managed result(create_env());
+  if (max_maps > 0)
+    error::success_or_throw(::mdbx_env_set_maxdbs(result.handle_, max_maps));
+  error::success_or_throw(::mdbx_env_open_for_recovery(result.handle_, pathname, target_meta, writeable));
+  return result;
+}
+
+__cold env_managed env_managed::open_for_recovery(const ::std::string &pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  return open_for_recovery(pathname.c_str(), target_meta, writeable, max_maps);
+}
+
+#if defined(_WIN32) || defined(_WIN64)
+__cold env_managed env_managed::open_for_recovery(const wchar_t *pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  env_managed result(create_env());
+  if (max_maps > 0)
+    error::success_or_throw(::mdbx_env_set_maxdbs(result.handle_, max_maps));
+  error::success_or_throw(::mdbx_env_open_for_recoveryW(result.handle_, pathname, target_meta, writeable));
+  return result;
+}
+
+__cold env_managed env_managed::open_for_recovery(const ::std::wstring &pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  return open_for_recovery(pathname.c_str(), target_meta, writeable, max_maps);
+}
+#endif /* Windows */
+
+#ifdef MDBX_STD_FILESYSTEM_PATH
+__cold env_managed env_managed::open_for_recovery(const MDBX_STD_FILESYSTEM_PATH &pathname, unsigned target_meta,
+                                                  bool writeable, unsigned max_maps) {
+  return open_for_recovery(pathname.native(), target_meta, writeable, max_maps);
+}
+#endif /* MDBX_STD_FILESYSTEM_PATH */
+
+//------------------------------------------------------------------------------
+
 void cursor_managed::close() {
   error::success_or_throw(::mdbx_cursor_close2(handle_));
   handle_ = nullptr;
@@ -2710,7 +2754,7 @@ void cursor::update_current(const slice &value) {
   update(key, value);
 }
 
-slice cursor::reverse_current(size_t value_length) {
+slice cursor::reserve_current(size_t value_length) {
   default_buffer holder;
   auto key = current().key;
   if (error::boolean_or_throw(mdbx_is_dirty(handle_->txn, key.iov_base)))

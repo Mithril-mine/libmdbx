@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -25,32 +25,129 @@
 #define xMDBX_TOOLS /* Avoid using internal ASSERT(), etc */
 #include "mdbx-internals.h"
 
+#ifndef MDBX_TOOLS_COMMON_H
+#define MDBX_TOOLS_COMMON_H
+
+#include <signal.h>
+#include <stdio.h>
+#include <string.h>
+
+#if IS_WINDOWS
+
+/* Bit of madness for Windows console */
+#ifndef mdbx_strerror
+#define mdbx_strerror mdbx_strerror_ANSI2OEM
+#define mdbx_strerror_r mdbx_strerror_r_ANSI2OEM
+#endif
+
+static volatile BOOL user_break;
+static BOOL WINAPI ConsoleBreakHandlerRoutine(DWORD dwCtrlType) {
+  (void)dwCtrlType;
+  user_break = user_break ? 2 : 1;
+  return true;
+}
+
+static inline void tool_break_setup(void) { SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true); }
+
+#else /* !IS_WINDOWS */
+
+static volatile sig_atomic_t user_break;
+static void signal_handler(int sig) {
+  (void)sig;
+  user_break = user_break ? 2 : 1;
+}
+
+static inline void tool_break_setup(void) {
+#ifdef SIGPIPE
+  signal(SIGPIPE, signal_handler);
+#endif
+#ifdef SIGHUP
+  signal(SIGHUP, signal_handler);
+#endif
+  signal(SIGINT, signal_handler);
+  signal(SIGTERM, signal_handler);
+}
+
+#endif /* IS_WINDOWS */
+
+/* Returns true if `-h` or `--help` was requested anywhere in the command
+ * line, while honoring the options that consume an argument (per `optstring`),
+ * so e.g. `-s --help` is NOT treated as a help request. */
+static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
+  bool consume_next = false;
+  for (int i = 1; i < argc; ++i) {
+    if (consume_next) {
+      consume_next = false;
+      continue;
+    }
+    const char *const arg = argv[i];
+    if (arg[0] != '-' || arg[1] == '\0')
+      continue; /* positional argument */
+    if (strcmp(arg, "--") == 0)
+      break; /* end of options */
+    if (strcmp(arg, "--help") == 0)
+      return true;
+    if (arg[1] == '-')
+      continue; /* some other long option, let getopt handle it */
+    for (size_t j = 1; arg[j] != '\0'; ++j) {
+      const char opt = arg[j];
+      if (opt == 'h')
+        return true;
+      const char *const optdef = strchr(optstring, opt);
+      if (!optdef)
+        break; /* unknown option, getopt will report it */
+      if (optdef[1] == ':') {
+        if (arg[j + 1] != '\0')
+          break; /* the rest of the cluster is the option argument */
+        consume_next = true;
+        break;
+      }
+    }
+  }
+  return false;
+}
+
+/* Uniform version banner (as printed by the `-V` option of each tool). */
+static inline void tool_version_print(const char *tool) {
+  printf("mdbx_%s version %d.%d.%d.%d\n"
+         " - source: %s %s, commit %s, tree %s\n"
+         " - anchor: %s\n"
+         " - build: %s for %s by %s\n"
+         " - flags: %s\n"
+         " - options: %s\n",
+         tool, mdbx_version.major, mdbx_version.minor, mdbx_version.patch, mdbx_version.tweak,
+         mdbx_version.git.describe, mdbx_version.git.datetime, mdbx_version.git.commit, mdbx_version.git.tree,
+         mdbx_sourcery_anchor, mdbx_build.datetime, mdbx_build.target, mdbx_build.compiler, mdbx_build.flags,
+         mdbx_build.options);
+}
+
+/* Default logger shared by the tools that do not need custom formatting. */
+MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level, const char *function, int line,
+                                                         const char *fmt, va_list args) {
+  static const char *const prefixes[] = {
+      "!!!fatal: ", // 0 fatal
+      " ! ",        // 1 error
+      " ~ ",        // 2 warning
+      "   ",        // 3 notice
+      "   //",      // 4 verbose
+  };
+  if (level >= 0 && level < MDBX_LOG_DEBUG) {
+    if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
+      fprintf(stderr, "%s", prefixes[level]);
+    vfprintf(stderr, fmt, args);
+  }
+}
+
+#endif /* MDBX_TOOLS_COMMON_H */
 #include <ctype.h>
 
 #if IS_WINDOWS
 
 /* Bit of madness for Windows console */
-#define mdbx_strerror mdbx_strerror_ANSI2OEM
-#define mdbx_strerror_r mdbx_strerror_r_ANSI2OEM
 
 #include "mdbx-wingetopt.h"
 
-static volatile BOOL user_break;
-static BOOL WINAPI ConsoleBreakHandlerRoutine(DWORD dwCtrlType) {
-  (void)dwCtrlType;
-  user_break = true;
-  return true;
-}
-
-#else /* WINDOWS */
-
-static volatile sig_atomic_t user_break;
-static void signal_handler(int sig) {
-  (void)sig;
-  user_break = 1;
-}
-
-#endif /* !WINDOWS */
+#endif /* WINDOWS */
 
 #define PRINT 1
 #define GLOBAL 2
@@ -206,10 +303,10 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
   return rc;
 }
 
-static void usage(void) {
-  fprintf(stderr,
+static void usage_msg(FILE *out) {
+  fprintf(out,
           "usage: %s "
-          "[-V] [-q] [-c] [-f file] [-l] [-p] [-r] [-a|-s table] [-u|U] "
+          "[-V] [-q] [-c] [-f file] [-l] [-p] [-r] [-a|-s table] [-u|U] [-h|--help] "
           "dbpath\n"
           "  -V\t\tprint version and exit\n"
           "  -q\t\tbe quiet\n"
@@ -223,24 +320,19 @@ static void usage(void) {
           "  -s name\tdump only the specified named table\n"
           "  -u\t\twarmup database before dumping\n"
           "  -U\t\twarmup and try lock database pages in memory before dumping\n"
-          "  \t\tby default dump only the main DB\n",
+          "  \t\tby default dump only the main DB\n"
+          "  -h|--help\tprint this usage message and exit\n",
           prog);
+}
+
+static void usage(void) {
+  usage_msg(stderr);
   exit(EXIT_FAILURE);
 }
 
-static void logger(MDBX_log_level_t level, const char *function, int line, const char *fmt, va_list args) {
-  static const char *const prefixes[] = {
-      "!!!fatal: ", // 0 fatal
-      " ! ",        // 1 error
-      " ~ ",        // 2 warning
-      "   ",        // 3 notice
-      "   //",      // 4 verbose
-  };
-  if (level >= 0 && level < MDBX_LOG_DEBUG) {
-    if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
-      fprintf(stderr, "%s", prefixes[level]);
-    vfprintf(stderr, fmt, args);
-  }
+static void help(void) {
+  usage_msg(stdout);
+  exit(EXIT_SUCCESS);
 }
 
 static int equal_or_greater(const MDBX_val *a, const MDBX_val *b) {
@@ -263,6 +355,9 @@ int main(int argc, char *argv[]) {
   if (argc < 2)
     usage();
 
+  if (tool_help_requested(argc, argv, "uUaf:lnps:Vrcqh"))
+    help();
+
   while ((i = getopt(argc, argv,
                      "uU"
                      "a"
@@ -274,18 +369,14 @@ int main(int argc, char *argv[]) {
                      "V"
                      "r"
                      "c"
-                     "q")) != EOF) {
+                     "q"
+                     "h")) != EOF) {
     switch (i) {
+    case 'h':
+      help();
+      break;
     case 'V':
-      printf("mdbx_dump version %d.%d.%d.%d\n"
-             " - source: %s %s, commit %s, tree %s\n"
-             " - anchor: %s\n"
-             " - build: %s for %s by %s\n"
-             " - flags: %s\n"
-             " - options: %s\n",
-             mdbx_version.major, mdbx_version.minor, mdbx_version.patch, mdbx_version.tweak, mdbx_version.git.describe,
-             mdbx_version.git.datetime, mdbx_version.git.commit, mdbx_version.git.tree, mdbx_sourcery_anchor,
-             mdbx_build.datetime, mdbx_build.target, mdbx_build.compiler, mdbx_build.flags, mdbx_build.options);
+      tool_version_print("dump");
       return EXIT_SUCCESS;
     case 'l':
       list = true;
@@ -335,25 +426,14 @@ int main(int argc, char *argv[]) {
   if (optind != argc - 1)
     usage();
 
-#if IS_WINDOWS
-  SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
-#else
-#ifdef SIGPIPE
-  signal(SIGPIPE, signal_handler);
-#endif
-#ifdef SIGHUP
-  signal(SIGHUP, signal_handler);
-#endif
-  signal(SIGINT, signal_handler);
-  signal(SIGTERM, signal_handler);
-#endif /* !WINDOWS */
+  tool_break_setup();
 
   envname = argv[optind];
   if (!quiet) {
     fprintf(stderr, "mdbx_dump %s (%s, T-%s)\nRunning for %s...\n", mdbx_version.git.describe,
             mdbx_version.git.datetime, mdbx_version.git.tree, envname);
     fflush(nullptr);
-    mdbx_setup_debug(MDBX_LOG_NOTICE, MDBX_DBG_DONTCHANGE, logger);
+    mdbx_setup_debug(MDBX_LOG_NOTICE, MDBX_DBG_DONTCHANGE, tool_logger_default);
   }
 
   err = mdbx_env_create(&env);

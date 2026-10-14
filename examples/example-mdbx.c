@@ -1,10 +1,13 @@
-/** \file The example of using the libmdbx C API.
- * However, it is strongly recommended to use the modern C++ API, which requires less effort
- * and ensures against many bugs related to resource leaks.
- *
- * \note If you have already used Berkeley DB,
- * it will be useful to make a line-by-line comparison of this example and the sample-bdb.txt
- */
+// EN: The example of using the libmdbx C API.
+// EN: However, it is strongly recommended to use the modern C++ API, which requires less
+// EN: effort and ensures against many bugs related to resource leaks.
+// EN: Note: If you have already used Berkeley DB, it will be useful to make a line-by-line
+// EN: comparison of this example and the sample-bdb.txt file.
+// RU: Пример использования C API libmdbx.
+// RU: Однако настоятельно рекомендуется использовать современный C++ API: он требует меньше
+// RU: усилий и защищает от многих ошибок, связанных с утечками ресурсов.
+// RU: Примечание: если вы уже использовали Berkeley DB, полезно сделать построчное сравнение
+// RU: этого примера и файла sample-bdb.txt.
 
 /*
  * Copyright 2015-2026 Leonid Yuriev <leo@yuriev.ru>.
@@ -87,11 +90,17 @@ int main(int argc, char *argv[]) {
     goto bailout;
   }
 
-  /* This deletion is not necessary, but it has been added here for full reproducibility of the conditions when running
-   * this example again as a simplest test. */
+  // EN: This deletion is not necessary, but it has been added here for full reproducibility
+  // EN: of the conditions when running this example again as a simplest test.
+  // RU: Это удаление не обязательно, но добавлено здесь для полной воспроизводимости
+  // RU: условий при повторном запуске примера в качестве простейшего теста.
   rc = mdbx_env_delete("./example-db", MDBX_ENV_JUST_DELETE);
-  if (rc != /* file was successfully deleted */ MDBX_SUCCESS &&
-      rc != /* nothing has been done because the file is missing */ MDBX_RESULT_TRUE) {
+  // EN: file was successfully deleted
+  // RU: файл успешно удалён
+  if (rc != MDBX_SUCCESS &&
+      // EN: nothing has been done because the file is missing
+      // RU: ничего не сделано, потому что файла нет
+      rc != MDBX_RESULT_TRUE) {
     fprintf(stderr, "mdbx_env_delete: (%d) %s\n", rc, mdbx_strerror(rc));
     goto bailout;
   }

@@ -31,13 +31,22 @@ if(NOT DEFINED ENABLE_MEMCHECK)
 endif()
 
 include(CheckLibraryExists)
-check_library_exists(gcov __gcov_flush "" HAVE_GCOV)
+check_library_exists(gcov __gcov_dump "" HAVE_GCOV)
+if(NOT HAVE_GCOV)
+  # __gcov_flush was the pre-GCC-7 entry point; __gcov_dump replaced it.
+  check_library_exists(gcov __gcov_flush "" HAVE_GCOV)
+endif()
 
 option(ENABLE_GCOV "Enable integration with gcov, a code coverage program" OFF)
 
 option(ENABLE_GPROF "Enable integration with gprof, a performance analyzing tool" OFF)
 
 option(ENABLE_DTRACE "Enable using DTrace dynamic tracing framework" OFF)
+
+option(ENABLE_SYSTEMTAP "Enable using SystemTap USDT probes (requires <sys/sdt.h>)" OFF)
+
+option(ENABLE_LTTNG
+       "Enable LTTng-UST tracepoints for MPROBE_COLLECT/WATCH (Linux, managed-testing)" OFF)
 
 option(ENABLE_ASAN "Enable AddressSanitizer, a fast memory error detector based on compiler instrumentation" OFF)
 
@@ -54,6 +63,17 @@ if(ENABLE_MEMCHECK)
   endif()
   if(NOT HAVE_VALGRIND_MEMCHECK_H)
     message(FATAL_ERROR "${MEMCHECK_OPTION_NAME} option is set but valgrind/memcheck.h is not found")
+  endif()
+endif()
+
+if(ENABLE_DTRACE OR ENABLE_SYSTEMTAP)
+  include(CheckIncludeFile)
+  check_include_file(sys/sdt.h HAVE_SYS_SDT_H)
+  if(NOT HAVE_SYS_SDT_H)
+    message(FATAL_ERROR
+            "DTrace/SystemTap probes are enabled but <sys/sdt.h> was not found "
+            "(install systemtap-sdt-dev on Debian/Ubuntu, systemtap-sdt-devel on Fedora, "
+            "or disable ENABLE_DTRACE/ENABLE_SYSTEMTAP)")
   endif()
 endif()
 

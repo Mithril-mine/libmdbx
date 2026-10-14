@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.15.0-4-g789861bb at 2026-09-24T13:41:28Z).
+/** This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -2875,6 +2875,10 @@ MDBX_DEPRECATED LIBMDBX_INLINE_API(int, mdbx_env_stat, (const MDBX_env *env, MDB
  * \ingroup c_statinfo
  * \see mdbx_env_info_ex() */
 struct MDBX_envinfo {
+  /* TODO: add st_nlink (filesystem link count of the database file) into
+   * MDBX_envinfo — needed to detect unlink() of the database from under a
+   * live process (used by shared-graph-memory module via mdbx_env_get_fd +
+   * fstat). */
   struct {
     uint64_t lower;   /**< Lower limit for datafile size */
     uint64_t upper;   /**< Upper limit for datafile size */

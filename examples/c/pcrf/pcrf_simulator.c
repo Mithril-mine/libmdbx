@@ -93,17 +93,20 @@ static void db_connect() {
   MDBX_CHECK(mdbx_env_set_geometry(env, 0, 0, REC_COUNT * sizeof(session_data_t) * 10, -1, -1, -1));
   MDBX_CHECK(mdbx_env_set_maxdbs(env, 30));
   MDBX_CHECK(
-      mdbx_env_open(env, opt_db_path, MDBX_CREATE | MDBX_WRITEMAP | MDBX_UTTERLY_NOSYNC | MDBX_LIFORECLAIM, 0664));
+      mdbx_env_open(env, opt_db_path, MDBX_WRITEMAP | MDBX_UTTERLY_NOSYNC | MDBX_LIFORECLAIM, 0664));
   MDBX_txn *txn;
 
-  // transaction init
+  // EN: transaction init
+  // RU: инициализация транзакции
   MDBX_CHECK(mdbx_txn_begin(env, NULL, 0, &txn));
-  // open database in read-write mode
+  // EN: open database in read-write mode
+  // RU: открытие БД в режиме чтения-записи
   MDBX_CHECK(mdbx_dbi_open(txn, "session", MDBX_CREATE, &dbi_session));
   MDBX_CHECK(mdbx_dbi_open(txn, "session_id", MDBX_CREATE, &dbi_session_id));
   MDBX_CHECK(mdbx_dbi_open(txn, "event", MDBX_CREATE, &dbi_event));
   MDBX_CHECK(mdbx_dbi_open(txn, "ip", MDBX_CREATE, &dbi_ip));
-  // transaction commit
+  // EN: transaction commit
+  // RU: фиксация транзакции
   MDBX_CHECK(mdbx_txn_commit(txn));
   printf("Connection open\n");
 }
@@ -116,7 +119,8 @@ static void create_record(uint64_t record_id) {
   event_data_t event;
   MDBX_txn *txn;
   session_data_t data;
-  // transaction init
+  // EN: transaction init
+  // RU: инициализация транзакции
   snprintf(data.session_id1, sizeof(data.session_id1), "prefix%02u_%02u.fill.fill.fill.fill.fill.fill;%" PRIu64,
            (unsigned)(record_id % 3) + 1, (unsigned)(record_id % 9) + 1, record_id);
   snprintf(data.session_id2, sizeof(data.session_id2), "dprefix%" PRIu64 ";%" PRIu64 ".fill.fill.;suffix", record_id,
@@ -149,7 +153,8 @@ static void create_record(uint64_t record_id) {
   mdbx_key_size += (_obj_id_rec.iov_len + _session_id1_rec.iov_len + _session_id2_rec.iov_len + _ip_rec.iov_len +
                     _event_rec.iov_len);
 
-  // transaction commit
+  // EN: transaction commit
+  // RU: фиксация транзакции
   mdbx_add_count++;
   mdbx_add_time += (getClockUs() - start);
 }
@@ -162,18 +167,22 @@ static void delete_record(int64_t record_id) {
   event_data_t event;
   MDBX_txn *txn;
 
-  // transaction init
+  // EN: transaction init
+  // RU: инициализация транзакции
   uint64_t start = getClockUs();
   MDBX_CHECK(mdbx_txn_begin(env, NULL, 0, &txn));
-  // open database in read-write mode
+  // EN: open database in read-write mode
+  // RU: открытие БД в режиме чтения-записи
   MDBX_CHECK(mdbx_dbi_open(txn, "session", MDBX_CREATE, &dbi_session));
   MDBX_CHECK(mdbx_dbi_open(txn, "session_id", MDBX_CREATE, &dbi_session_id));
   MDBX_CHECK(mdbx_dbi_open(txn, "event", MDBX_CREATE, &dbi_event));
   MDBX_CHECK(mdbx_dbi_open(txn, "ip", MDBX_CREATE, &dbi_ip));
-  // put data
+  // EN: put data
+  // RU: запись данных
   MDBX_val _obj_id_rec = {&record_id, sizeof(record_id)};
   MDBX_val _data_rec;
-  // get data
+  // EN: get data
+  // RU: чтение данных
   MDBX_CHECK(mdbx_get(txn, dbi_session, &_obj_id_rec, &_data_rec));
   session_data_t *data = (session_data_t *)_data_rec.iov_base;
 
@@ -193,7 +202,8 @@ static void delete_record(int64_t record_id) {
   mdbx_key_size -= (_obj_id_rec.iov_len + _session_id1_rec.iov_len + _session_id2_rec.iov_len + _ip_rec.iov_len +
                     _event_rec.iov_len);
 
-  // transaction commit
+  // EN: transaction commit
+  // RU: фиксация транзакции
   MDBX_CHECK(mdbx_txn_commit(txn));
   mdbx_del_count++;
   mdbx_del_time += (getClockUs() - start);

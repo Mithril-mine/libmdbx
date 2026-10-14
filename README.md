@@ -12,13 +12,13 @@ _libmdbx_ is an extremely fast, compact, powerful, embedded, transactional [key-
 
 3. Requires **no maintenance and no crash recovery** since it doesn't use [WAL](https://en.wikipedia.org/wiki/Write-ahead_logging), but that might be a caveat for write-intensive workloads with durability requirements.
 
-4. Enforces [serializability](https://en.wikipedia.org/wiki/Serializability) for writers just by single [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion) and affords [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) for parallel readers without atomic/interlocked operations, while **writing and reading transactions do not block each other**.
+4. Enforces [serializability](https://en.wikipedia.org/wiki/Serializability) for writers through a single [mutex](https://en.wikipedia.org/wiki/Mutual_exclusion) and affords [wait-free](https://en.wikipedia.org/wiki/Non-blocking_algorithm#Wait-freedom) for parallel readers without atomic/interlocked operations, while **writing and reading transactions do not block each other**.
 
 5. **Guarantees data integrity** after crash unless this was explicitly neglected in favour of write performance.
 
-6. Supports Linux, Windows, MacOS, Harmony, Android, iOS, FreeBSD, DragonFly, Solaris, OpenSolaris, OpenIndiana, NetBSD, OpenBSD and other systems compliant with **POSIX.1-2008**.
+6. Supports Linux, Windows, MacOS, Harmony, Android, iOS, FreeBSD, DragonFly BSD, Solaris, OpenSolaris, OpenIndiana, NetBSD, OpenBSD and other systems compliant with **POSIX.1-2008**.
 
-7. **Compact and friendly for fully embedding**. Just a few flat source code files. Here no internal threads nor server process(es), but implements core part of the [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB) API with many powerful extensions.
+7. **Compact and friendly for full embedding**. Just a few flat source code files. Here no internal threads nor server process(es), but implements the core of the [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB) API with many powerful extensions.
 
 <!-- section-end -->
 
@@ -26,7 +26,7 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the legen
 
 [![Telegram: Support | Discussions | News](https://img.shields.io/endpoint?color=scarlet&logo=telegram&label=Support%20%7C%20Discussions%20%7C%20News&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flibmdbx)](https://t.me/libmdbx)
 
-> Please rely on  the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/doxygen/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/doxygen/group__c__api.html) API, etc.
+> Please rely on  the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__api.html) API, etc.
 
 -----
 
@@ -44,11 +44,11 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the legen
 
 - Range lookups, including range query estimation.
 
-- Efficient support for short fixed length keys, including native 32/64-bit integers.
+- Efficient support for short fixed-length keys, including native 32/64-bit integers.
 
 - Ultra-efficient support for [multimaps](https://en.wikipedia.org/wiki/Multimap). Multi-values sorted, searchable and iterable. Keys stored without duplication.
 
-- Data is [memory-mapped](https://en.wikipedia.org/wiki/Memory-mapped_file) and accessible directly/zero-copy. In-memory fullscan of database records is extremely-fast.
+- Data is [memory-mapped](https://en.wikipedia.org/wiki/Memory-mapped_file) and accessible directly/zero-copy. In-memory full-scan of database records is extremely fast.
 
 - Transactions for readers and writers, ones do not block others.
 
@@ -64,7 +64,7 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the legen
 
 - `O(log N)` cost of lookup, insert, update, and delete operations by virtue of [B+ tree characteristics](https://en.wikipedia.org/wiki/B%2B_tree#Characteristics).
 
-- Improbably fast and robust get(key) operations [accelerated by shareable lockfree cache](https://libmdbx.dqdkfa.ru/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353).
+- Improbably fast and robust get(key) operations [accelerated by a shareable lock-free cache](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353).
 
 - Online hot backup.
 
@@ -97,19 +97,32 @@ Thus syncing data to disk might be a bottleneck for write-intensive workloads.
 
 * _libmdbx_ uses [copy-on-write](https://en.wikipedia.org/wiki/Copy-on-write) for [snapshot isolation](https://en.wikipedia.org/wiki/Snapshot_isolation) during updates, but a read transaction prevents recycling of retired/freed pages while it is still reading them.
 Thus altering of data during a parallel long-lived read operation will increase the process work set, may exhaust entire free database space, the database can grow quickly, and result in performance degradation.
-Try to avoid long running read transactions, otherwise use [transaction parking](https://libmdbx.dqdkfa.ru/group__c__transactions.html#ga2c2c97730ff35cadcedfbd891ac9b12f)
-and/or [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6).
+Try to avoid long running read transactions, otherwise use [transaction parking](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#ga2c2c97730ff35cadcedfbd891ac9b12f)
+and/or [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6).
 
 * _libmdbx_ is extraordinarily fast and provides minimal overhead for data access, so you should reconsider using brute force techniques and double check your code.
 On the one hand, in the case of _libmdbx_, a simple linear search may be more profitable than complex indexes.
 On the other hand, if you make something suboptimally, you can notice its detrimental effect only on sufficiently large data.
+
+## Durability and synchronization modes
+
+_libmdbx_ provides a set of trade-offs between durability and write performance, selected per environment via `mdbx_env_set_option()`:
+
+| Mode | DB data synced to disk | Meta-page synced | Survives OS crash | Survives power loss |
+| --- | --- | --- | --- | --- |
+| `MDBX_DURABLE` (default) | each commit | each commit | yes | yes |
+| `MDBX_NOMETASYNC` | each commit | no | yes | last commits may roll back |
+| `MDBX_SAFE_NOSYNC` | lazy (thresholds/timeout) | lazy | yes | recent commits may be lost, integrity guaranteed |
+| `MDBX_UTTERLY_NOSYNC` | no explicit sync | no | no | possible corruption (matches LMDB `MDB_NOSYNC`) |
+
+In addition, `MDBX_WRITEMAP` maps data pages and writes through `mmap`, which can be combined with the modes above (typically with `MDBX_NOMETASYNC`) to reduce data copying at the cost of more memory-mapped I/O. See the [API reference](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__opening.html) for the exact semantics.
 
 ## Comparison with other databases
 For now please refer to [chapter of "BoltDB comparison with other databases"](https://github.com/coreos/bbolt#comparison-with-other-databases) which is also (mostly) applicable to _libmdbx_ with minor clarification:
  - a database could be shared by multiple processes, i.e. no multi-process issues;
  - no issues with moving a cursor(s) after the deletion;
  - _libmdbx_ provides zero-overhead database compactification, so a database file could be shrunk/truncated in particular cases;
- - excluding disk I/O time _libmdbx_ could be ≈3 times faster than BoltDB and up to 10-100K times faster than both BoltDB and LMDB in particular extreme cases;
+ - excluding disk I/O time _libmdbx_ could be ≈3 times faster than BoltDB and up to 10–100,000× faster than both BoltDB and LMDB in specific edge cases;
  - _libmdbx_ provides even more features compared to BoltDB and/or LMDB.
 
 <!-- section-end -->
@@ -138,7 +151,7 @@ Usage
 
 <!-- section-begin usage -->
 
-Since December 2025 _libmdbx_ is available only in an amalgamated source code form like [SQLite](https://www.sqlite.org/amalgamation.html), without additional dependencies and internal resources needed only for development of _libmdbx_ itself. Package support for common Linux distributions is planned in the future, since release the version `1.0`.
+Since December 2025 _libmdbx_ is available only in an amalgamated source code form like [SQLite](https://www.sqlite.org/amalgamation.html), without additional dependencies and internal resources needed only for development of _libmdbx_ itself. Package support for common Linux distributions is planned in the future, after the `1.0` release.
 
 The source code is available on [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and mirror on [GitHub](https://github.com/Mithril-mine/libmdbx).
 Please use the `stable` branch or the latest release for production environments through staging, and the `master` branch for development of derivative projects.
@@ -199,7 +212,7 @@ As a rule on BSD and its derivatives the default is to use Berkeley Make and [Ba
 So you need to install the required components: GNU Make, Bash, C and C++ compilers compatible with GCC or CLANG. After that, to build the library, it is enough to execute `gmake all` (or `make all`) in the directory with source code, and `gmake check` (or `make check`) to run the basic tests.
 
 ### Windows
-To build _libmdbx_ on Windows the _original_ CMake and [Microsoft Visual Studio 2019](https://en.wikipedia.org/wiki/Microsoft_Visual_Studio) are recommended. Please use the recent versions of CMake, Visual Studio and Windows SDK to avoid troubles with C11 support and `alignas()` feature.
+To build _libmdbx_ on Windows the _original_ CMake and [Microsoft Visual Studio 2019 or 2022](https://en.wikipedia.org/wiki/Microsoft_Visual_Studio) are recommended. Please use the recent versions of CMake, Visual Studio and Windows SDK to avoid troubles with C11 support and `alignas()` feature.
 
 To build with MinGW the 10.2 or recent version coupled with a modern CMake are required. So it is recommended to use [chocolatey](https://chocolatey.org/) to install and/or update the ones.
 
@@ -230,6 +243,16 @@ To build _libmdbx_ for iOS, please use CMake with the ["toolchain file"](https:/
 
 Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers.
 
+## Textbook
+
+A complete practical guide to libmdbx — six volumes from the first steps to expert topics and bindings — is available online in [Russian](https://libmdbx.dqdkfa.ru/docs/textbook/ru/) and [English](https://libmdbx.dqdkfa.ru/docs/textbook/en/); each online version links a downloadable PDF.
+
+The textbook's source (markdown, in `docs/textbook/ru` and `docs/textbook/en`) and all code examples (`examples/` — compilable C11/C++17 programs, exercised by CTest) are part of this repository. Both localizations are built into HTML + PDF with `make books` (requires `pip install mkdocs mkdocs-material mkdocs-with-pdf`).
+
+## Contributing
+
+Contributions are welcome. The project uses [CMake](https://cmake.org/)+[CTest](https://cmake.org/cmake/help/latest/module/CTest.html) for building and testing and [LLVM](https://llvm.org/) code style; build support for at least Linux and Windows is expected for any change. Please keep the amalgamated build green (`make dist`), avoid enabling link-time optimization in test builds, and add/update tests together with your change. For the project structure, build details and workflows, see `docs/` and the [home site](https://libmdbx.dqdkfa.ru).
+
 --------------------------------------------------------------------------------
 
 <!-- section-begin history -->
@@ -257,7 +280,7 @@ Martin Hedenfalk <martin@bzero.se> is the author of `btree.c` code, which was us
 Improvements beyond LMDB
 ========================
 
-_libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of features and reliability, not inferior in performance. In comparison to _LMDB_, _libmdbx_ makes things "just work" perfectly and out-of-the-box, not silently and catastrophically break down. The list below is pruned down to the improvements most notable and obvious from the user's point of view.
+_libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of features and reliability, not inferior in performance. In comparison to _LMDB_, _libmdbx_ makes things "just work" perfectly and out-of-the-box, not silently and catastrophically break down. The list below is reduced to the improvements most notable and obvious from the user's point of view.
 
 ## Some Added Features
 
@@ -267,11 +290,11 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 * Up to 30% faster than _LMDB_ in [CRUD](https://en.wikipedia.org/wiki/Create,_read,_update_and_delete) benchmarks.
    > Benchmarks of the in-[tmpfs](https://en.wikipedia.org/wiki/Tmpfs) scenarios, that tests the speed of the engine itself, showed that _libmdbx_ 10-20% faster than _LMDB_, and up to 30% faster when _libmdbx_ compiled with specific build options which downgrades several runtime checks to match LMDB behaviour.
    >
-   > However, libmdbx may be slower than LMDB on Windows, since it uses native file locking API. These locks are really slow, but they prevent an inconsistent backup from being obtained by copying the DB file during an ongoing write transaction. So I think this is the right decision, and for speed, it's better to use Linux, or ask Microsoft to fix up file locks.
+   > However, libmdbx may be slower than LMDB on Windows, since it uses the native file-locking API. These locks are really slow, but they prevent an inconsistent backup from being obtained by copying the DB file during an ongoing write transaction. So I think this is the right decision, and for speed, it's better to use Linux, or ask Microsoft to fix up file locks.
    >
-   > Noted above and other results could be easily reproduced with [ioArena](https://sourcecraft.dev/dqdkfa/ioarena) just by `make bench-quartet` command, including comparisons with [RocksDB](https://en.wikipedia.org/wiki/RocksDB) and [WiredTiger](https://en.wikipedia.org/wiki/WiredTiger).
+   > Noted above and other results could be easily reproduced with [ioArena](https://sourcecraft.dev/dqdkfa/ioarena) by running the `make bench-quartet` command, including comparisons with [RocksDB](https://en.wikipedia.org/wiki/RocksDB) and [WiredTiger](https://en.wikipedia.org/wiki/WiredTiger).
 
-* Automatic on-the-fly database size adjustment, both increment and reduction.
+* Automatic on-the-fly database size adjustment, both growth and truncation.
    > _libmdbx_ manages the database size according to parameters specified by `mdbx_env_set_geometry()` function, which include the growth step and the truncation threshold.
    >
    > Unfortunately, on-the-fly database size adjustment doesn't work under [Wine](https://en.wikipedia.org/wiki/Wine_(software)) due to its internal limitations and unimplemented functions, i.e. the `MDBX_UNABLE_EXTEND_MAPSIZE` error will be returned.
@@ -284,10 +307,10 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 
 * The "Big Foot" feature that solves specific performance issues with huge transactions and extra-large page-number-lists.
 
-* LIFO policy for Garbage Collection recycling. This can significantly increase write performance due to write-back disk cache up to several times in a best case scenario.
+* LIFO policy for Garbage Collection recycling. Thanks to the write-back disk cache, this can multiply write performance several times in the best case.
    > LIFO means that the most recently unused pages will be taken for reuse. Therefore the loop of database pages circulation becomes as short as possible. In other words, the set of pages, that are (over)written in memory and on disk during a series of write transactions, will be as small as possible. This creates ideal conditions for the battery-backed or flash-backed disk cache efficiency.
 
-* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6) to resolve issues due to long-lived read transactions.
+* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6) to resolve issues due to long-lived read transactions.
 
 * Fast estimation of range query result volume, i.e. how many items can be found between a `KEY1` and a `KEY2`. This is a prerequisite for building and/or optimizing query execution plans.
    > _libmdbx_ performs a rough estimate based on the common B-tree pages along the paths from root to corresponding keys.
@@ -299,25 +322,25 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 * Extended information about the whole database, tables/sub-databases, transactions, readers enumeration.
     > _libmdbx_ provides a lot of information, including dirty and leftover pages for a write transaction, reading lag and holdover space for read transactions.
 
-* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353) with lightweight transparent cache that can provide dramatic acceleration in many cases.
+* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353) with lightweight transparent cache that can provide dramatic acceleration in many cases.
 
-* [Cloning a read transaction](https://libmdbx.dqdkfa.ru/group__c__transactions.html#ga28d3db2426df24b16c0bc40cd0af8187) and [resurrect after fork](https://libmdbx.dqdkfa.ru/group__c__extra.html#gab7d13c1dbf074bc23ebda2d886add02a) features.
+* [Cloning a read transaction](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#ga28d3db2426df24b16c0bc40cd0af8187) and [resurrection after fork](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__extra.html#gab7d13c1dbf074bc23ebda2d886add02a) features.
 
 * Automated steady sync-to-disk upon several thresholds and/or timeout via cheap polling.
 
 * Extended update and quick delete operations.
-    > _libmdbx_ allows [getting the previous value](https://libmdbx.dqdkfa.ru/group__c__crud.html#gaad688c4b0fbbcff676f181dc0437befa) _at once_ when updating, and addressing the particular item of a multi-value with the same key.
-    > _libmdbx_ supports [massive deletion by bunches](https://libmdbx.dqdkfa.ru/group__c__crud.html#gac986d35a3b6b27ac43af881c471a6878) of adjacent elements much faster by cutting off entire pages and branches from a B-tree.
+    > _libmdbx_ allows [getting the previous value](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#gaad688c4b0fbbcff676f181dc0437befa) _at once_ when updating, and addressing the particular item of a multi-value with the same key.
+    > _libmdbx_ supports [massive deletion by bunches](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#gac986d35a3b6b27ac43af881c471a6878) of adjacent elements much faster by cutting out entire pages and branches from a B-tree.
 
 * Ability to determine whether the particular data is on a dirty page or not, which allows avoiding copy-out before updates.
 
-* Sequence generation and three persistent 64-bit vector-clock like markers.
+* Sequence generation and three persistent 64-bit vector-clock-like markers.
 
 * Useful runtime options for tuning the engine to the application's requirements and use cases.
 
 ## Other fixes and specifics
 
-* Fixed more than a dozen bugs, many of which are still present in LMDB, in particular: page leaks, wrong table/sub-database statistics, segfaults in several conditions, nonoptimal page merge strategy, updating an existing item with resizing data (including for a multimap), etc.
+* Fixed more than a dozen bugs, many of which are still present in LMDB, in particular: page leaks, wrong table/sub-database statistics, segfaults in several conditions, non-optimal page merge strategy, updating an existing item with resizing data (including for a multimap), etc.
 
 * All cursors can be reused and should be closed explicitly, regardless of whether they were opened within a write or read transaction.
 
@@ -325,13 +348,13 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 
 * Returning `MDBX_EMULTIVAL` error in case of ambiguous update or delete.
 
-* Guarantee of database integrity even in asynchronous unordered write-to-disk mode.
-   > _libmdbx_ proposes an additional trade-off by `MDBX_SAFE_NOSYNC` with append-like manner for updates, that avoids database corruption after a system crash contrary to LMDB.
+* Guarantee of database integrity even in asynchronous unordered write mode.
+   > _libmdbx_ proposes an additional trade-off by `MDBX_SAFE_NOSYNC` in an append-like manner for updates, that avoids database corruption after a system crash contrary to LMDB.
    > Nevertheless, the `MDBX_UTTERLY_NOSYNC` mode is available to match LMDB's behaviour for `MDB_NOSYNC`.
 
 * On **MacOS & iOS** the `fcntl(F_FULLFSYNC)` syscall is used _by default_ to synchronize data with the disk, as this is [the only way to guarantee data durability](https://developer.apple.com/library/archive/documentation/System/Conceptual/ManPages_iPhoneOS/man2/fsync.2.html) in case of power failure. Unfortunately, in scenarios with high write intensity, the use of `F_FULLFSYNC` significantly degrades performance compared to LMDB, where the `fsync()` syscall is used. Therefore, _libmdbx_ allows you to override this behavior by defining the `MDBX_OSX_SPEED_INSTEADOF_DURABILITY=1` option while building the library.
 
-* On **Windows** the `LockFileEx()` syscall is used for locking, since it allows placing the database on network drives, and provides protection against incompetent user actions (aka [poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)). Therefore _libmdbx_ may be a little lag in performance tests from LMDB where the named mutexes are used.
+* On **Windows** the `LockFileEx()` syscall is used for locking, since it allows placing the database on network drives, and provides protection against misuse (aka [poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)). Therefore _libmdbx_ may be a little lag in performance tests from LMDB where the named mutexes are used.
 
 <!-- section-end -->
 
@@ -341,7 +364,7 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 
 <!-- section-begin mithril -->
 
-The next version is under non-public development and will be released as **MithrilDB** and `libmithrildb` for libraries & packages. Admittedly mythical [Mithril](https://en.wikipedia.org/wiki/Mithril) resembles silver, but is stronger and lighter than steel. Therefore _MithrilDB_ is a rightly relevant name.
+The next version is under non-public development and will be released as **MithrilDB** and `libmithrildb` for libraries & packages. Admittedly mythical [Mithril](https://en.wikipedia.org/wiki/Mithril) resembles silver, but is stronger and lighter than steel. Therefore _MithrilDB_ is an aptly relevant name.
 
 _MithrilDB_ differs radically from _libmdbx_ in the new database format and API based on C++20. The goal of this revolution is to provide a clearer and robust API, add more features and new valuable properties of the database. All fundamental architectural problems of libmdbx/LMDB have been solved there, but now the active development has been suspended for top-three reasons:
 
@@ -349,10 +372,10 @@ _MithrilDB_ differs radically from _libmdbx_ in the new database format and API 
 2. Waiting for fresh [Elbrus CPU](https://wiki.elbrus.ru/) of [e2k architecture](https://en.wikipedia.org/wiki/Elbrus_2000), especially with hardware acceleration of [Streebog](https://en.wikipedia.org/wiki/Streebog) and [Kuznyechik](https://en.wikipedia.org/wiki/Kuznyechik), which are required for Merkle tree, etc.
 3. The expectation of needs and opportunities due to the wide use of NVDIMM (aka persistent memory), modern NVMe and [Ангара](https://ru.wikipedia.org/wiki/Ангара_(интерконнект)).
 
-However, _MithrilDB_ will not be available for countries unfriendly to Russia (i.e. acceded the sanctions, devil adepts and/or NATO). But it is not yet known whether such restriction will be implemented only through a license and support, either the source code will not be open at all. Basically I am not inclined to allow my work to contribute to the profit that goes to weapons that kill my relatives and friends. NO OPTIONS.
+However, _MithrilDB_ may not be available in jurisdictions that have imposed sanctions on Russia: I do not want my work to serve, even indirectly, purposes that I cannot accept. Whether this restriction will be implemented through licensing and support terms, or by keeping the source closed, is not yet decided. My position here is simple and firm — I will not allow my work to contribute to weapons that are used against people I care about.
 
 Nonetheless, I try not to make any promises regarding _MithrilDB_ until release.
 
-Contrary to _MithrilDB_, _libmdbx_ will forever remain free and open source. Moreover with high-quality support whenever possible. Tu deviens responsable pour toujours de ce que tu as apprivoisé. So I will continue to comply with the original open license and the principles of constructive cooperation, in spite of outright GitHub sabotage and sanctions. I will also try to keep (not drop) Windows support, despite it being an unused obsolete technology for us.
+Contrary to _MithrilDB_, _libmdbx_ will forever remain free and open source. Moreover with high-quality support whenever possible. Tu deviens responsable pour toujours de ce que tu as apprivoisé. Regardless of the earlier GitHub incident and the current sanctions, _libmdbx_ will continue to comply with the original open license and the principles of constructive cooperation. I will also keep supporting Windows, even though it is no longer a technology we use ourselves.
 
 <!-- section-end -->

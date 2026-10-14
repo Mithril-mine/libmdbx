@@ -2,7 +2,7 @@
 .\" Copyright 2015,2016 Peter-Service R&D LLC <http://billing.ru/>.
 .\" Copyright 2012-2015 Howard Chu, Symas Corp. All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
-.TH MDBX_COPY 1 "2026-07-07" "MDBX 0.14"
+.TH MDBX_COPY 1 "2026-10-14" "MDBX 0.15"
 .SH NAME
 mdbx_copy \- MDBX environment copy tool
 .SH SYNOPSIS
@@ -22,9 +22,9 @@ mdbx_copy \- MDBX environment copy tool
 [\c
 .BR \-n ]
 [\c
-.BR \-u ]
+.BR \-h ]
 [\c
-.BR \-U ]
+.BR \-\-help ]
 .B src_path
 [\c
 .BR dest_path ]
@@ -84,6 +84,9 @@ then forcibly loads ones by sequential access and tries to lock database pages i
 .BR \-n
 Open MDBX environment(s) which do not use subdirectories.
 This is legacy option. For now MDBX handles this automatically.
+.TP
+.BR \-h ", " \-\-help
+Print a usage message and exit.
 
 .SH DIAGNOSTICS
 Exit status is zero if no errors occur.
@@ -94,11 +97,12 @@ This utility can trigger significant file size growth if run
 in parallel with write transactions, because pages which they
 free during copying cannot be reused until the copy is done.
 .SH "SEE ALSO"
-.BR mdbx_dump (1),
 .BR mdbx_chk (1),
-.BR mdbx_stat (1),
-.BR mdbx_load (1)
-.BR mdbx_drop (1)
+.BR mdbx_defrag (1),
+.BR mdbx_drop (1),
+.BR mdbx_dump (1),
+.BR mdbx_load (1),
+.BR mdbx_stat (1)
 .SH AUTHOR
 Howard Chu of Symas Corporation <http://www.symas.com>,
 Leonid Yuriev <https://libmdbx.dqdkfa.ru>

@@ -101,7 +101,7 @@ WAIT         = .WAIT
 endif
 
 ifeq ($(bash_ge_4_3),1)
-STOCHASTIC   = ./tests/stochastic.sh
+STOCHASTIC   = ./tests/scripts/stochastic.sh
 else
 STOCHASTIC   = echo "Skip running stochastic script since Bash < 4.3"
 endif
@@ -152,7 +152,7 @@ HEADERS    := mdbx.h mdbx.h++
 LIBRARIES  := libmdbx.a libmdbx.$(SO_SUFFIX)
 TOOLS      := chk copy defrag drop dump load stat
 MDBX_TOOLS := $(addprefix mdbx_,$(TOOLS))
-MANPAGES   := mdbx_stat.1 mdbx_copy.1 mdbx_dump.1 mdbx_load.1 mdbx_chk.1 mdbx_drop.1
+MANPAGES   := mdbx_stat.1 mdbx_copy.1 mdbx_dump.1 mdbx_load.1 mdbx_chk.1 mdbx_drop.1 mdbx_defrag.1
 TIP        := // TIP:
 
 .PHONY: all help options lib libs tools clean install uninstall check_buildflags_tag tools-static run-ut
@@ -267,7 +267,7 @@ clean:
 		*.gcov *.log *.err src/*.o tests/*.o tests/framework/*.o tests/ut/*.o tests/issues/*.o \
 		mdbx_legacy_example mdbx_modern_example dist @dist-check \
 		config-gnumake.h src/config-gnumake.h *.tar* @buildflags.tag @dist-checked.tag \
-		mdbx_*.static mdbx_*.static-lto CMakeFiles
+		mdbx_*.static mdbx_*.static-lto CMakeFiles build/docsite build/textbook build/tmp
 
 MDBX_BUILD_FLAGS =$(strip MDBX_BUILD_CXX=$(MDBX_BUILD_CXX) $(MDBX_BUILD_OPTIONS) $(call select_by,MDBX_BUILD_CXX,$(CXXFLAGS) $(LDFLAGS) $(LIB_STDCXXFS) $(LIBS),$(CFLAGS) $(LDFLAGS) $(LIBS)))
 check_buildflags_tag:

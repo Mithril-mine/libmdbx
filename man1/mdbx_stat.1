@@ -2,7 +2,7 @@
 .\" Copyright 2015,2016 Peter-Service R&D LLC <http://billing.ru/>.
 .\" Copyright 2012-2015 Howard Chu, Symas Corp. All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
-.TH MDBX_STAT 1 "2026-07-07" "MDBX 0.14"
+.TH MDBX_STAT 1 "2026-10-14" "MDBX 0.15"
 .SH NAME
 mdbx_stat \- MDBX environment status tool
 .SH SYNOPSIS
@@ -25,6 +25,10 @@ mdbx_stat \- MDBX environment status tool
 .BR \ dbpath
 [\c
 .BR \-n ]
+[\c
+.BR \-h ]
+[\c
+.BR \-\-help ]
 .SH DESCRIPTION
 The
 .B mdbx_stat
@@ -70,6 +74,9 @@ Display the status of a specific table.
 Open an MDBX database which does not use subdirectories.
 This is legacy option. For now MDBX handles this automatically
 for existing databases, but may be required while creating new.
+.TP
+.BR \-h ", " \-\-help
+Print a usage message and exit.
 
 .SH DIAGNOSTICS
 Exit status is zero if no errors occur.
@@ -78,9 +85,10 @@ a diagnostic message being written to standard error.
 .SH "SEE ALSO"
 .BR mdbx_chk (1),
 .BR mdbx_copy (1),
+.BR mdbx_defrag (1),
+.BR mdbx_drop (1),
 .BR mdbx_dump (1),
 .BR mdbx_load (1)
-.BR mdbx_drop (1)
 .SH AUTHOR
 Howard Chu of Symas Corporation <http://www.symas.com>,
 Leonid Yuriev <https://libmdbx.dqdkfa.ru>

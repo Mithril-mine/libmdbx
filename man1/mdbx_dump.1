@@ -2,7 +2,7 @@
 .\" Copyright 2015,2016 Peter-Service R&D LLC <http://billing.ru/>.
 .\" Copyright 2014-2015 Howard Chu, Symas Corp. All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
-.TH MDBX_DUMP 1 "2026-07-07" "MDBX 0.14"
+.TH MDBX_DUMP 1 "2026-10-14" "MDBX 0.15"
 .SH NAME
 mdbx_dump \- MDBX environment export tool
 .SH SYNOPSIS
@@ -30,6 +30,10 @@ mdbx_dump \- MDBX environment export tool
 .BR \-U ]
 [\c
 .BR \-n ]
+[\c
+.BR \-h ]
+[\c
+.BR \-\-help ]
 .BR \ dbpath
 .SH DESCRIPTION
 The
@@ -85,6 +89,9 @@ then forcibly loads ones by sequential access and tries to lock database pages i
 .BR \-n
 Open an MDBX database which does not use subdirectories.
 This is legacy option. For now MDBX handles this automatically.
+.TP
+.BR \-h ", " \-\-help
+Print a usage message and exit.
 
 .SH DIAGNOSTICS
 Exit status is zero if no errors occur.
@@ -100,11 +107,12 @@ The only available workaround is to modify the source for the
 .BR mdbx_load (1)
 utility to load the database using the correct comparison functions.
 .SH "SEE ALSO"
-.BR mdbx_load (1),
-.BR mdbx_copy (1),
 .BR mdbx_chk (1),
+.BR mdbx_copy (1),
+.BR mdbx_defrag (1),
+.BR mdbx_drop (1),
+.BR mdbx_load (1),
 .BR mdbx_stat (1)
-.BR mdbx_drop (1)
 .SH AUTHOR
 Howard Chu of Symas Corporation <http://www.symas.com>,
 Leonid Yuriev <https://libmdbx.dqdkfa.ru>

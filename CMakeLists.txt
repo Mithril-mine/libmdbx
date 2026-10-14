@@ -82,7 +82,7 @@ else()
   message(
     FATAL_ERROR
       "\nThe set of libmdbx source code files is incomplete!"
-      "  Instead just follow the https://libmdbx.dqdkfa.ru/usage.html" "  PLEASE, AVOID USING ANY OTHER TECHNIQUES.")
+      "  Instead just follow the https://libmdbx.dqdkfa.ru/docs/en/getting-started/install-build.html" "  PLEASE, AVOID USING ANY OTHER TECHNIQUES.")
 endif()
 
 # Provide version
@@ -1070,6 +1070,7 @@ if(MDBX_BUILD_TOOLS)
       FILES "${MDBX_SOURCE_DIR}/man1/mdbx_chk.1" "${MDBX_SOURCE_DIR}/man1/mdbx_stat.1"
             "${MDBX_SOURCE_DIR}/man1/mdbx_copy.1" "${MDBX_SOURCE_DIR}/man1/mdbx_dump.1"
             "${MDBX_SOURCE_DIR}/man1/mdbx_load.1" "${MDBX_SOURCE_DIR}/man1/mdbx_drop.1"
+            "${MDBX_SOURCE_DIR}/man1/mdbx_defrag.1"
       DESTINATION ${MDBX_MAN_INSTALL_DESTINATION}
       COMPONENT doc)
   endif()
@@ -1243,6 +1244,7 @@ if(MDBX_ENABLE_TESTS)
   add_subdirectory(examples)
 endif()
 
+# ######################################################################################################################
 # ######################################################################################################################
 
 if(NOT SUBPROJECT)

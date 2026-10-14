@@ -1,11 +1,14 @@
-/// \copyright SPDX-License-Identifier: Apache-2.0
-/// \author Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> \date 2026
-/// \file The example of using the libmdbx modern C++ API.
+// EN: The example of using the libmdbx modern C++ API.
+// EN: Author: Leonid Yuriev <leo@yuriev.ru>, 2026.
+// RU: Пример использования современного C++ API libmdbx.
+// RU: Автор: Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru>, 2026.
+// SPDX-License-Identifier: Apache-2.0
 
 #include <iostream>
 #include <mdbx.h++>
 
-/* This is a minimal example now, which will be expanded soon. */
+// EN: This is a minimal example now, which will be expanded soon.
+// RU: Сейчас это минимальный пример, который будет расширен в ближайшее время.
 
 static void thousand(const mdbx::path &database_pathname, const mdbx::env::mode mode,
                      mdbx::env::durability durability) {
@@ -89,7 +92,9 @@ static bool doit(const mdbx::path &database_pathname) {
     size_t count = 0;
     cursor.fullscan([&](const mdbx::pair &) -> bool {
       count += 1;
-      return /* don't break but continue scanning */ false;
+      // EN: don't break but continue scanning
+      // RU: не прерывать, а продолжить сканирование
+      return false;
     });
     nested.abort();
 
