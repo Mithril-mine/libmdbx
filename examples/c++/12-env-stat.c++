@@ -28,8 +28,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 int main() {
   try {
@@ -51,16 +51,15 @@ int main() {
     // EN: analogous to mdbx_env_stat_ex()
     // RU: аналог mdbx_env_stat_ex()
     const auto stat = env.get_stat();
-    std::cout << "stat: ps=" << stat.ms_psize << " depth=" << stat.ms_depth
-              << " leaf=" << stat.ms_leaf_pages << " branch=" << stat.ms_branch_pages
-              << " overflow=" << stat.ms_overflow_pages << " entries=" << stat.ms_entries << "\n";
+    std::cout << "stat: ps=" << stat.ms_psize << " depth=" << stat.ms_depth << " leaf=" << stat.ms_leaf_pages
+              << " branch=" << stat.ms_branch_pages << " overflow=" << stat.ms_overflow_pages
+              << " entries=" << stat.ms_entries << "\n";
 
     // EN: analogous to mdbx_env_info_ex()
     // RU: аналог mdbx_env_info_ex()
     const auto info = env.get_info();
-    std::cout << "info: recent_txnid=" << info.mi_recent_txnid
-              << " latter_reader_txnid=" << info.mi_latter_reader_txnid << " geo.current=" << info.mi_geo.current
-              << "\n";
+    std::cout << "info: recent_txnid=" << info.mi_recent_txnid << " latter_reader_txnid=" << info.mi_latter_reader_txnid
+              << " geo.current=" << info.mi_geo.current << "\n";
 
     std::cout << "ok: env_stat/env_info read\n";
     return EXIT_SUCCESS;

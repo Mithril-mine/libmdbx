@@ -26,16 +26,14 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 namespace {
 
 const std::string db_path() { return std::string(example::tmpdir()) + "/config-store-04.mdbx"; }
 
-void usage() {
-  std::cerr << "usage: config-store-04 [add|set KEY VALUE | get KEY | del KEY]\n";
-}
+void usage() { std::cerr << "usage: config-store-04 [add|set KEY VALUE | get KEY | del KEY]\n"; }
 
 } // namespace
 

@@ -69,6 +69,13 @@ use standard text editors and tools to modify the contents of databases.
 Note: different systems may have different notions about what characters
 are considered printing characters, and databases dumped in this manner may
 be less portable to external systems.
+
+Note: a key or value whose first byte is a space is output escaped (as
+.B \\20
+) so the dump format stays unambiguous: a line beginning with two spaces
+would otherwise be read by
+.BR mdbx_load (1)
+as the concise repeat marker.
 .TP
 .BR \-a
 Dump all of the tables in the environment.

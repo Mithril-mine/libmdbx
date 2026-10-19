@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 63c8b00f13e146b34ec7dffe5d67912ad053a2326a567ab98b2b4d2b827e4a5a_v0_15_0_54_g62f07cfe
+#define MDBX_BUILD_SOURCERY d683f6f71a995a0e035b722818df0fe93e2cc11219eaf561b2a8045aa4c17709_v0_15_0_139_g634a8449
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -940,7 +940,11 @@ __extern_C key_t ftok(const char *, int);
 
 #if defined(__SANITIZE_ADDRESS__) && !defined(MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS)
 /* Avoid ASAN-trap due the target TLS-variable feed by Darwin's tlv_free() */
+#if defined(_MSC_VER) && !defined(__clang__)
+#define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) __declspec(no_sanitize_address)
+#else
 #define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) __attribute__((__no_sanitize_address__, __noinline__))
+#endif
 #else
 #define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) ELSEWISE
 #endif
@@ -1647,6 +1651,9 @@ MDBX_INTERNAL int osal_fileexists(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
                                 const pathchar_t *pathname, mdbx_filehandle_t *fd, mdbx_mode_t unix_mode_bits);
 MDBX_INTERNAL int osal_closefile(mdbx_filehandle_t fd);
+#if !IS_WINDOWS
+MDBX_INTERNAL key_t osal_ftok(int fd, const char *pathname);
+#endif /* !Windows */
 MDBX_INTERNAL int osal_removefile(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_removedirectory(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_is_pipe(mdbx_filehandle_t fd);
@@ -2108,7 +2115,12 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #else
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2001
 #endif
-#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__)
+#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__) ||                                  \
+    (defined(_POSIX_SEMAPHORES) && _POSIX_SEMAPHORES >= 200112L &&                                                     \
+     !defined(__OpenBSD__)) /* OpenBSD's sem_init() always fails with EPERM on pshared */
+/* Prefer POSIX shared anonymous semaphores (POSIX1988) over the legacy System V IPC
+ * (SysV) whenever the platform provides process-shared semaphores, e.g. FreeBSD and
+ * NetBSD where the pthread process-shared primitives are not usable but POSIX are. */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX1988
 #else
 #define MDBX_LOCKING MDBX_LOCKING_SYSV
@@ -2386,7 +2398,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #else
 #define MDBX_CHECKING MDBX_DEBUG
 #endif
-#elif MDBX_CHECKING < -1 || MDBX_DEBUG > 3
+#elif MDBX_CHECKING < -1 || MDBX_CHECKING > 3
 #error "The MDBX_CHECKING must be defined to -1, 0, 1, 2 or 3"
 #endif /* MDBX_CHECKING */
 
@@ -3511,7 +3523,9 @@ MDBX_MAYBE_UNUSED static inline char sanitizer_kind_of_poison(const void *addr, 
 #define MPROBE_WATCH(name, value) ((void)(value))
 #endif
 #ifndef MPROBE_WATCH_IF
-#define MPROBE_WATCH_IF(cond, name, value) do { } while (0)
+#define MPROBE_WATCH_IF(cond, name, value)                                                                             \
+  do {                                                                                                                 \
+  } while (0)
 #endif
 #ifndef MPROBE_FAULT
 #define MPROBE_FAULT(name, var) ((void)(var))

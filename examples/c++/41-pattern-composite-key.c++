@@ -31,8 +31,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 #if defined(_MSC_VER)
 #include <intrin.h>
@@ -94,8 +94,8 @@ int main() {
     // EN: Range year=2026: keys are sorted by (year, month).
     // RU: Диапазон year=2026: ключи отсортированы по (year, month).
     std::string events;
-    for (auto r = cur.to_key_greater_or_equal(mdbx::slice::wrap(pack(2026, 0)), false);
-         r && decode_year(r.key) == 2026; r = cur.to_next(false))
+    for (auto r = cur.to_key_greater_or_equal(mdbx::slice::wrap(pack(2026, 0)), false); r && decode_year(r.key) == 2026;
+         r = cur.to_next(false))
       events += "(" + std::to_string(decode_year(r.key)) + "," + std::to_string(decode_month(r.key)) + ") ";
     std::cout << "year=2026: " << events << "\n";
     rtxn.abort();

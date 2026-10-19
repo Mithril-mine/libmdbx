@@ -69,8 +69,8 @@ int main(void) {
   memset(&info, 0, sizeof(info));
   rc = mdbx_env_info_ex(env, NULL, &info, sizeof(info));
   check_rc(rc, "mdbx_env_info_ex");
-  printf("info: recent_txnid=%" PRIu64 " latter_reader_txnid=%" PRIu64 " geo.current=%zu\n",
-         info.mi_recent_txnid, info.mi_latter_reader_txnid, (size_t)info.mi_geo.current);
+  printf("info: recent_txnid=%" PRIu64 " latter_reader_txnid=%" PRIu64 " geo.current=%zu\n", info.mi_recent_txnid,
+         info.mi_latter_reader_txnid, (size_t)info.mi_geo.current);
 
   mdbx_env_close(env);
   mdbx_env_delete(path, MDBX_ENV_JUST_DELETE);

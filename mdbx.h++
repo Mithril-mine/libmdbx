@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -414,7 +414,7 @@ template <class ALLOCATOR = default_allocator>
 using string = ::std::basic_string<char, ::std::char_traits<char>, ALLOCATOR>;
 
 using filehandle = ::mdbx_filehandle_t;
-#if MDBX_USING_CXX_EXPERIMETAL_FILESYSTEM
+#if MDBX_USING_CXX_EXPERIMENTAL_FILESYSTEM
 #ifdef _MSC_VER
 namespace filesystem = ::std::experimental::filesystem::v1;
 #else
@@ -536,7 +536,7 @@ class LIBMDBX_API_TYPE exception : public ::std::runtime_error {
   ::mdbx::error error_;
 
 public:
-  exception(const ::mdbx::error &) noexcept;
+  exception(const ::mdbx::error &);
   exception(const exception &) = default;
   exception(exception &&) = default;
   exception &operator=(const exception &) = default;
@@ -683,7 +683,8 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   MDBX_CXX14_CONSTEXPR slice(slice &&src) noexcept;
 
 #if defined(DOXYGEN) || (defined(__cpp_lib_span) && __cpp_lib_span >= 202002L)
-  template <typename POD> MDBX_CXX14_CONSTEXPR slice(const ::std::span<POD> &span) : slice(span.begin(), span.end()) {
+  template <typename POD>
+  MDBX_CXX14_CONSTEXPR slice(const ::std::span<POD> &span) : slice(span.data(), span.size_bytes()) {
     static_assert(::std::is_standard_layout<POD>::value && !::std::is_pointer<POD>::value,
                   "Must be a standard layout type!");
   }
@@ -925,6 +926,8 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
 
   /// \brief Returns true if slice is not empty.
   MDBX_CXX11_CONSTEXPR operator bool() const noexcept;
+  /// \brief Same as the const version; keeps `if (s)` away from `operator MDBX_val *()`.
+  MDBX_CXX14_CONSTEXPR operator bool() noexcept { return !is_null(); }
 
   /// \brief Invalidates the slice by nullifying the data pointer while
   /// preserving the length; makes \ref is_valid() return `false` unless the
@@ -1882,7 +1885,8 @@ private:
       }
 
       constexpr bool is_inplace(const void *ptr) const noexcept {
-        return ptr != nullptr && size_t(static_cast<const byte *>(ptr) - inplace_.buffer_) < inplace_capacity();
+        /* `<=`: an empty payload may sit at the very end of the inplace storage */
+        return ptr != nullptr && size_t(static_cast<const byte *>(ptr) - inplace_.buffer_) <= inplace_capacity();
       }
 
       constexpr const byte *address() const noexcept {
@@ -1925,7 +1929,7 @@ private:
                 /* `content` may refer into the own storage, so use memmove */
                 ::std::memmove(new_place, content, length);
               else {
-                const size_t old_headroom = bin_.address() - static_cast<const byte *>(content);
+                const size_t old_headroom = static_cast<const byte *>(content) - bin_.address();
                 MDBX_INLINE_API_ASSERT(old_capacity >= old_headroom + length);
                 if (MDBX_UNLIKELY(old_headroom != wanna_headroom))
                   MDBX_CXX20_UNLIKELY ::std::memmove(new_place, content, length);
@@ -2156,7 +2160,7 @@ public:
     const auto begin_ptr = inherited::byte_ptr();
     if (MDBX_UNLIKELY(begin_ptr == nullptr))
       return false;
-    return size_t(begin_ptr - silo_begin()) < silo_.capacity();
+    return size_t(begin_ptr - silo_begin()) <= silo_.capacity();
   }
 
   /// \brief Checks whether data chunk stored in place within the buffer instance itself,
@@ -2326,6 +2330,12 @@ public:
   buffer(const void *ptr, size_t bytes, const allocator_type &alloc = allocator_type())
       : buffer(inherited(ptr, bytes), alloc) {}
 
+  /// \brief Copies `bytes` from `ptr`; keeps an integer length away from `buffer(const char *, bool)`.
+  template <typename INT, typename ::std::enable_if<::std::is_integral<INT>::value && !::std::is_same<INT, bool>::value,
+                                                    int>::type = 0>
+  MDBX_CXX20_CONSTEXPR buffer(const char *ptr, INT bytes, const allocator_type &alloc = allocator_type())
+      : buffer(static_cast<const void *>(ptr), size_t(bytes), alloc) {}
+
   /// \brief Creates a buffer that stores a copy of the string's content.
   /// The source string may be a temporary: the bytes are copied immediately,
   /// so there are no lifetime requirements (unlike mdbx::slice).
@@ -2342,16 +2352,6 @@ public:
   explicit MDBX_CXX20_CONSTEXPR buffer(const ::std::basic_string<CHAR, T, A> &str, bool make_reference,
                                        const allocator_type &alloc = allocator_type())
       : buffer(inherited(str), make_reference, alloc) {}
-
-  /// \brief Move-constructs a buffer stealing the string's storage; the source
-  /// string is left empty. Safe with temporaries (e.g. `buffer(std::to_string(k))`)
-  /// since the storage ownership is transferred within the same full-expression.
-  template <class CHAR, class T, class A>
-  explicit MDBX_CXX20_CONSTEXPR buffer(const ::std::basic_string<CHAR, T, A> &&str,
-                                       const allocator_type &alloc = allocator_type())
-      : buffer(inherited(str), false, alloc) {
-    str.clear();
-  }
 
   MDBX_CXX20_CONSTEXPR
   buffer(const char *c_str, const allocator_type &alloc = allocator_type()) : buffer(inherited(c_str), alloc) {}
@@ -2423,22 +2423,20 @@ public:
   }
 
   /// \brief Returns a new buffer with a hexadecimal dump of the given pod.
-  template <typename POD>
+  template <typename POD, typename ::std::enable_if<!::std::is_constructible<slice, const POD &>::value, int>::type = 0>
   static buffer hex(const POD &pod, bool uppercase = false, unsigned wrap_width = 0,
                     const allocator_type &alloc = allocator_type()) {
     return hex(inherited::wrap(pod), uppercase, wrap_width, alloc);
   }
 
-  /// \brief Returns a new buffer with a
-  /// [Base58](https://en.wikipedia.org/wiki/Base58) dump of the given pod.
-  template <typename POD>
+  template <typename POD, typename ::std::enable_if<!::std::is_constructible<slice, const POD &>::value, int>::type = 0>
   static buffer base58(const POD &pod, unsigned wrap_width = 0, const allocator_type &alloc = allocator_type()) {
     return base58(inherited::wrap(pod), wrap_width, alloc);
   }
 
   /// \brief Returns a new buffer with a
   /// [Base64](https://en.wikipedia.org/wiki/Base64) dump of the given pod.
-  template <typename POD>
+  template <typename POD, typename ::std::enable_if<!::std::is_constructible<slice, const POD &>::value, int>::type = 0>
   static buffer base64(const POD &pod, unsigned wrap_width = 0, const allocator_type &alloc = allocator_type()) {
     return base64(inherited::wrap(pod), wrap_width, alloc);
   }
@@ -2529,7 +2527,10 @@ public:
   /// \brief Reserves storage space for at least `size` bytes of payload,
   /// without changing the current length. STL-compatible counterpart of
   /// \ref reserve(size_t, size_t) that keeps the headroom unchanged.
-  void reserve(size_t size) { reserve(0, size > length() ? size - length() : 0); }
+  void reserve(size_t size) {
+    if (size > length() && size - length() > tailroom())
+      reserve(headroom(), size - length());
+  }
 
   buffer &assign_reference(const void *ptr, size_t bytes) {
     silo_.clear();
@@ -2600,6 +2601,16 @@ public:
     if (MDBX_LIKELY(this != &src))
       MDBX_CXX20_LIKELY {
         const auto kind = src.content_modality();
+        if (MDBX_UNLIKELY(kind == modality::reference && src.const_data() &&
+                          size_t(static_cast<const byte *>(src.const_data()) - silo_begin()) < silo_.capacity())) {
+          /* `src` refers into this buffer's own storage, which the move below would release first,
+           * so just move the bytes to the start of the storage without any (re)allocation */
+          MDBX_INLINE_API_ASSERT(static_cast<const byte *>(src.const_data()) + src.length() <= silo_end());
+          iov_base = ::std::memmove(silo_.data(), src.const_data(), src.length());
+          iov_len = src.length();
+          src.invalidate();
+          return *this;
+        }
         const auto src_headroom = src.headroom();
         const auto src_data = src.const_data();
         const auto src_length = src.length();
@@ -2617,6 +2628,12 @@ public:
 
   buffer &assign(const void *ptr, size_t bytes, bool make_reference = false) {
     return make_reference ? assign_reference(ptr, bytes) : assign_freestanding(ptr, bytes);
+  }
+
+  template <typename INT, typename ::std::enable_if<::std::is_integral<INT>::value && !::std::is_same<INT, bool>::value,
+                                                    int>::type = 0>
+  buffer &assign(const char *ptr, INT bytes, bool make_reference = false) {
+    return assign(static_cast<const void *>(ptr), size_t(bytes), make_reference);
   }
 
   buffer &assign(const struct slice &src, bool make_reference = false) {
@@ -2674,12 +2691,14 @@ public:
   buffer &operator=(struct slice &&src) { return assign(::std::move(src)); }
 
 #if defined(DOXYGEN) || (defined(__cpp_lib_string_view) && __cpp_lib_string_view >= 201606L)
-  template <class CHAR, class T> buffer &operator=(const ::std::basic_string_view<CHAR, T> &view) noexcept {
+  template <class CHAR, class T> buffer &operator=(const ::std::basic_string_view<CHAR, T> &view) {
+    /* assigning a string_view copies the bytes into owned storage, so this
+     * allocates and must be allowed to throw on out-of-memory (issue #78) */
     return assign(inherited(view));
   }
 
   template <class CHAR, class T> buffer &append(const ::std::basic_string_view<CHAR, T> &view) {
-    return append(view.begin(), view.end());
+    return append(view.data(), view.size() * sizeof(CHAR));
   }
 #endif /* __cpp_lib_string_view >= 201606L */
 
@@ -2716,7 +2735,14 @@ public:
         const bool aliased = src_ptr >= begin_ptr && src_ptr < inherited::end_byte_ptr();
         const size_t src_offset = aliased ? size_t(src_ptr - begin_ptr) : 0;
         if (MDBX_UNLIKELY(tailroom() < check_length(bytes)))
-          MDBX_CXX20_UNLIKELY reserve_tailroom(bytes);
+          MDBX_CXX20_UNLIKELY {
+            if (MDBX_UNLIKELY(!aliased && size_t(src_ptr - silo_begin()) < silo_.capacity())) {
+              /* `src` refers into the own head/tail room, which the reserve below does not preserve */
+              const buffer chunk(src, bytes, get_allocator());
+              return append(chunk.data(), chunk.size());
+            }
+            reserve_tailroom(bytes);
+          }
         ::std::memmove(end_byte_ptr(), aliased ? byte_ptr() + src_offset : src_ptr, bytes);
         iov_len += bytes;
       }
@@ -2743,7 +2769,14 @@ public:
         const bool aliased = src_ptr >= begin_ptr && src_ptr < inherited::end_byte_ptr();
         const size_t src_offset = aliased ? size_t(src_ptr - begin_ptr) : 0;
         if (MDBX_UNLIKELY(headroom() < check_length(bytes)))
-          MDBX_CXX20_UNLIKELY reserve_headroom(bytes);
+          MDBX_CXX20_UNLIKELY {
+            if (MDBX_UNLIKELY(!aliased && size_t(src_ptr - silo_begin()) < silo_.capacity())) {
+              /* `src` refers into the own head/tail room, which the reserve below does not preserve */
+              const buffer chunk(src, bytes, get_allocator());
+              return add_header(chunk.data(), chunk.size());
+            }
+            reserve_headroom(bytes);
+          }
         iov_base = ::std::memmove(byte_ptr() - bytes, aliased ? byte_ptr() + src_offset : src_ptr, bytes);
         iov_len += bytes;
       }
@@ -2757,7 +2790,12 @@ public:
     if (MDBX_LIKELY(wanna_bytes))
       MDBX_CXX20_LIKELY {
         if (MDBX_UNLIKELY(tailroom() < check_length(wanna_bytes)))
-          MDBX_CXX20_UNLIKELY reserve_tailroom(wanna_bytes);
+          MDBX_CXX20_UNLIKELY {
+            /* the producer may refer into this buffer, so produce before relocating the storage */
+            buffer chunk(wanna_bytes, get_allocator());
+            chunk.append_producer(producer);
+            return append(chunk.data(), chunk.size());
+          }
         return set_end(producer.write_bytes(end_char_ptr(), tailroom()));
       }
     return *this;
@@ -2768,7 +2806,12 @@ public:
     if (MDBX_LIKELY(wanna_bytes))
       MDBX_CXX20_LIKELY {
         if (MDBX_UNLIKELY(tailroom() < check_length(wanna_bytes)))
-          MDBX_CXX20_UNLIKELY reserve_tailroom(wanna_bytes);
+          MDBX_CXX20_UNLIKELY {
+            /* the producer may refer into this buffer, so produce before relocating the storage */
+            buffer chunk(wanna_bytes, get_allocator());
+            chunk.append_producer(producer);
+            return append(chunk.data(), chunk.size());
+          }
         return set_end(producer.write_bytes(end_char_ptr(), tailroom()));
       }
     return *this;
@@ -3071,12 +3114,10 @@ public:
   };
 
   friend MDBX_CXX14_CONSTEXPR bool operator==(const cache_entry &a, const cache_entry &b) noexcept {
-    return a.trunk_txnid == b.trunk_txnid && a.last_confirmed_txnid == b.last_confirmed_txnid &&
-           a.offset == b.offset && a.length == b.length;
+    return a.trunk_txnid == b.trunk_txnid && a.last_confirmed_txnid == b.last_confirmed_txnid && a.offset == b.offset &&
+           a.length == b.length;
   }
-  friend MDBX_CXX14_CONSTEXPR bool operator!=(const cache_entry &a, const cache_entry &b) noexcept {
-    return !(a == b);
-  }
+  friend MDBX_CXX14_CONSTEXPR bool operator!=(const cache_entry &a, const cache_entry &b) noexcept { return !(a == b); }
 };
 
 //------------------------------------------------------------------------------
@@ -3288,6 +3329,12 @@ public:
   inline env &operator=(env &&) noexcept;
   inline env(env &&) noexcept;
   inline ~env() noexcept;
+  /* Slicing an owning env_managed temporary into the base handle would drop
+   * ownership and never close the environment (issue #77), so these exact-match
+   * overloads turn `mdbx::env e = mdbx::env_managed(...);` into a compile error,
+   * while a non-owning view of an env_managed lvalue is still allowed. */
+  env(env_managed &&) = delete;
+  env &operator=(env_managed &&) = delete;
 
   MDBX_CXX14_CONSTEXPR operator bool() const noexcept { return handle_ != nullptr; };
   MDBX_CXX14_CONSTEXPR operator const MDBX_env *() const noexcept { return handle_; }
@@ -3367,7 +3414,8 @@ public:
     intptr_t pagesize{default_value};
 
     MDBX_CXX14_CONSTEXPR geometry &make_fixed(intptr_t size) noexcept;
-    MDBX_CXX14_CONSTEXPR geometry &make_dynamic(intptr_t lower = default_value, intptr_t upper = default_value) noexcept;
+    MDBX_CXX14_CONSTEXPR geometry &make_dynamic(intptr_t lower = default_value,
+                                                intptr_t upper = default_value) noexcept;
 
     /// \brief Sets the lower bound of database size in bytes.
     MDBX_CXX14_CONSTEXPR geometry &set_size_lower(intptr_t size) noexcept;
@@ -3446,9 +3494,7 @@ public:
 #if defined(__cpp_impl_three_way_comparison) && __cpp_impl_three_way_comparison >= 201907L
     friend auto operator<=>(const reclaiming_options &a, const reclaiming_options &b) = default;
 #else
-    MDBX_CXX14_CONSTEXPR bool operator==(const reclaiming_options &other) const noexcept {
-      return lifo == other.lifo;
-    }
+    MDBX_CXX14_CONSTEXPR bool operator==(const reclaiming_options &other) const noexcept { return lifo == other.lifo; }
     MDBX_CXX14_CONSTEXPR bool operator!=(const reclaiming_options &other) const noexcept { return !(*this == other); }
 #endif
 
@@ -3595,8 +3641,8 @@ public:
 #endif
 
     MDBX_NODISCARD MDBX_env_flags_t make_flags(bool accede = true, ///< Allows accepting incompatible operating options
-                                                               ///< in case the database is already being used by
-                                                               ///< another process(es) \see MDBX_ACCEDE
+                                                                   ///< in case the database is already being used by
+                                                                   ///< another process(es) \see MDBX_ACCEDE
                                                bool use_subdirectory = false ///< use subdirectory to place the DB files
     ) const;
     MDBX_NODISCARD static env::mode mode_from_flags(MDBX_env_flags_t) noexcept;
@@ -3792,7 +3838,7 @@ public:
   inline stat get_stat() const;
 
   /// \brief Returns pagesize of this MDBX environment.
-  size_t get_pagesize() const { return get_stat().ms_psize; }
+  size_t get_pagesize() const { return get_info().mi_dxb_pagesize; }
 
   /// \brief Return snapshot information about the MDBX environment.
   inline info get_info() const;
@@ -4047,9 +4093,11 @@ public:
 
   /// \brief Registers the current thread as a reader for the environment,
   /// i.e. assigns a reader slot.
-  inline void thread_register();
+  /// \returns `false` if the thread was already registered.
+  inline bool thread_register();
   /// \brief Unregisters the current thread, i.e. releases its reader slot.
-  inline void thread_unregister();
+  /// \returns `false` if the thread was not registered.
+  inline bool thread_unregister();
 
   /// \brief Loads into memory the given pages of the database and their
   /// on-disk neighbours in advance.
@@ -4209,8 +4257,8 @@ public:
   /// \throws mdbx::error on failure (other than stopping reasons above).
   /// \see ::mdbx_env_defrag()
   inline defrag_result defrag(VISITOR &visitor, size_t defrag_atleast = 0, size_t time_atleast_dot16 = 0,
-                              size_t defrag_enough = 0, size_t time_limit_dot16 = 0,
-                              intptr_t acceptable_backlash = -1, intptr_t preferred_batch = 0);
+                              size_t defrag_enough = 0, size_t time_limit_dot16 = 0, intptr_t acceptable_backlash = -1,
+                              intptr_t preferred_batch = 0);
   /// \brief Performs database defragmentation without a progress visitor.
   ///
   /// \details The same defragmentation as in the overload accepting a
@@ -4405,7 +4453,7 @@ inline MDBX_cmp_func get_datacmp(MDBX_db_flags_t flags) { return ::mdbx_get_data
 /// \see ::mdbx_setup_debug()
 inline int setup_debug(MDBX_log_level_t log_level = MDBX_LOG_DONTCHANGE,
                        MDBX_debug_flags_t debug_flags = MDBX_DBG_DONTCHANGE,
-                       MDBX_debug_func logger = nullptr) {
+                       MDBX_debug_func logger = MDBX_LOGGER_DONTCHANGE) {
   return ::mdbx_setup_debug(log_level, debug_flags, logger);
 }
 
@@ -4413,8 +4461,8 @@ inline int setup_debug(MDBX_log_level_t log_level = MDBX_LOG_DONTCHANGE,
 /// preformatted messages.
 /// \returns A non-negative value on success, or a negative error.
 /// \see ::mdbx_setup_debug_nofmt()
-inline int setup_debug_nofmt(MDBX_log_level_t log_level, MDBX_debug_flags_t debug_flags,
-                             MDBX_debug_func_nofmt logger, char *logger_buffer, size_t logger_buffer_size) {
+inline int setup_debug_nofmt(MDBX_log_level_t log_level, MDBX_debug_flags_t debug_flags, MDBX_debug_func_nofmt logger,
+                             char *logger_buffer, size_t logger_buffer_size) {
   return ::mdbx_setup_debug_nofmt(log_level, debug_flags, logger, logger_buffer, logger_buffer_size);
 }
 
@@ -4429,6 +4477,7 @@ inline void set_panic(MDBX_panic_func func) { ::mdbx_set_panic(func); }
 ///
 /// All database operations require a transaction handle. Transactions may be
 /// read-only or read-write.
+class txn_managed;
 class LIBMDBX_API_TYPE txn {
 protected:
   friend class cursor;
@@ -4442,6 +4491,15 @@ public:
   inline txn &operator=(txn &&) noexcept;
   inline txn(txn &&) noexcept;
   inline ~txn() noexcept;
+  /* The base handle must never be move-initialized from the owning
+   * txn_managed: the move would silently drop ownership, so the transaction
+   * (and for a writer, the environment's writer lock) would never be released
+   * (issue #77). The exact-match deleted overloads win over the base upcast
+   * and turn `mdbx::txn t = env.start_write();` into a compile error.
+   * Copying from an lvalue txn_managed stays allowed: the copy is a
+   * non-owning view and does not change the source's ownership. */
+  txn(txn_managed &&) = delete;
+  txn &operator=(txn_managed &&) = delete;
 
   MDBX_CXX14_CONSTEXPR operator bool() const noexcept { return handle_ != nullptr; };
   MDBX_CXX14_CONSTEXPR operator const MDBX_txn *() const noexcept { return handle_; }
@@ -4560,8 +4618,12 @@ public:
   /// \brief Unbind or close all cursors.
   inline size_t release_all_cursors(bool unbind) const;
 
-  /// \brief Close all cursors.
-  inline size_t close_all_cursors() const { return release_all_cursors(false); }
+  // TODO: пересмотреть вариант реализации при переходе на двухсвязанные
+  // списки курсоров.
+  // \brief Close all cursors.
+  // Опасный API: освобождает C-хендлы курсоров, которыми могут ещё
+  // владеть живые mdbx::cursor_managed (issue #91).
+  // inline size_t close_all_cursors() const { return release_all_cursors(false); }
 
   /// \brief Unbind all cursors.
   inline size_t unbind_all_cursors() const { return release_all_cursors(true); }
@@ -4983,6 +5045,12 @@ public:
   inline cursor &operator=(cursor &&) noexcept;
   inline cursor(cursor &&) noexcept;
   inline ~cursor() noexcept;
+  /* Slicing an owning cursor_managed temporary into the base handle would drop
+   * ownership and leak the cursor (issue #77), so these exact-match overloads
+   * turn `mdbx::cursor c = txn.open_cursor(map);` into a compile error, while
+   * a non-owning view of a cursor_managed lvalue is still allowed. */
+  cursor(cursor_managed &&) = delete;
+  cursor &operator=(cursor_managed &&) = delete;
   cursor_managed clone(void *your_context = nullptr) const;
   inline cursor &assign(const cursor &);
   MDBX_CXX14_CONSTEXPR operator bool() const noexcept { return handle_ != nullptr; };
@@ -5184,7 +5252,9 @@ public:
   move_result move(move_operation operation, const slice &key, const slice &value, bool throw_notfound) {
     return move_result(*this, operation, key, value, throw_notfound);
   }
-  bool move(move_operation operation, slice &key, slice &value, bool throw_notfound) {
+  move_result move(move_operation operation, const slice &key, const slice &value) = delete;
+  template <class SLICE, typename ::std::enable_if<::std::is_same<SLICE, slice>::value, int>::type = 0>
+  bool move(move_operation operation, SLICE &key, SLICE &value, bool throw_notfound) {
     return move(operation, &key, &value, throw_notfound);
   }
 
@@ -5413,6 +5483,20 @@ public:
   /// \brief Seeks and removes the particular multi-value entry of the key.
   /// \return `True` if the given key-value pair is found and removed.
   inline bool erase(const slice &key, const slice &value);
+
+  /// \brief Overloads for C strings, which otherwise bind to the `bool` parameters above.
+  template <typename CHARS, typename BOOL = bool,
+            typename std::enable_if<(std::is_same<CHARS, const char *>::value || std::is_same<CHARS, char *>::value) &&
+                                        std::is_same<BOOL, bool>::value,
+                                    int>::type = 0>
+  bool erase(CHARS key, BOOL whole_multivalue = true) {
+    return erase(slice(key), whole_multivalue);
+  }
+  template <size_t SIZE> bool erase(const slice &key, const char (&value)[SIZE]) { return erase(key, slice(value)); }
+  template <size_t KEY_SIZE, size_t VALUE_SIZE>
+  bool erase(const char (&key)[KEY_SIZE], const char (&value)[VALUE_SIZE]) {
+    return erase(slice(key), slice(value));
+  }
 
   /// \brief Modes for deleting bunches of neighboring items, see
   /// \ref ::MDBX_bunch_action_t(). The EXCLUDING and INCLUDING suffixes mean
@@ -5903,7 +5987,8 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_CXX14_CONSTEXPR size_t slice::find_first_of(byte
   return find_first_of(slice(&c, sizeof(c)), pos);
 }
 
-MDBX_NOTHROW_PURE_FUNCTION MDBX_CXX14_CONSTEXPR size_t slice::find_last_of(const slice &chars, size_t pos) const noexcept {
+MDBX_NOTHROW_PURE_FUNCTION MDBX_CXX14_CONSTEXPR size_t slice::find_last_of(const slice &chars,
+                                                                           size_t pos) const noexcept {
   if (MDBX_UNLIKELY(chars.empty() || empty()))
     return npos;
   if (pos >= length())
@@ -6031,7 +6116,7 @@ MDBX_CXX20_CONSTEXPR buffer<ALLOCATOR, CAPACITY_POLICY>::buffer(const struct sli
 template <class ALLOCATOR, typename CAPACITY_POLICY>
 inline buffer<ALLOCATOR, CAPACITY_POLICY>::buffer(const txn &transaction, const struct slice &src,
                                                   const allocator_type &alloc)
-    : buffer(src, !transaction.is_dirty(src.data()), alloc) {}
+    : buffer(src, src.data() && ::mdbx_is_dirty(transaction, src.data()) == MDBX_RESULT_FALSE, alloc) {}
 
 template <class ALLOCATOR, typename CAPACITY_POLICY>
 inline ::std::ostream &operator<<(::std::ostream &out, const buffer<ALLOCATOR, CAPACITY_POLICY> &it) {
@@ -6352,8 +6437,7 @@ env_managed::create_parameters &env_managed::create_parameters::set_geometry(con
 }
 
 MDBX_CXX14_CONSTEXPR
-env_managed::create_parameters &
-env_managed::create_parameters::set_file_mode_bits(mdbx_mode_t value) noexcept {
+env_managed::create_parameters &env_managed::create_parameters::set_file_mode_bits(mdbx_mode_t value) noexcept {
   file_mode_bits = value;
   return *this;
 }
@@ -6773,6 +6857,8 @@ inline unsigned env::sync_period__seconds_16dot16() const {
 }
 
 inline env &env::set_sync_period__seconds_double(double seconds) {
+  if (MDBX_UNLIKELY(!(seconds >= 0 && seconds * 65536 <= double(UINT_MAX))))
+    MDBX_CXX20_UNLIKELY error::throw_exception(MDBX_EINVAL);
   return set_sync_period__seconds_16dot16(unsigned(seconds * 65536));
 }
 
@@ -6864,7 +6950,10 @@ inline MDBX_chk_context_t &env::chk(MDBX_chk_context_t &ctx, const MDBX_chk_call
                                     MDBX_chk_severity_t verbosity, unsigned timeout_seconds_16dot16) const {
   if (!cb)
     cb = &silent_chk_callbacks;
-  error::success_or_throw(::mdbx_env_chk(handle_, cb, &ctx, flags, verbosity, timeout_seconds_16dot16));
+  const int err = ::mdbx_env_chk(handle_, cb, &ctx, flags, verbosity, timeout_seconds_16dot16);
+  /* MDBX_PROBLEM with counted problems is a check result reported in `ctx`, not a failure of the check itself */
+  if (err != MDBX_SUCCESS && !(err == MDBX_PROBLEM && ctx.result.total_problems))
+    error::throw_exception(err);
   return ctx;
 }
 
@@ -6902,9 +6991,9 @@ inline env::info env::get_preopen_snapinfo(const wchar_t *pathname) {
 }
 #endif /* Windows */
 
-inline void env::thread_register() { error::success_or_throw(::mdbx_thread_register(handle_)); }
+inline bool env::thread_register() { return !error::boolean_or_throw(::mdbx_thread_register(handle_)); }
 
-inline void env::thread_unregister() { error::success_or_throw(::mdbx_thread_unregister(handle_)); }
+inline bool env::thread_unregister() { return !error::boolean_or_throw(::mdbx_thread_unregister(handle_)); }
 
 inline int env::warmup(MDBX_warmup_flags_t flags, unsigned timeout_seconds_16dot16, const MDBX_txn *txn) const {
   return ::mdbx_env_warmup(handle_, txn, flags, timeout_seconds_16dot16);
@@ -6954,7 +7043,14 @@ inline txn_managed env::start_write(txn &parent) {
   return txn_managed(ptr);
 }
 
-inline txn_managed env::try_start_write() { return start_write(true); }
+inline txn_managed env::try_start_write() {
+  ::MDBX_txn *ptr;
+  const int err = ::mdbx_txn_begin(handle_, nullptr, MDBX_TXN_READWRITE | MDBX_TXN_TRY, &ptr);
+  if (err == MDBX_BUSY)
+    return txn_managed();
+  error::success_or_throw(err);
+  return txn_managed(ptr);
+}
 
 inline bool env::txn_lock(bool dont_wait) {
   const int err = ::mdbx_txn_lock(handle_, dont_wait);
@@ -6978,7 +7074,9 @@ inline env::defrag_result env::defrag(VISITOR &visitor, size_t defrag_atleast, s
     VISITOR &visitor_;
     static int cb(void *ctx, const MDBX_defrag_result_t *progress) noexcept {
       defrag_thunk *thunk = static_cast<defrag_thunk *>(ctx);
-      assert(thunk->is_clean());
+      if (MDBX_UNLIKELY(!thunk->is_clean()))
+        /* the C side notifies once more (final milestone) after the visitor has thrown */
+        return static_cast<int>(defrag_control::abort);
       try {
         return static_cast<int>(thunk->visitor_(*progress));
       } catch (... /* capture any exception to rethrow it over C code */) {
@@ -6990,11 +7088,10 @@ inline env::defrag_result env::defrag(VISITOR &visitor, size_t defrag_atleast, s
   };
   defrag_thunk thunk(visitor);
   defrag_result result;
-  const int rc =
-      ::mdbx_env_defrag(handle_, defrag_atleast, time_atleast_dot16, defrag_enough, time_limit_dot16,
-                        acceptable_backlash, preferred_batch, thunk.cb, &thunk, &result);
+  const int rc = ::mdbx_env_defrag(handle_, defrag_atleast, time_atleast_dot16, defrag_enough, time_limit_dot16,
+                                   acceptable_backlash, preferred_batch, thunk.cb, &thunk, &result);
   thunk.rethrow_captured();
-  if (rc != MDBX_SUCCESS && rc != MDBX_RESULT_TRUE)
+  if (rc != MDBX_SUCCESS && rc != MDBX_RESULT_TRUE && rc != MDBX_LAGGARD_READER)
     error::success_or_throw(rc);
   return result;
 }
@@ -7049,7 +7146,7 @@ inline env txn::env() const noexcept { return ::mdbx_txn_env(handle_); }
 
 inline MDBX_txn_flags_t txn::flags() const {
   const int bits = mdbx_txn_flags(handle_);
-  error::throw_on_failure((bits != -1) ? MDBX_SUCCESS : MDBX_BAD_TXN);
+  error::throw_on_failure((bits != static_cast<int>(MDBX_TXN_INVALID)) ? MDBX_SUCCESS : MDBX_BAD_TXN);
   return static_cast<MDBX_txn_flags_t>(bits);
 }
 
@@ -7108,10 +7205,10 @@ inline void txn::copy(const MDBX_STD_FILESYSTEM_PATH &destination, bool compacti
 #endif /* MDBX_STD_FILESYSTEM_PATH */
 
 inline void txn::copy(filehandle fd, bool compactify, bool force_dynamic_size) {
-  error::success_or_throw(::mdbx_txn_copy2fd(
-      handle_, fd,
-      MDBX_copy_flags_t((compactify ? MDBX_CP_COMPACT : MDBX_CP_DEFAULTS) |
-                        (force_dynamic_size ? MDBX_CP_FORCE_DYNAMIC_SIZE : MDBX_CP_DEFAULTS))));
+  error::success_or_throw(
+      ::mdbx_txn_copy2fd(handle_, fd,
+                         MDBX_copy_flags_t((compactify ? MDBX_CP_COMPACT : MDBX_CP_DEFAULTS) |
+                                           (force_dynamic_size ? MDBX_CP_FORCE_DYNAMIC_SIZE : MDBX_CP_DEFAULTS))));
 }
 
 inline txn_managed txn::clone(void *context) const {
@@ -7221,9 +7318,7 @@ inline map_handle txn::open_map(const ::std::string &name, const ::mdbx::key_mod
 inline map_handle txn::open_map_accede(const ::std::string &name) const { return open_map_accede(slice(name)); }
 
 #if defined(__cpp_lib_string_view) && __cpp_lib_string_view >= 201606L
-inline map_handle txn::open_map_accede(const ::std::string_view &name) const {
-  return open_map_accede(slice(name));
-}
+inline map_handle txn::open_map_accede(const ::std::string_view &name) const { return open_map_accede(slice(name)); }
 #endif /* __cpp_lib_string_view >= 201606L */
 
 inline map_handle txn::create_map(const ::std::string &name, const ::mdbx::key_mode key_mode,
@@ -7254,8 +7349,9 @@ inline txn::map_stat txn::get_map_stat(map_handle map) const {
 }
 
 inline uint32_t txn::get_tree_deepmask(map_handle map) const {
-  uint32_t r;
-  error::success_or_throw(::mdbx_dbi_dupsort_depthmask(handle_, map.dbi, &r));
+  uint32_t r = 0;
+  /* MDBX_RESULT_TRUE: not a multi-value table, so there are no nested trees */
+  error::boolean_or_throw(::mdbx_dbi_dupsort_depthmask(handle_, map.dbi, &r));
   return r;
 }
 
@@ -7268,8 +7364,8 @@ inline map_handle::info txn::get_map_flags(map_handle map) const {
 template <typename VISITOR> inline int txn::enumerate_tables(VISITOR &visitor) const {
   struct tables_enum_thunk : public exception_thunk {
     VISITOR &visitor_;
-    static int cb(void *ctx, const MDBX_txn *, const MDBX_val *name, MDBX_db_flags_t flags,
-                  const MDBX_stat *stat, MDBX_dbi dbi) noexcept {
+    static int cb(void *ctx, const MDBX_txn *, const MDBX_val *name, MDBX_db_flags_t flags, const MDBX_stat *stat,
+                  MDBX_dbi dbi) noexcept {
       tables_enum_thunk *thunk = static_cast<tables_enum_thunk *>(ctx);
       assert(thunk->is_clean());
       try {
@@ -7294,7 +7390,9 @@ template <typename VISITOR> inline txn::gc_info txn::get_gc_info(VISITOR &visito
     static int cb(void *ctx, const MDBX_txn *, uint64_t span_txnid, size_t span_pgno, size_t span_length,
                   bool span_is_reclaimable) noexcept {
       gc_iter_thunk *thunk = static_cast<gc_iter_thunk *>(ctx);
-      assert(thunk->is_clean());
+      if (MDBX_UNLIKELY(!thunk->is_clean()))
+        /* do not call the visitor again after it has thrown */
+        return loop_control::exit_loop;
       try {
         return loop_control(thunk->visitor_(span_txnid, span_pgno, span_length, span_is_reclaimable));
       } catch (... /* capture any exception to rethrow it over C code */) {
@@ -7342,7 +7440,8 @@ inline uint64_t txn::sequence(map_handle map) const {
 
 inline uint64_t txn::sequence(map_handle map, uint64_t increment) {
   uint64_t result;
-  error::success_or_throw(::mdbx_dbi_sequence(handle_, map.dbi, &result, increment));
+  if (error::boolean_or_throw(::mdbx_dbi_sequence(handle_, map.dbi, &result, increment)))
+    throw ::std::overflow_error("mdbx::txn::sequence(): the increment overflows the sequence");
   return result;
 }
 
@@ -7415,8 +7514,9 @@ inline slice txn::get(map_handle map, slice key, size_t &values_count, const sli
 
 inline pair_result txn::get_equal_or_great(map_handle map, const slice &key) const {
   pair result(key, slice());
-  bool exact = !error::boolean_or_throw(::mdbx_get_equal_or_great(handle_, map.dbi, &result.key, &result.value));
-  return pair_result(result.key, result.value, exact);
+  error::boolean_or_throw(::mdbx_get_equal_or_great(handle_, map.dbi, &result.key, &result.value));
+  /* for a multimap MDBX_SUCCESS needs the value to match too, while here only the key is given */
+  return pair_result(result.key, result.value, result.key == key);
 }
 
 inline pair_result txn::get_equal_or_great(map_handle map, const slice &key, const slice &value_at_absence) const {
@@ -7424,9 +7524,9 @@ inline pair_result txn::get_equal_or_great(map_handle map, const slice &key, con
   const int err = ::mdbx_get_equal_or_great(handle_, map.dbi, &result.key, &result.value);
   switch (err) {
   case MDBX_SUCCESS:
-    return pair_result{result.key, result.value, true};
+    return pair_result{result.key, result.value, result.key == key};
   case MDBX_RESULT_TRUE:
-    return pair_result{result.key, result.value, false};
+    return pair_result{result.key, result.value, result.key == key};
   case MDBX_NOTFOUND:
     return pair_result{key, value_at_absence, false};
   default:
@@ -7584,7 +7684,10 @@ inline BUFFER txn::extract(map_handle map, const slice &key, const ALLOCATOR &al
   typename BUFFER::data_preserver result(alloc);
   error::success_or_throw(
       ::mdbx_replace_ex(handle_, map.dbi, &key, nullptr, &result.data, MDBX_CURRENT, result, &result), result);
-  return result.data;
+  if (result.data.is_freestanding())
+    /* already a private copy made by the preserver: hand it over with its allocator */
+    return BUFFER(::std::move(result.data));
+  return BUFFER(result.data.slice(), false, alloc);
 }
 
 template <class BUFFER, typename ALLOCATOR>
@@ -7593,7 +7696,10 @@ inline BUFFER txn::replace(map_handle map, const slice &key, const slice &new_va
   error::success_or_throw(::mdbx_replace_ex(handle_, map.dbi, &key, const_cast<slice *>(&new_value), &result.data,
                                             MDBX_CURRENT, result, &result),
                           result);
-  return result.data;
+  if (result.data.is_freestanding())
+    /* already a private copy made by the preserver: hand it over with its allocator */
+    return BUFFER(::std::move(result.data));
+  return BUFFER(result.data.slice(), false, alloc);
 }
 
 template <class BUFFER, typename ALLOCATOR>
@@ -7605,7 +7711,10 @@ inline BUFFER txn::replace_reserve(map_handle map, const slice &key, size_t leng
   error::success_or_throw(::mdbx_replace_ex(handle_, map.dbi, &key, &new_value_reservation, &result.data,
                                             MDBX_CURRENT | MDBX_RESERVE, result, &result),
                           result);
-  return result.data;
+  if (result.data.is_freestanding())
+    /* already a private copy made by the preserver: hand it over with its allocator */
+    return BUFFER(::std::move(result.data));
+  return BUFFER(result.data.slice(), false, alloc);
 }
 
 inline void txn::append(map_handle map, const slice &key, const slice &value, bool multivalue_order_preserved) {
@@ -7792,6 +7901,11 @@ inline ::std::vector<pair> cursor::get_batch(size_t max_pairs, move_operation op
   ::std::vector<MDBX_val> pairs(limit);
   size_t count = 0;
   int rc = ::mdbx_cursor_get_batch(handle_, &count, pairs.data(), limit, MDBX_cursor_op(op));
+  if (rc == MDBX_NOTFOUND || rc == MDBX_ENODATA) {
+    if (is_last)
+      *is_last = true;
+    return result;
+  }
   if (rc == MDBX_RESULT_TRUE) {
     if (is_last)
       *is_last = true;

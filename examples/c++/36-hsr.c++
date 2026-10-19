@@ -29,8 +29,8 @@
 #include <string>
 #include <thread>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 namespace {
 std::atomic<bool> hsr_release_reader{false};
@@ -46,8 +46,8 @@ std::atomic<bool> stop_reader{false};
 // RU: удерживающих старые снапшоты. Здесь: сообщаем о событии, просим читателя
 // RU: освободить снапшот и ждём его, после чего возвращаем MDBX_RESULT_TRUE
 // RU: («проблема устранена» — писатель продолжит).
-int hsr_callback(const MDBX_env *, const MDBX_txn *, mdbx_pid_t pid, mdbx_tid_t tid, uint64_t laggard,
-                 unsigned gap, size_t space, int retry) noexcept {
+int hsr_callback(const MDBX_env *, const MDBX_txn *, mdbx_pid_t pid, mdbx_tid_t tid, uint64_t laggard, unsigned gap,
+                 size_t space, int retry) noexcept {
   std::cout << "hsr invoked: laggard pid=" << pid << " tid=" << tid << " lag=" << laggard << " gap=" << gap
             << " space=" << space << " retry=" << retry << "\n";
   hsr_called = true;

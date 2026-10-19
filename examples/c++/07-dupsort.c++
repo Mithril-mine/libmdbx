@@ -35,8 +35,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 int main() {
   try {
@@ -76,15 +76,14 @@ int main() {
     // RU: GET_BOTH: точный поиск пары «ключ + значение».
     const uint32_t needle = 9;
     auto found = cur.find_multivalue(key, mdbx::slice::wrap(needle), false);
-    std::cout << "get_both(9) -> "
-              << (found ? std::to_string(found.value.as_uint32()) : std::string("<none>")) << "\n";
+    std::cout << "get_both(9) -> " << (found ? std::to_string(found.value.as_uint32()) : std::string("<none>")) << "\n";
 
     // EN: GET_BOTH_RANGE: the first value not less than the given one.
     // RU: GET_BOTH_RANGE: первое значение, не меньшее заданного.
     const uint32_t low = 6;
     auto range = cur.lower_bound_multivalue(key, mdbx::slice::wrap(low), false);
-    std::cout << "get_both_range(>=6) -> "
-              << (range ? std::to_string(range.value.as_uint32()) : std::string("<none>")) << "\n";
+    std::cout << "get_both_range(>=6) -> " << (range ? std::to_string(range.value.as_uint32()) : std::string("<none>"))
+              << "\n";
 
     rtxn.abort();
 

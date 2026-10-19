@@ -48,21 +48,83 @@ aborting processes with active reads (libmdbx cleans the reader slots
 automatically, but the check cannot be run too often without a performance
 penalty).
 
-## Large values
+## Storing long values
 
-- Values up to `0x7FF00000` bytes are stored in chains of consecutive pages —
-  reading is direct, without copying or overhead.
-- The downside: **writing** a large value requires finding a sufficient
-  sequence of free pages, which can be expensive or impossible with a
-  fragmented B+tree (the engine may process the whole GC or grow the file).
-  Maximum read speed at the cost of write speed.
-- **Already available**: the free-sequence search through the GC has been
-  substantially accelerated (SIMD: NEON/SSE2/AVX2/AVX512); spilling and refund
-  reduce fragmentation; the auto-growing geometry helps when sequences are
-  missing.
-- **Roadmap**: the rework of large-value storage and fragmentation bypass —
-  in _MithrilDB_ (where the problem is solved architecturally) and in the
-  refinements of the upcoming libmdbx releases.
+The data lives in a B+tree as "key → value" pairs. A value that does not fit
+into a leaf page together with the key and the node header (practically —
+longer than roughly half a page) is **not split into parts**: it is stored as
+one unbroken piece on consecutive pages (these are the large/overflow pages),
+and the leaf keeps only a pointer to the piece, `{pgno, npages}`. Reading such
+a piece is direct, without copying and without overhead (maximum read speed).
+Mechanics — [internals](../deep-dive/internals.md#7-large-values-and-overflow-pages).
+
+The "unbroken piece" requirement is exactly what grows into the main
+limitation:
+- **writing** a long value requires finding a *continuous* range ("span") of
+  free pages of the required length, not "any free page". The longer the
+  value, the longer the needed span and the harder it is to find: with a
+  fragmented B+tree the engine has to scan and merge many GC records (the
+  "deep search"), may process the whole GC or append pages at the file end,
+  and when neither the GC nor the geometry upper bound provides a sequence —
+  `MDBX_MAP_FULL`;
+- **rewriting** a long value is CoW of the whole span: allocate a new
+  contiguous range, copy the data, release the old range. Frequent overwrites
+  churn the free space, fragment the file and produce lots of GC records;
+- **very long values bloat GC**: one GC record holds about 1000 page numbers
+  (~4 MB with a 4 KB page); a value spanning hundreds of thousands of pages
+  produces bigfoot chains of dozens/hundreds of records, growing the GC tree;
+- **write amplification** grows proportionally to the value size: every commit
+  rewrites all the pages of the span, not a single leaf.
+
+**Already available**: the free-sequence search through the GC has been
+substantially accelerated (SIMD: NEON/SSE2/AVX2/AVX512); spilling and refund
+reduce fragmentation; the auto-growing geometry helps when sequences are
+missing.
+
+### Basic advice
+
+Store values so that every value **fits into a single page together with its
+key** — i.e. not longer than `mdbx_limits_valsize4page_max()`. Such values do
+not create the "span problem" at all. Additionally:
+- enlarge the page (up to 64 KB) when values are "on average" large;
+- monitor the DB with `mdbx_env_stat()` (overflow page counts) and
+  `mdbx_chk` histograms (`large_pages`, `val_len`) to detect churn;
+- when the free space is fragmented, use **defragmentation**
+  (`mdbx_env_defrag()` / `mdbx_defrag`);
+- tune `rp_augment_limit`/`gc_time_limit` for the write pattern
+  (uncontrolled file growth vs "stuck" commits);
+- keep "heavy" data (images, binary objects) out of the DB, storing only
+  references in values (e.g. content-addressed keys).
+
+### Splitting long values into chunks
+
+If a long value still has to live in the DB and does not fit into one page, it
+can be **explicitly split into chunks** not exceeding
+`mdbx_limits_valsize4page_max()` (see also `mdbx_limits_valsize_max()` for the
+per-table-flag limits). Two common approaches:
+
+1. **In a plain table** — the key `K` gets a suffix with the chunk number:
+   `K#0`, `K#1`, `K#2`, … A prefix search over `K` finds all chunks of the
+   value in their order.
+2. **In a multivalue (DUPSORT) table** — chunks not longer than
+   `mdbx_limits_valsize_max(MDBX_DUPSORT)`; each chunk's data is prefixed with
+   the multivalue number (when several long values are stored under one key)
+   and the chunk number. A search by key yields all multivalues and their
+   chunks, and a prefix search with the multivalue number yields just its
+   chunks.
+
+> Both approaches are **manual splitting**, needed only until the streamed API
+> for long values ("Streaming BLOBs") planned in the roadmap arrives and
+> removes the need for such splitting.
+
+### Roadmap
+
+Besides reworking long-value storage in _MithrilDB_ (where the problem is
+solved architecturally), the roadmap also includes a **streaming read/write
+mode for long values** — "Streaming BLOBs": an API to read and write long
+values in a streamed fashion, without manual chunking. See also
+[Volume V, ch. 33](../textbook/05-tom-v-ekspertnye-temy.md) and
+[improvements](../deep-dive/improvements.md).
 
 ## Huge transactions
 

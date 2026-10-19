@@ -42,8 +42,8 @@
 #include <string>
 #include <thread>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 namespace {
 
@@ -57,20 +57,19 @@ void observer_run(mdbx::env_managed &env) {
 
   while (stage.load() != 2)
     std::this_thread::yield();
-  std::cout << "during uncommitted write, observer still sees: "
-            << rtxn.get(table, mdbx::slice("key")).as_string() << "\n";
+  std::cout << "during uncommitted write, observer still sees: " << rtxn.get(table, mdbx::slice("key")).as_string()
+            << "\n";
   stage = 3;
 
   while (stage.load() != 4)
     std::this_thread::yield();
-  std::cout << "after abort, observer still sees: "
-            << rtxn.get(table, mdbx::slice("key")).as_string() << "\n";
+  std::cout << "after abort, observer still sees: " << rtxn.get(table, mdbx::slice("key")).as_string() << "\n";
   stage = 5;
 
   while (stage.load() != 6)
     std::this_thread::yield();
-  std::cout << "after committed v3, old observer still sees: "
-            << rtxn.get(table, mdbx::slice("key")).as_string() << "\n";
+  std::cout << "after committed v3, old observer still sees: " << rtxn.get(table, mdbx::slice("key")).as_string()
+            << "\n";
   rtxn.abort();
 
   // EN: A new reader after the commit sees the actual state.

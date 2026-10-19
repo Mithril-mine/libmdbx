@@ -101,7 +101,7 @@ WAIT         = .WAIT
 endif
 
 ifeq ($(bash_ge_4_3),1)
-STOCHASTIC   = ./tests/scripts/stochastic.sh
+STOCHASTIC   = ./tests/stochastic.sh
 else
 STOCHASTIC   = echo "Skip running stochastic script since Bash < 4.3"
 endif

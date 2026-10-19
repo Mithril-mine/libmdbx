@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -107,6 +107,33 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
   return false;
 }
 
+/* Whether a name contains control characters (a table name may contain any
+ * byte except NUL; when emitted raw into a dump stream it could break the
+ * format or reroute data, and when printed to a terminal it could leak
+ * escape sequences). */
+MDBX_MAYBE_UNUSED static inline bool tool_name_has_control(const char *name) {
+  for (const unsigned char *p = (const unsigned char *)name; *p; ++p)
+    if (*p < 0x20 || *p == 0x7f)
+      return true;
+  return false;
+}
+
+MDBX_MAYBE_UNUSED static inline bool tool_data_has_control(const void *data, size_t size) {
+  const unsigned char *p = (const unsigned char *)data;
+  for (size_t i = 0; i < size; ++i)
+    if (p[i] < 0x20 || p[i] == 0x7f)
+      return true;
+  return false;
+}
+
+/* Print a name replacing control characters with '?', so that no control or
+ * escape sequences leak into a terminal or into a dump stream. */
+MDBX_MAYBE_UNUSED static inline void tool_print_sanitized(const void *data, size_t size) {
+  const unsigned char *p = (const unsigned char *)data;
+  for (size_t i = 0; i < size; ++i)
+    putchar((p[i] < 0x20 || p[i] == 0x7f) ? '?' : p[i]);
+}
+
 /* Uniform version banner (as printed by the `-V` option of each tool). */
 static inline void tool_version_print(const char *tool) {
   printf("mdbx_%s version %d.%d.%d.%d\n"
@@ -172,7 +199,7 @@ static void dumpval(const MDBX_val *v) {
   putchar(' ');
   for (const unsigned char *c = v->iov_base, *end = c + v->iov_len; c < end; ++c) {
     if (mode & PRINT) {
-      if (isprint(*c) && *c != '\\') {
+      if (isprint(*c) && *c != '\\' && !(*c == ' ' && c == v->iov_base)) {
         putchar(*c);
         continue;
       } else
@@ -235,8 +262,14 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
       printf("canary=v%" PRIu64 ",x%" PRIu64 ",y%" PRIu64 ",z%" PRIu64 "\n", canary.v, canary.x, canary.y, canary.z);
   }
   printf("format=%s\n", mode & PRINT ? "print" : "bytevalue");
-  if (name)
+  if (name) {
+    if (tool_name_has_control(name)) {
+      if (!quiet)
+        fprintf(stderr, "%s: refuse to dump a table whose name contains control characters\n", prog);
+      return MDBX_EINVAL;
+    }
     printf("database=%s\n", name);
+  }
   printf("type=btree\n");
   printf("db_pagesize=%u\n", ms.ms_psize);
   /* if (ms.ms_mod_txnid)
@@ -347,6 +380,7 @@ int main(int argc, char *argv[]) {
   prog = argv[0];
   char *envname;
   char *subname = nullptr, *buf4free = nullptr;
+  const char *outname = nullptr;
   unsigned envflags = 0;
   bool alldbs = false, list = false;
   bool warmup = false;
@@ -387,10 +421,7 @@ int main(int argc, char *argv[]) {
       alldbs = true;
       break;
     case 'f':
-      if (freopen(optarg, "w", stdout) == nullptr) {
-        fprintf(stderr, "%s: %s: reopen: %s\n", prog, optarg, mdbx_strerror(errno));
-        exit(EXIT_FAILURE);
-      }
+      outname = optarg;
       break;
     case 'n':
       break;
@@ -425,6 +456,15 @@ int main(int argc, char *argv[]) {
 
   if (optind != argc - 1)
     usage();
+
+  if (outname) {
+    /* The output file is opened only after the command line has been fully
+     * validated, so a mistyped/erroneous invocation cannot truncate it. */
+    if (freopen(outname, "w", stdout) == nullptr) {
+      fprintf(stderr, "%s: %s: reopen: %s\n", prog, outname, mdbx_strerror(errno));
+      return EXIT_FAILURE;
+    }
+  }
 
   tool_break_setup();
 
@@ -527,7 +567,8 @@ int main(int argc, char *argv[]) {
       } else {
         count++;
         if (list) {
-          printf("%s\n", subname);
+          tool_print_sanitized(subname, strlen(subname));
+          putchar('\n');
         } else {
           err = dump_tbl(txn, sub_dbi, subname);
           if (unlikely(err != MDBX_SUCCESS)) {
@@ -574,6 +615,16 @@ int main(int argc, char *argv[]) {
     }
   } else {
     err = dump_tbl(txn, dbi, subname);
+  }
+
+  fflush(stdout);
+  if (ferror(stdout)) {
+    /* The dump stream swallowed a write error earlier, so the output is
+     * incomplete; report it instead of pretending a successful dump. */
+    if (!quiet)
+      fprintf(stderr, "%s: failed to write dump output\n", prog);
+    if (err == MDBX_SUCCESS)
+      err = MDBX_EIO;
   }
 
   switch (err) {

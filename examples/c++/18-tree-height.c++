@@ -24,8 +24,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 int main() {
   try {
@@ -48,9 +48,8 @@ int main() {
     // EN: mdbx_env_stat_ex()
     // RU: mdbx_env_stat_ex()
     const auto stat = env.get_stat();
-    std::cout << "stat: depth=" << stat.ms_depth << " leaf=" << stat.ms_leaf_pages
-              << " branch=" << stat.ms_branch_pages << " overflow=" << stat.ms_overflow_pages
-              << " entries=" << stat.ms_entries << "\n";
+    std::cout << "stat: depth=" << stat.ms_depth << " leaf=" << stat.ms_leaf_pages << " branch=" << stat.ms_branch_pages
+              << " overflow=" << stat.ms_overflow_pages << " entries=" << stat.ms_entries << "\n";
 
     if (stat.ms_overflow_pages == 0) {
       std::cerr << "FAIL: expected overflow pages for a large value\n";

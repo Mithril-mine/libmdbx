@@ -30,8 +30,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 #if defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS)
 int main() {

@@ -30,8 +30,8 @@
 #include <string>
 #include <thread>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 int main() {
   try {
@@ -117,9 +117,9 @@ int main() {
       std::atomic<bool> mismatch_seen{false};
       std::thread foreign([&] {
         try {
-        // EN: foreign thread
+          // EN: foreign thread
           // RU: чужой поток
-        (void)rtxn.get(table, mdbx::slice("after-release"));
+          (void)rtxn.get(table, mdbx::slice("after-release"));
         } catch (const std::exception &ex) {
           // EN: Expected rejection: THREAD_MISMATCH (or a derived error code).
           // RU: Ожидаемый отказ: THREAD_MISMATCH (или производный код ошибки).

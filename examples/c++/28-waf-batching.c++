@@ -29,8 +29,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 static void measure(const std::string &path, size_t batch_size) {
   mdbx::env::remove(path);
@@ -47,8 +47,8 @@ static void measure(const std::string &path, size_t batch_size) {
   }
   const auto final = env.get_info().mi_pgop_stat;
   const uint64_t pages = (final.newly - initial.newly) + (final.cow - initial.cow);
-  std::cout << "batch=" << batch_size << ": pages=" << pages << " ops=" << total << " pages/op=" << (double)pages / total
-            << "\n";
+  std::cout << "batch=" << batch_size << ": pages=" << pages << " ops=" << total
+            << " pages/op=" << (double)pages / total << "\n";
 }
 
 int main() {

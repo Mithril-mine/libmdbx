@@ -24,8 +24,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 int main(int argc, char **argv) {
   try {

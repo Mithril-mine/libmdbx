@@ -34,9 +34,7 @@ static void set_str(MDBX_val *val, const char *s) {
   val->iov_len = strlen(s);
 }
 
-static void set_key(char *buf, size_t bufsize, const char *prefix, int i) {
-  snprintf(buf, bufsize, "%s%d", prefix, i);
-}
+static void set_key(char *buf, size_t bufsize, const char *prefix, int i) { snprintf(buf, bufsize, "%s%d", prefix, i); }
 
 int main(void) {
   char path[512];

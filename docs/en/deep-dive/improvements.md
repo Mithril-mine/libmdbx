@@ -393,8 +393,14 @@ The most significant ones are listed below.
   - correct builds require selecting `ar`/`nm`/`ranlib` with the LTO plugin (or `lld`/`ld` for
     CLANG) — a non-trivial part of the scripts;
   - GNU Make provides dedicated `.static-lto` targets compiling utilities with `-flto`;
+  - `MDBX_LTO_FAT_OBJECTS` (Conan `mdbx.lto=Fat`) produces dual LTO+native object code
+    (`-ffat-lto-objects`, GCC `-flto` / full CLANG `-flto` instead of thin), so the packaged
+    library stays linkable into builds that do not engage LTO;
   - the change history reflects integration specifics: GCC tool search for LTO, CLANG-LTO detection
     for Android, suppressing spurious `-Wno-lto-type-mismatch` warnings for old GCC in LTO builds.
+- **Conan binary identity** covers the whole profile and every recipe option — including
+  `mdbx.lto` and `mdbx.sanitize` — while warnings and the optimization level inside a build
+  type are excluded; the audit table lives in README "Packaging / Conan".
 - **Reproducible builds** (`SOURCE_DATE_EPOCH`/`MDBX_BUILD_TIMESTAMP`), ASAN/UBSAN/MSAN support
   (Valgrind/ASAN), `ctest`, atomicity checks.
 - **Apache-2.0 license** (since 0.13), explanations in COPYRIGHT.
@@ -416,7 +422,8 @@ The most significant ones are listed below.
 - The project is a winner of the **Yandex Open Source** contest among open-source projects; the code
   stays open with free support.
 - **The strategic direction is MithrilDB** (announced in late 2025): a common API for supporting
-  several database formats. Planned: txnid-cached search, streaming BLOBs, optional mmap,
+  several database formats. Planned: txnid-cached search, a streaming read/write mode for long values
+  ("Streaming BLOBs"), optional mmap,
   engine-level encryption and compression, SWIG, replication, and cross-language C/C++↔Rust
   interaction. Old formats and databases will be supported while users need them.
 

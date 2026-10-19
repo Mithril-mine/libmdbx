@@ -32,8 +32,8 @@
 #include <iostream>
 #include <string>
 
-#include <mdbx.h++>
 #include "common.h++"
+#include <mdbx.h++>
 
 static void dump_key(const mdbx::txn_managed &txn, const mdbx::map_handle &multi, const std::string &label,
                      const mdbx::slice &key) {

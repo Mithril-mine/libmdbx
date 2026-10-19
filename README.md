@@ -64,7 +64,7 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the legen
 
 - `O(log N)` cost of lookup, insert, update, and delete operations by virtue of [B+ tree characteristics](https://en.wikipedia.org/wiki/B%2B_tree#Characteristics).
 
-- Improbably fast and robust get(key) operations [accelerated by a shareable lock-free cache](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353).
+- Improbably fast and robust get(key) operations [accelerated by a shareable lock-free cache](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#function-mdbx_cache_get).
 
 - Online hot backup.
 
@@ -97,8 +97,8 @@ Thus syncing data to disk might be a bottleneck for write-intensive workloads.
 
 * _libmdbx_ uses [copy-on-write](https://en.wikipedia.org/wiki/Copy-on-write) for [snapshot isolation](https://en.wikipedia.org/wiki/Snapshot_isolation) during updates, but a read transaction prevents recycling of retired/freed pages while it is still reading them.
 Thus altering of data during a parallel long-lived read operation will increase the process work set, may exhaust entire free database space, the database can grow quickly, and result in performance degradation.
-Try to avoid long running read transactions, otherwise use [transaction parking](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#ga2c2c97730ff35cadcedfbd891ac9b12f)
-and/or [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6).
+Try to avoid long running read transactions, otherwise use [transaction parking](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#function-mdbx_txn_park)
+and/or [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#function-mdbx_env_set_hsr).
 
 * _libmdbx_ is extraordinarily fast and provides minimal overhead for data access, so you should reconsider using brute force techniques and double check your code.
 On the one hand, in the case of _libmdbx_, a simple linear search may be more profitable than complex indexes.
@@ -239,13 +239,83 @@ To build _libmdbx_ for iOS, please use CMake with the ["toolchain file"](https:/
 
 <!-- section-end -->
 
+## Packaging / Conan
+
+**The recommended way to consume libmdbx is the source-level route** — the
+amalgamated sources (`mdbx.h`, `mdbx.c`, `mdbx.h++`, `mdbx.c++`) for direct
+embedding, or CMake subproject / FetchContent. Then the library and the
+application are compiled by the same toolchain with the same flags in the
+same build, which structurally rules out ABI drift.
+
+A Conan recipe is also shipped (`conanfile.py`) as a convenience for
+prebuilt consumption. However, Conan resolves, builds and caches binaries
+according to the *active profile*, and nothing ties that profile to the
+compiler the consumer's project is actually built with. On any
+multi-compiler machine the profile and the consumer's real toolchain can
+silently diverge: `find_package(mdbx)` succeeds and the mismatch surfaces
+only at runtime.
+
+This is especially dangerous for the C++ binding: `mdbx.h++` is compiled by
+the *consumer's* compiler while the out-of-line definitions and extern
+template instantiations (e.g. `mdbx::default_buffer`) live in the package's
+binary, compiled by the *profile's* compiler. For a consistent C++ ABI the
+active Conan profile must exactly match the consumer's
+compiler/version, stdlib (`libstdc++` vs `libc++`), `_GLIBCXX_USE_CXX11_ABI`
+setting, build type and C++ standard. The recipe warns about this both when
+building and when consuming the package, and the `mdbx.cxx_standard` option
+lets you pin the C++ standard instead of relying on compiler auto-picking.
+
+For the pure-C core the risk is modest, since the platform C ABI is stable
+across compilers; a C++ consumer that is not diligent about toolchain match
+may prefer to embed the sources instead of using the prebuilt package.
+
+### Package binary identity
+
+Conan's binary identifier (`package_id`) is the hash of the *active profile*
+and **every** recipe option: the recipe does not opt out of any setting nor
+option. So for a given library version the following shape the identity — and
+equally important, what does *not*:
+
+| Part of the binary identity | NOT part of the identity (can silently diverge) |
+| --- | --- |
+| profile `settings`: os, arch, compiler & its version, build_type | compiler warnings and warning machinery |
+| every `mdbx.*` option: ABI knobs (`64bit_atomic`, `64bit_cas`, `unaligned_ok`, `cacheline_size`, `without_msvc_crt`, `build_cxx`, `cxx_standard`, `locking`), feature toggles (`build_tools`, `enable_*`, `force_assertions`, ...) | the exact `-O`-level details *inside* a given build_type |
+| `mdbx.lto`: `Default`/`True`/`False`/`Fat` produce distinct ids | the consumer's own CMake toolchain-file and its `CMAKE_*_FLAGS` |
+| `mdbx.sanitize`: `none`/`address`/`undefined`/`address,undefined` | libstdc++/glibc versions of the machine that built the cached binary |
+| `shared` | whether the consumer's own build engages LTO (only `mdbx.lto=Fat` keeps the packaged objects usable regardless) |
+
+The "NOT part" rows are exactly the silent ABI traps: Conan serves a cached
+binary with a matching hash while the consumer's real environment differs.
+Nothing but the profile ties the two together, so keep the profile in sync
+with what actually builds the consumer project.
+
+### mdbx.lto and mdbx.sanitize
+
+- `mdbx.lto=Default` leaves LTO to CMake's own default; `True`/`False` force
+  `INTERPROCEDURAL_OPTIMIZATION` on/off; `Fat` additionally sets
+  `MDBX_LTO_FAT_OBJECTS`, so GCC/Clang produce dual LTO+native object code
+  (`-ffat-lto-objects`) and the packaged library links into a consumer build
+  regardless of whether the consumer engages LTO. On MSVC `Fat` behaves as
+  `True`.
+- `mdbx.sanitize=none|address|undefined|address,undefined` adds
+  `-fsanitize=...` to the compile and link flags. A sanitized package must be
+  consumed by a sanitized build (the sanitizer runtime participates in the
+  ABI), hence both options participate in the package identity.
+
+On the roadmap the C++ API will become the native one, with the C API
+provided as a secondary interface (an emulation facade) over it. That
+transition is expected to be long and is *not* the case yet: currently the C
+core and the C ABI are first-class, and the toolchain-match requirement above
+applies mostly to consumers of the C++ binding. Once the transition lands,
+the requirement will apply to every consumer of a prebuilt package.
+
 ## API description
 
 Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers.
 
 ## Textbook
 
-A complete practical guide to libmdbx — six volumes from the first steps to expert topics and bindings — is available online in [Russian](https://libmdbx.dqdkfa.ru/docs/textbook/ru/) and [English](https://libmdbx.dqdkfa.ru/docs/textbook/en/); each online version links a downloadable PDF.
+A complete practical guide to libmdbx — six volumes from the first steps to expert topics and bindings — is available online in [Russian](https://libmdbx.dqdkfa.ru/docs/ru/textbook/) and [English](https://libmdbx.dqdkfa.ru/docs/en/textbook/); each online version links a downloadable PDF.
 
 The textbook's source (markdown, in `docs/textbook/ru` and `docs/textbook/en`) and all code examples (`examples/` — compilable C11/C++17 programs, exercised by CTest) are part of this repository. Both localizations are built into HTML + PDF with `make books` (requires `pip install mkdocs mkdocs-material mkdocs-with-pdf`).
 
@@ -310,7 +380,7 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 * LIFO policy for Garbage Collection recycling. Thanks to the write-back disk cache, this can multiply write performance several times in the best case.
    > LIFO means that the most recently unused pages will be taken for reuse. Therefore the loop of database pages circulation becomes as short as possible. In other words, the set of pages, that are (over)written in memory and on disk during a series of write transactions, will be as small as possible. This creates ideal conditions for the battery-backed or flash-backed disk cache efficiency.
 
-* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#ga2cb11b56414c282fe06dd942ae6cade6) to resolve issues due to long-lived read transactions.
+* Parking of read transactions with ousting and auto-restart, [Handle-Slow-Readers callback](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html#function-mdbx_env_set_hsr) to resolve issues due to long-lived read transactions.
 
 * Fast estimation of range query result volume, i.e. how many items can be found between a `KEY1` and a `KEY2`. This is a prerequisite for building and/or optimizing query execution plans.
    > _libmdbx_ performs a rough estimate based on the common B-tree pages along the paths from root to corresponding keys.
@@ -322,15 +392,15 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 * Extended information about the whole database, tables/sub-databases, transactions, readers enumeration.
     > _libmdbx_ provides a lot of information, including dirty and leftover pages for a write transaction, reading lag and holdover space for read transactions.
 
-* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#ga5bfb583bf2c5d5676ffddb466e789353) with lightweight transparent cache that can provide dramatic acceleration in many cases.
+* The ["get-cached" feature](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#function-mdbx_cache_get) with lightweight transparent cache that can provide dramatic acceleration in many cases.
 
-* [Cloning a read transaction](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#ga28d3db2426df24b16c0bc40cd0af8187) and [resurrection after fork](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__extra.html#gab7d13c1dbf074bc23ebda2d886add02a) features.
+* [Cloning a read transaction](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__transactions.html#function-mdbx_txn_clone) and [resurrection after fork](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__extra.html#function-mdbx_env_resurrect_after_fork) features.
 
 * Automated steady sync-to-disk upon several thresholds and/or timeout via cheap polling.
 
 * Extended update and quick delete operations.
-    > _libmdbx_ allows [getting the previous value](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#gaad688c4b0fbbcff676f181dc0437befa) _at once_ when updating, and addressing the particular item of a multi-value with the same key.
-    > _libmdbx_ supports [massive deletion by bunches](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#gac986d35a3b6b27ac43af881c471a6878) of adjacent elements much faster by cutting out entire pages and branches from a B-tree.
+    > _libmdbx_ allows [getting the previous value](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#function-mdbx_replace) _at once_ when updating, and addressing the particular item of a multi-value with the same key.
+    > _libmdbx_ supports [massive deletion by bunches](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__crud.html#function-mdbx_cursor_bunch_delete) of adjacent elements much faster by cutting out entire pages and branches from a B-tree.
 
 * Ability to determine whether the particular data is on a dirty page or not, which allows avoiding copy-out before updates.
 

@@ -33,6 +33,14 @@ The full list of rules and tips is in the knowledge base (`knowledge-base/rules-
 - Lower `rp_augment_limit` — only together with `gc_time_limit`.
 - Do not use `MDBX_ENABLE_REFUND=0` in production (debug option).
 - Long values: increase the page size (up to 64 KB), split records.
+- A value spanning several overflow pages needs a run of **consecutive** pages: when large values are
+  rewritten often, watch fragmentation (`mdbx_chk` histograms, overflow page counts in
+  `mdbx_env_stat`); for "heavy" data consider storing it outside the database.
+- If a long value must be kept in the DB, split it into chunks that fit into a single page
+  (`mdbx_limits_valsize4page_max()`): in a plain table — a chunk-number suffix in the key, in a
+  DUPSORT table — a prefix with the multivalue number and the chunk number. Manual splitting is
+  needed only until the planned **streamed API for long values** ("Streaming BLOBs") arrives.
+  Details — [Restrictions & gotchas](https://libmdbx.dqdkfa.ru/docs/en/overview/restrictions.html).
 
 ### 27.4. Operations
 
@@ -77,7 +85,7 @@ Full code: [34-rules-counter.c++](examples/c++/34-rules-counter.c++).
 - An unclosed read-transaction "freezes" page reclamation — the file grows to `MDBX_MAP_FULL`; close/park it.
 - Do not open the database twice in one process; `fork()` — only with `resurrect_after_fork` in the child; copying — only `mdbx_copy`.
 - Do not use `MDBX_UTTERLY_NOSYNC` or debug options (`MDBX_ENABLE_REFUND=0`) in production.
-- Set the geometry once before open, do not lower `upper`; for long values increase the page size (up to 64 KB) or split records.
+- Set the geometry once before open, do not lower `upper`; for long values increase the page size (up to 64 KB), split into chunks that fit into one page, or store outside the DB; values that do not fit one page need a contiguous run and are sensitive to fragmentation — until the streaming API ("Streaming BLOBs") arrives.
 - Do deletions before insertions; mass deletions — `bunch_delete`/`delete_range`; DUPSORT deletion while iterating — two cursors.
 - Typical counter-examples: violating thread discipline (`BAD_RSLOT`), double opening, a forgotten reader, a debug build in production.
 
@@ -773,7 +781,8 @@ tracking of page usage by readable snapshots).
 
 - Change subscription (mailboxes, ring buffers).
 - Encryption and compression at the engine level.
-- Streaming BLOBs.
+- A streaming read/write mode for long values ("Streaming BLOBs") — without manual chunking, see
+  [Restrictions & gotchas](https://libmdbx.dqdkfa.ru/docs/en/overview/restrictions.html).
 - SWIG and cross-language interop.
 
 ### 33.5. Summary of chapter 33
@@ -781,14 +790,14 @@ tracking of page usage by readable snapshots).
 - libmdbx as of 2026 — a mature engine (0.15.x devel-canon); the DB format frozen since 2018.
 - Fundamental GC/freelist improvements are planned only in the next generation — MithrilDB: a common API for several storage formats, amalgamation simplifies distribution.
 - Replication prerequisites: change subscription, early GC cleanup (2025), non-linear GC processing (end-to-end tracking of page usage by readable snapshots).
-- Other roadmap items: engine-level encryption and compression, streaming BLOBs, SWIG and cross-language interop.
+- Other roadmap items: engine-level encryption and compression, a streaming read/write mode for long values ("Streaming BLOBs"), SWIG and cross-language interop.
 
 ### 33.6. Chapter 33 checklist
 
 - [ ] In long-term planning account for the DB format being frozen since 2018 (0.11.x ↔ 0.12.x compatibility).
 - [ ] Do not expect fundamental GC/freelist improvements in the current generation — watch MithrilDB.
 - [ ] For replication rely on the available prerequisites (change subscription, early GC cleanup).
-- [ ] Treat roadmap features (encryption, compression, streaming BLOBs, SWIG) as future, not current, capabilities.
+- [ ] Treat roadmap features (encryption, compression, the streaming mode for long values / Streaming BLOBs, SWIG) as future, not current, capabilities.
 
 ---
 

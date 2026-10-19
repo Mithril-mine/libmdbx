@@ -269,6 +269,9 @@ else()
     endif()
     option(INTERPROCEDURAL_OPTIMIZATION "Enable interprocedural/LTO optimization."
            ${INTERPROCEDURAL_OPTIMIZATION_DEFAULT})
+    option(MDBX_LTO_FAT_OBJECTS
+           "Generate both LTO bitcode and native object code in every object file, so the library can be consumed regardless of whether the consumer's build engages LTO. Only meaningful with GCC/CLANG; on MSVC it degrades to plain LTO."
+           OFF)
   endif()
 
   if(INTERPROCEDURAL_OPTIMIZATION)
@@ -882,7 +885,9 @@ else()
   set_target_properties(mdbx-static PROPERTIES OUTPUT_NAME mdbx)
   set(MDBX_LIBRARY mdbx-static)
 endif()
-target_include_directories(mdbx-static INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(
+  mdbx-static
+  INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
 if(MDBX_CLANG_BUILTINS_LIB)
   target_link_libraries(mdbx-static INTERFACE "${MDBX_CLANG_BUILTINS_LIB}")
 endif()
@@ -934,7 +939,9 @@ if(MDBX_BUILD_SHARED_LIBRARY)
     set_target_properties(mdbx PROPERTIES LINK_FLAGS "-fvisibility=hidden")
   endif()
   list(APPEND MDBX_BUILD_FLAGS ${CMAKE_SHARED_LINKER_FLAGS})
-  target_include_directories(mdbx INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}")
+  target_include_directories(
+    mdbx
+    INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
   if(MDBX_CLANG_BUILTINS_LIB)
     target_link_libraries(mdbx PRIVATE "${MDBX_CLANG_BUILTINS_LIB}")
   endif()
@@ -1028,10 +1035,7 @@ if(MDBX_BUILD_SHARED_LIBRARY)
       EXPORT libmdbx
       LIBRARY DESTINATION ${MDBX_DLL_INSTALL_DESTINATION} COMPONENT runtime
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
-      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel
-      INCLUDES
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-      COMPONENT devel)
+      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel)
   else()
     install(
       TARGETS mdbx
@@ -1041,10 +1045,7 @@ if(MDBX_BUILD_SHARED_LIBRARY)
               NAMELINK_COMPONENT devel
       OBJECTS DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
-      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel
-      INCLUDES
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-      COMPONENT devel)
+      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel)
   endif()
 endif(MDBX_BUILD_SHARED_LIBRARY)
 
@@ -1085,10 +1086,7 @@ if(MDBX_INSTALL_STATIC)
       LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
       OBJECTS DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
-      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel
-      INCLUDES
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-      COMPONENT devel)
+      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel)
   else()
     install(
       TARGETS mdbx-static
@@ -1098,12 +1096,31 @@ if(MDBX_INSTALL_STATIC)
               NAMELINK_COMPONENT devel
       OBJECTS DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
       ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} COMPONENT devel
-      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel
-      INCLUDES
-      DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-      COMPONENT devel)
+      PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR} COMPONENT devel)
   endif()
 endif(MDBX_INSTALL_STATIC)
+
+# CMake package config: export the installed targets so that an installed tree
+# (and, transitively, the Conan package) is usable via find_package(mdbx CONFIG).
+if(MDBX_BUILD_SHARED_LIBRARY OR MDBX_INSTALL_STATIC)
+  install(
+    EXPORT libmdbx
+    FILE libmdbx-targets.cmake
+    NAMESPACE mdbx::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mdbx)
+  include(CMakePackageConfigHelpers)
+  configure_package_config_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/mdbx-config.cmake.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/mdbx-config.cmake"
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mdbx)
+  write_basic_package_version_file(
+    "${CMAKE_CURRENT_BINARY_DIR}/mdbx-config-version.cmake"
+    VERSION ${MDBX_VERSION}
+    COMPATIBILITY SameMajorVersion)
+  install(FILES "${CMAKE_CURRENT_BINARY_DIR}/mdbx-config.cmake"
+                "${CMAKE_CURRENT_BINARY_DIR}/mdbx-config-version.cmake"
+          DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/mdbx)
+endif()
 
 # ######################################################################################################################
 

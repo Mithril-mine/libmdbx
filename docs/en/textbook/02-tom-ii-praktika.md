@@ -740,6 +740,17 @@ Full code: [11-geometry-options.c++](examples/c++/11-geometry-options.c++) · [C
 | 8 KB   | Insurance against a large fragmented GC                             |
 | 64 KB  | Large values (fewer overflow trips); more expensive small writes    |
 
+> Note: a value that does not fit into a single page is stored as one unbroken
+> piece on consecutive pages and needs a run of **consecutive** free pages —
+> allocating it is costlier and, under fragmentation, may end in
+> `MDBX_MAP_FULL`. So when choosing the page size, keep the actual (typical and
+> maximum) value sizes in mind: the larger the share of values that do not fit
+> into one page, the more attractive a large page. If a long value cannot be
+> made smaller, split it into chunks that fit into one page
+> (`mdbx_limits_valsize4page_max()`); manual splitting is needed only until the
+> planned **streamed API for long values** ("Streaming BLOBs") arrives. Details —
+> [Restrictions & gotchas](https://libmdbx.dqdkfa.ru/docs/en/overview/restrictions.html).
+
 ### 9.6. Statistics
 
 ```c

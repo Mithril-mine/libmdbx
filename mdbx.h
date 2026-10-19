@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.15.0-54-g62f07cfe at 2026-10-15T01:24:05+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -5863,6 +5863,10 @@ LIBMDBX_API int mdbx_cursor_close2(MDBX_cursor *cursor);
  * Unbinds either closes all cursors associated (opened, renewed or binded) with
  * the given transaction in a bulk with minimal overhead.
  *
+ * \warning These functions must NOT be used when the transaction is used
+ * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
+ * behind the wrapper's back leaves it owning a freed handle (issue #91).
+ *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()
  *
@@ -5886,6 +5890,10 @@ LIBMDBX_API int mdbx_txn_release_all_cursors_ex(const MDBX_txn *txn, bool unbind
  *
  * Unbinds either closes all cursors associated (opened, renewed or binded) with
  * the given transaction in a bulk with minimal overhead.
+ *
+ * \warning These functions must NOT be used when the transaction is used
+ * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
+ * behind the wrapper's back leaves it owning a freed handle (issue #91).
  *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()

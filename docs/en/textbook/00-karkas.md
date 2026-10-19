@@ -139,8 +139,8 @@ Length ~100–200 pages._
   full-scan iterator, replication via per-table txnid, read-your-writes via clone/
   embark_read): problem → solution with code → trade-offs → alternatives.
 - **Ch. 33. Roadmap and the future: MithrilDB** — the current state; a common API for several formats;
-  amalgamation; replication (nonlinear GC); change subscription; encryption/compression; streaming BLOBs;
-  SWIG.
+  amalgamation; replication (nonlinear GC); change subscription; encryption/compression; a streaming mode
+  for long values ("Streaming BLOBs"); SWIG.
 
 ## Volume VI. Bindings
 

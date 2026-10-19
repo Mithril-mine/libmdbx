@@ -58,6 +58,17 @@ make check    # basic checks
 If the system `make` is not GNU Make you will see many errors: use `gmake`
 (FreeBSD/BSD) or install GNU Make (macOS: `brew install make`).
 
+## Conan (prebuilt, optional)
+
+A [Conan](https://conan.io/) recipe (`conanfile.py`) offers a prebuilt-binary
+route. Such a binary is compiled by the *active profile*, so the profile must
+exactly match the toolchain that builds the consumer project: Conan hashes
+only the profile, and otherwise the C++ ABI can split between the
+consumer-compiled `mdbx.h++` and the packaged binary. When in doubt, prefer
+the source-level route above (CMake subproject / FetchContent). The
+`mdbx.lto` and `mdbx.sanitize` options are part of the binary identity;
+details and the full hash audit: README "Packaging / Conan".
+
 ## Platforms
 
 - **Windows**: the original CMake + Visual Studio 2019/2022 (recent CMake/SDK

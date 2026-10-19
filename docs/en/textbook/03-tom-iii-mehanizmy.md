@@ -32,6 +32,15 @@ Properties:
 Values that do not fit in a leaf (larger than roughly half a page) go to **overflow pages**: a
 contiguous run of `P_LARGE` pages; the leaf keeps a pointer `{pgno, npages}`.
 
+When the value does not fit even a single overflow page (`npages > 1`), the run must be a sequence
+of **consecutive** pages of the needed length. This is the main practical point: allocating such a
+run is costlier than allocating any single free page (the engine may scan and merge GC records or
+append at the file end), and rewriting the value rewrites the whole run (CoW of all its pages,
+fragmentation, GC churn). The problem can be softened by splitting the long value into chunks that
+fit into a single page (`mdbx_limits_valsize4page_max()`); manual splitting is needed only until
+the planned **streamed API for long values** ("Streaming BLOBs") arrives. Details and mitigations —
+[Restrictions & gotchas](https://libmdbx.dqdkfa.ru/docs/en/overview/restrictions.html).
+
 ### 13.2. Why B+tree Rather than B-tree or LSM
 
 - **B-tree** — data in both leaves and branches: a search may stop at any level, but traversal
@@ -127,6 +136,7 @@ Integrity auditing and the database verification tool (`mdbx_chk`) are built on 
 
 - [ ] I can explain why all values live in the leaves of the B+tree while branches hold only separators, and what this gives for search and range traversal.
 - [ ] I know where a value that does not fit in a leaf goes (an overflow run) and what the leaf keeps in its place.
+- [ ] I understand why a value spanning several overflow pages needs a contiguous run of pages, and what it costs for allocation and rewriting.
 - [ ] I understand why libmdbx does not maintain its own buffer cache, and its consequences (copy-free reads, residency managed by the kernel, PTE growth when the DB ≫ RAM).
 - [ ] I can name the address-space limit on database size and its consequence on 32-bit platforms.
 - [ ] I know the purpose of the canary (`MDBX_canary`) and that the `v` field always holds the transaction number.
