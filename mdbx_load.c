@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-19-g253b2d56 at 2026-10-14T12:30:50+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-89-g2090f8e8 at 2026-10-19T12:05:46+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -55,6 +55,18 @@ static void signal_handler(int sig) {
 static char *prog;
 static bool quiet = false;
 static size_t lineno;
+static bool dump_trailer_seen = false;
+
+/* Whether a name contains control characters (a table name may contain any
+ * byte except NUL; when used as a `database=` header value it could break the
+ * dump format or reroute data into a different table). */
+static bool tool_name_has_control(const char *name) {
+  for (const unsigned char *p = (const unsigned char *)name; *p; ++p)
+    if (*p < 0x20 || *p == 0x7f)
+      return true;
+  return false;
+}
+
 static void error(const char *func, int rc) {
   if (!quiet) {
     if (lineno)
@@ -217,6 +229,12 @@ static int readhdr(void) {
     str = valstr(data_buf.iov_base, "database");
     if (str) {
       if (*str) {
+        if (tool_name_has_control(str)) {
+          if (!quiet)
+            fprintf(stderr, "%s: line %" PRIiSIZE ": invalid database name containing control characters\n", prog,
+                    lineno);
+          exit(EXIT_FAILURE);
+        }
         free(subname);
         subname = osal_strdup(str);
         if (!subname) {
@@ -371,7 +389,7 @@ static inline uint8_t unhex(const char *hex) {
   return (uint8_t)(hi << 4 | lo);
 }
 
-__hot static int readline(MDBX_val *out, MDBX_val *buf) {
+__hot static int readline(MDBX_val *out, MDBX_val *buf, bool *concise) {
   if (user_break)
     return MDBX_EINTR;
 
@@ -383,8 +401,10 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf) {
     if (c != ' ') {
       lineno++;
       if (fgets(buf->iov_base, (int)buf->iov_len, stdin)) {
-        if (c == 'D' && !strncmp(buf->iov_base, "ATA=END", STRLENOF("ATA=END")))
+        if (c == 'D' && !strncmp(buf->iov_base, "ATA=END", STRLENOF("ATA=END"))) {
+          dump_trailer_seen = true;
           return EOF;
+        }
       }
       return badend();
     }
@@ -394,8 +414,11 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf) {
   int c = fgetc(stdin);
   if (c == EOF)
     return errno ? errno : EOF;
-  if (c == ' ')
+  if (c == ' ') {
+    if (concise)
+      *concise = true;
     return (ungetc(c, stdin) == c) ? MDBX_SUCCESS : (errno ? errno : EOF);
+  }
 
   char *line = buf->iov_base;
   line[0] = (char)c;
@@ -826,19 +849,33 @@ int main(int argc, char *argv[]) {
     size_t count = 0;
     MDBX_val key = {.iov_base = nullptr, .iov_len = 0}, data = {.iov_base = nullptr, .iov_len = 0};
     while (err == MDBX_SUCCESS) {
-      err = readline(&key, &key_buf);
-      if (err == EOF)
-        break;
+      dump_trailer_seen = false;
+      err = readline(&key, &key_buf, nullptr);
+      if (err == EOF) {
+        if (mode & NOHDR || dump_trailer_seen)
+          break;
+        if (!quiet)
+          fprintf(stderr, "%s: line %" PRIiSIZE ": unexpected end of input (dump truncated)\n", prog, lineno);
+        err = MDBX_ENODATA;
+        goto bailout;
+      }
       if (err) {
         if (!quiet)
           fprintf(stderr, "%s: line %" PRIiSIZE ": failed to read %s\n", prog, lineno, "key");
         goto bailout;
       }
 
-      err = readline(&data, &data_buf);
+      bool data_concise = false;
+      err = readline(&data, &data_buf, &data_concise);
       if (err) {
         if (!quiet)
           fprintf(stderr, "%s: line %" PRIiSIZE ": failed to read %s\n", prog, lineno, "value");
+        goto bailout;
+      }
+      if (data_concise) {
+        if (!quiet)
+          fprintf(stderr, "%s: line %" PRIiSIZE ": concise-repeat marker for a value\n", prog, lineno);
+        err = MDBX_ENODATA;
         goto bailout;
       }
 

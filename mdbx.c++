@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-19-g253b2d56 at 2026-10-14T12:30:50+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-89-g2090f8e8 at 2026-10-19T12:05:46+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -659,9 +659,12 @@ struct MDBX_txn {
            * shifted left by 1, deleted slots have the LSB set. */
           pnl_t __restrict list;
         } spilled;
-        size_t writemap_dirty_npages;
-        size_t writemap_spilled_npages;
       };
+      /* WRITEMAP mode keeps two counters instead of the spilled dirty list above */
+      struct {
+        size_t dirty_npages;
+        size_t spilled_npages;
+      } writemap;
       void *preserve_parent_userctx;
       /* In write txns, next is located the array of cursors for each DB */
     } wr;
@@ -1301,7 +1304,7 @@ namespace mdbx {
 
 [[noreturn]] __cold void throw_bad_value_size() { throw bad_value_size(MDBX_BAD_VALSIZE); }
 
-__cold exception::exception(const ::mdbx::error &error) noexcept : base(error.what()), error_(error) {}
+__cold exception::exception(const ::mdbx::error &error) : base(error.what()), error_(error) {}
 
 __cold exception::~exception() noexcept {}
 
@@ -2379,18 +2382,19 @@ env_managed &env_managed::operator=(env_managed &&other) noexcept {
     if (MDBX_UNLIKELY(handle_))
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
-        /* coverity[UNCAUGHT_EXCEPT] */
-        close();
+        /* best-effort release: never throw from a noexcept move-assignment
+         * (issue #60) */
+        (void)::mdbx_env_close(handle_);
       }
-    inherited::operator=(std::move(other));
+    inherited::operator=(static_cast<env &&>(std::move(other)));
   }
   return *this;
 }
 
 __cold env_managed::~env_managed() {
   if (MDBX_UNLIKELY(handle_))
-    /* coverity[UNCAUGHT_EXCEPT] */
-    MDBX_CXX20_UNLIKELY error::success_or_throw(::mdbx_env_close(handle_));
+    /* best-effort release: never throw from a destructor (issue #60) */
+    (void)::mdbx_env_close(handle_);
 }
 
 __cold void env_managed::close(bool dont_sync) {
@@ -2398,11 +2402,23 @@ __cold void env_managed::close(bool dont_sync) {
   switch (rc.code()) {
   case MDBX_EBADSIGN:
     MDBX_CXX20_UNLIKELY handle_ = nullptr;
-    __fallthrough /* fall through */;
-  default:
     MDBX_CXX20_UNLIKELY rc.throw_exception();
+    return;
+  case MDBX_BUSY:
+    /* the environment is not released on MDBX_BUSY: keep the handle valid
+     * so a retry from the owner thread is possible (issue #60) */
+    MDBX_CXX20_UNLIKELY rc.throw_exception();
+    return;
   case MDBX_SUCCESS:
     MDBX_CXX20_LIKELY handle_ = nullptr;
+    return;
+  default:
+    /* mdbx_env_close_ex() releases the environment on every path after the
+     * signature CAS, including error returns from sync/fstat or env_close():
+     * null the handle before throwing to keep the destructor from re-entering
+     * the freed object (issue #60) */
+    MDBX_CXX20_UNLIKELY handle_ = nullptr;
+    MDBX_CXX20_UNLIKELY rc.throw_exception();
   }
 }
 
@@ -2498,18 +2514,19 @@ cursor_managed &cursor_managed::operator=(cursor_managed &&other) noexcept {
     if (MDBX_UNLIKELY(handle_))
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
-        /* coverity[UNCAUGHT_EXCEPT] */
-        close();
+        /* best-effort release: never throw from a noexcept move-assignment
+         * (issue #60) */
+        (void)::mdbx_cursor_close2(handle_);
       }
-    inherited::operator=(std::move(other));
+    inherited::operator=(static_cast<cursor &&>(std::move(other)));
   }
   return *this;
 }
 
 cursor_managed::~cursor_managed() {
   if (handle_)
-    /* coverity[UNCAUGHT_EXCEPT] */
-    error::success_or_throw(::mdbx_cursor_close2(handle_));
+    /* best-effort release: never throw from a destructor (issue #60) */
+    (void)::mdbx_cursor_close2(handle_);
 }
 
 //------------------------------------------------------------------------------
@@ -2530,18 +2547,19 @@ txn_managed &txn_managed::operator=(txn_managed &&other) noexcept {
     if (MDBX_UNLIKELY(handle_))
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
-        /* coverity[UNCAUGHT_EXCEPT] */
-        abort();
+        /* best-effort release: never throw from a noexcept move-assignment
+         * (issue #60) */
+        (void)::mdbx_txn_abort(handle_);
       }
-    inherited::operator=(std::move(other));
+    inherited::operator=(static_cast<txn &&>(std::move(other)));
   }
   return *this;
 }
 
 txn_managed::~txn_managed() {
   if (MDBX_UNLIKELY(handle_))
-    /* coverity[UNCAUGHT_EXCEPT] */
-    MDBX_CXX20_UNLIKELY error::success_or_throw(::mdbx_txn_abort(handle_));
+    /* best-effort release: never throw from a destructor (issue #60) */
+    (void)::mdbx_txn_abort(handle_);
 }
 
 void txn_managed::abort() { abort(nullptr); }
@@ -2553,6 +2571,9 @@ bool txn_managed::checkpoint() { return checkpoint(nullptr); }
 void txn_managed::commit_embark_read() { commit_embark_read(nullptr); }
 
 void txn_managed::abort(finalization_latency *latency) {
+  if (handle_ && (::mdbx_txn_flags(handle_) & MDBX_TXN_HAS_CHILD))
+    /* the C API would also abort and free the child, which a txn_managed may still own */
+    MDBX_CXX20_UNLIKELY error::throw_exception(MDBX_BAD_TXN);
   const error err = static_cast<MDBX_error_t>(::mdbx_txn_abort_ex(handle_, latency));
   if (MDBX_LIKELY(err.code() != MDBX_THREAD_MISMATCH))
     /* do not reset the handle in case of errors that do not change the transaction state. */
@@ -2562,12 +2583,24 @@ void txn_managed::abort(finalization_latency *latency) {
 }
 
 void txn_managed::commit(finalization_latency *latency) {
+  if (handle_ && (::mdbx_txn_flags(handle_) & MDBX_TXN_HAS_CHILD))
+    /* the C API would also commit and free the child, which a txn_managed may still own */
+    MDBX_CXX20_UNLIKELY error::throw_exception(MDBX_BAD_TXN);
+  const bool was_errored = (::mdbx_txn_flags(handle_) & MDBX_TXN_ERROR) != 0;
   const error err = static_cast<MDBX_error_t>(::mdbx_txn_commit_ex(handle_, latency));
   if (MDBX_LIKELY(err.code() != MDBX_THREAD_MISMATCH))
     /* do not reset the handle in case of errors that do not change the transaction state. */
     MDBX_CXX20_LIKELY handle_ = nullptr;
-  if (MDBX_UNLIKELY(err.code() != MDBX_SUCCESS))
+  if (MDBX_UNLIKELY(err.code() != MDBX_SUCCESS)) {
+    /* MDBX_RESULT_TRUE: aborted instead of committed, either due to previous errors
+     * or as an empty transaction with MDBX_NOSUCCESS_PURE_COMMIT */
+    if (err.code() == MDBX_RESULT_TRUE) {
+      if (!was_errored)
+        return;
+      error::throw_exception(MDBX_BAD_TXN);
+    }
     MDBX_CXX20_UNLIKELY err.throw_exception();
+  }
 }
 
 bool txn_managed::checkpoint(finalization_latency *latency) {
