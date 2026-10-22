@@ -17,7 +17,7 @@
 /// \copyright SPDX-License-Identifier: Apache-2.0
 /// \author Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> \date 2015-2026
 
-#define MDBX_BUILD_SOURCERY 66b709f51a75e4768d4900bbe763b83ba1e0cc0c2de0a37691c626d926a05779_v0_13_12_164_g7aca4951
+#define MDBX_BUILD_SOURCERY e0ae3583852f1b2691763de39e55b04c5152ce38ba99b17737beb006d542eaff_v0_13_12_208_gcf44b7ee
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -905,7 +905,11 @@ __extern_C key_t ftok(const char *, int);
 
 #if defined(__SANITIZE_ADDRESS__) && !defined(MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS)
 /* Avoid ASAN-trap due the target TLS-variable feed by Darwin's tlv_free() */
+#if defined(_MSC_VER) && !defined(__clang__)
+#define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) __declspec(no_sanitize_address)
+#else
 #define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) __attribute__((__no_sanitize_address__, __noinline__))
+#endif
 #else
 #define MDBX_ATTRIBUTE_NO_SANITIZE_ADDRESS(ELSEWISE) ELSEWISE
 #endif
@@ -1518,6 +1522,9 @@ MDBX_INTERNAL int osal_fileexists(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
                                 const pathchar_t *pathname, mdbx_filehandle_t *fd, mdbx_mode_t unix_mode_bits);
 MDBX_INTERNAL int osal_closefile(mdbx_filehandle_t fd);
+#if !defined(_WIN32) && !defined(_WIN64)
+MDBX_INTERNAL key_t osal_ftok(int fd, const char *pathname);
+#endif /* !Windows */
 MDBX_INTERNAL int osal_removefile(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_removedirectory(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_is_pipe(mdbx_filehandle_t fd);
@@ -1936,7 +1943,12 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #else
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2001
 #endif
-#elif defined(__sun) || defined(__SVR4) || defined(__svr4__)
+#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) ||                                                        \
+    (defined(_POSIX_SEMAPHORES) && _POSIX_SEMAPHORES >= 200112L &&                                                     \
+     !defined(__OpenBSD__)) /* OpenBSD's sem_init() always fails with EPERM on pshared */
+/* Prefer POSIX shared anonymous semaphores (POSIX1988) over the legacy System V IPC
+ * (SysV) whenever the platform provides process-shared semaphores, e.g. FreeBSD and
+ * NetBSD where the pthread process-shared primitives are not usable but POSIX are. */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX1988
 #else
 #define MDBX_LOCKING MDBX_LOCKING_SYSV
@@ -3421,7 +3433,7 @@ static void text(MDBX_val *v) {
   c = v->iov_base;
   end = c + v->iov_len;
   while (c < end) {
-    if (isprint(*c) && *c != '\\') {
+    if (isprint(*c) && *c != '\\' && !(*c == ' ' && c == v->iov_base)) {
       putchar(*c);
     } else {
       putchar('\\');
@@ -3448,6 +3460,25 @@ const char *prog;
 static void error(const char *func, int rc) {
   if (!quiet)
     fprintf(stderr, "%s: %s() error %d %s\n", prog, func, rc, mdbx_strerror(rc));
+}
+
+/* Whether a name contains control characters (a table name may contain any
+ * byte except NUL; when emitted raw into a dump stream it could break the
+ * format or reroute data, and when printed to a terminal it could leak
+ * escape sequences). */
+static bool tool_name_has_control(const char *name) {
+  for (const unsigned char *p = (const unsigned char *)name; *p; ++p)
+    if (*p < 0x20 || *p == 0x7f)
+      return true;
+  return false;
+}
+
+/* Print a name replacing control characters with '?', so that no control or
+ * escape sequences leak into a terminal or into a dump stream. */
+static void tool_print_sanitized(const void *data, size_t size) {
+  const unsigned char *p = (const unsigned char *)data;
+  for (size_t i = 0; i < size; ++i)
+    putchar((p[i] < 0x20 || p[i] == 0x7f) ? '?' : p[i]);
 }
 
 /* Dump in BDB-compatible format */
@@ -3492,8 +3523,14 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
       printf("canary=v%" PRIu64 ",x%" PRIu64 ",y%" PRIu64 ",z%" PRIu64 "\n", canary.v, canary.x, canary.y, canary.z);
   }
   printf("format=%s\n", mode & PRINT ? "print" : "bytevalue");
-  if (name)
+  if (name) {
+    if (tool_name_has_control(name)) {
+      if (!quiet)
+        fprintf(stderr, "%s: refuse to dump a table whose name contains control characters\n", prog);
+      return MDBX_EINVAL;
+    }
     printf("database=%s\n", name);
+  }
   printf("type=btree\n");
   printf("db_pagesize=%u\n", ms.ms_psize);
   /* if (ms.ms_mod_txnid)
@@ -3602,6 +3639,7 @@ int main(int argc, char *argv[]) {
   prog = argv[0];
   char *envname;
   char *subname = nullptr, *buf4free = nullptr;
+  const char *outname = nullptr;
   unsigned envflags = 0;
   bool alldbs = false, list = false;
   bool warmup = false;
@@ -3642,10 +3680,7 @@ int main(int argc, char *argv[]) {
       alldbs = true;
       break;
     case 'f':
-      if (freopen(optarg, "w", stdout) == nullptr) {
-        fprintf(stderr, "%s: %s: reopen: %s\n", prog, optarg, mdbx_strerror(errno));
-        exit(EXIT_FAILURE);
-      }
+      outname = optarg;
       break;
     case 'n':
       break;
@@ -3677,6 +3712,15 @@ int main(int argc, char *argv[]) {
 
   if (optind != argc - 1)
     usage();
+
+  if (outname) {
+    /* The output file is opened only after the command line has been fully
+     * validated, so a mistyped/erroneous invocation cannot truncate it. */
+    if (freopen(outname, "w", stdout) == nullptr) {
+      fprintf(stderr, "%s: %s: reopen: %s\n", prog, outname, mdbx_strerror(errno));
+      return EXIT_FAILURE;
+    }
+  }
 
 #if defined(_WIN32) || defined(_WIN64)
   SetConsoleCtrlHandler(ConsoleBreakHandlerRoutine, true);
@@ -3792,7 +3836,8 @@ int main(int argc, char *argv[]) {
       } else {
         count++;
         if (list) {
-          printf("%s\n", subname);
+          tool_print_sanitized(subname, strlen(subname));
+          putchar('\n');
         } else {
           err = dump_tbl(txn, sub_dbi, subname);
           if (unlikely(err != MDBX_SUCCESS)) {
@@ -3839,6 +3884,16 @@ int main(int argc, char *argv[]) {
     }
   } else {
     err = dump_tbl(txn, dbi, subname);
+  }
+
+  fflush(stdout);
+  if (ferror(stdout)) {
+    /* The dump stream swallowed a write error earlier, so the output is
+     * incomplete; report it instead of pretending a successful dump. */
+    if (!quiet)
+      fprintf(stderr, "%s: failed to write dump output\n", prog);
+    if (err == MDBX_SUCCESS)
+      err = MDBX_EIO;
   }
 
   switch (err) {

@@ -5352,6 +5352,10 @@ LIBMDBX_API int mdbx_cursor_close2(MDBX_cursor *cursor);
  * Unbinds either closes all cursors associated (opened, renewed or binded) with
  * the given transaction in a bulk with minimal overhead.
  *
+ * \warning These functions must NOT be used when the transaction is used
+ * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
+ * behind the wrapper's back leaves it owning a freed handle (issue #91).
+ *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()
  *
@@ -5375,6 +5379,10 @@ LIBMDBX_API int mdbx_txn_release_all_cursors_ex(const MDBX_txn *txn, bool unbind
  *
  * Unbinds either closes all cursors associated (opened, renewed or binded) with
  * the given transaction in a bulk with minimal overhead.
+ *
+ * \warning These functions must NOT be used when the transaction is used
+ * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
+ * behind the wrapper's back leaves it owning a freed handle (issue #91).
  *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()

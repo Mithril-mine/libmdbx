@@ -1940,7 +1940,7 @@ public:
   /// buffer just refers to data located outside the buffer.
   MDBX_NOTHROW_PURE_FUNCTION MDBX_CXX20_CONSTEXPR bool is_freestanding() const noexcept {
     static_assert(size_t(-intptr_t(max_length)) > max_length, "WTF?");
-    return size_t(byte_ptr() - silo_begin()) < silo_.capacity();
+    return size_t(byte_ptr() - silo_begin()) <= silo_.capacity();
   }
 
   /// \brief Checks whether data chunk stored in place within the buffer instance itself,
@@ -2488,7 +2488,7 @@ public:
   buffer &operator=(struct slice &&src) { return assign(::std::move(src)); }
 
 #if defined(DOXYGEN) || (defined(__cpp_lib_string_view) && __cpp_lib_string_view >= 201606L)
-  template <class CHAR, class T> buffer &operator=(const ::std::basic_string_view<CHAR, T> &view) noexcept {
+  template <class CHAR, class T> buffer &operator=(const ::std::basic_string_view<CHAR, T> &view) {
     return assign(view);
   }
 
@@ -3914,7 +3914,9 @@ public:
     if (MDBX_UNLIKELY(handle_))
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
-        close();
+        /* best-effort release: never throw from a noexcept move-assignment
+         * (issue #60) */
+        (void)::mdbx_env_close(handle_);
       }
     inherited::operator=(std::move(other));
     return *this;
@@ -3944,6 +3946,15 @@ public:
   inline txn &operator=(txn &&) noexcept;
   inline txn(txn &&) noexcept;
   inline ~txn() noexcept;
+  /* The base handle must never be move-initialized from the owning
+   * txn_managed: the move would silently drop ownership, so the transaction
+   * (and for a writer, the environment's writer lock) would never be released
+   * (issue #77). The exact-match deleted overloads win over the base upcast
+   * and turn `mdbx::txn t = env.start_write();` into a compile error.
+   * Copying from an lvalue txn_managed stays allowed: the copy is a
+   * non-owning view and does not change the source's ownership. */
+  txn(txn_managed &&) = delete;
+  txn &operator=(txn_managed &&) = delete;
 
   MDBX_CXX14_CONSTEXPR operator bool() const noexcept;
   MDBX_CXX14_CONSTEXPR operator const MDBX_txn *() const;
@@ -4016,9 +4027,6 @@ public:
 
   /// \brief Unbind or close all cursors.
   inline size_t release_all_cursors(bool unbind) const;
-
-  /// \brief Close all cursors.
-  inline size_t close_all_cursors() const { return release_all_cursors(false); }
 
   /// \brief Unbind all cursors.
   inline size_t unbind_all_cursors() const { return release_all_cursors(true); }
@@ -4285,9 +4293,11 @@ public:
     if (MDBX_UNLIKELY(handle_))
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
-        abort();
+        /* best-effort release: never throw from a noexcept move-assignment
+         * (issue #60) */
+        (void)::mdbx_txn_abort(handle_);
       }
-    inherited::operator=(std::move(other));
+    inherited::operator=(static_cast<txn &&>(std::move(other)));
     return *this;
   }
   txn_managed(const txn_managed &) = delete;
