@@ -3,6 +3,7 @@
 > Смежные: [Установка и сборка](install-build.md) ·
 > [Тулинг](../reference/tooling.md) · [Ограничения](../overview/restrictions.md) ·
 > [Учебник: Том I «Основы»](../textbook/01-tom-i-osnovy.md) ·
+> [Шпаргалка CRUD](crud-quick.md) ·
 > [Справочник C API](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__api.html)
 
 Всё начинается с **окружения** (`MDBX_env`): `mdbx_env_create()` →
@@ -85,7 +86,8 @@ write: попытки начать следующую будут блокиро�
 - **Не используйте окружение в потомке после `fork()`** — libmdbx проверяет
   это в критических точках. При необходимости —
   `mdbx_env_resurrect_after_fork()`.
-- **Не более одной транзакции на поток.** Нарушения детектируются кодами
+- **Не более одной транзакции на поток.** Транзакция привязана к потоку по
+  умолчанию (Thread Local Storage). Нарушения детектируются кодами
   `MDBX_TXN_OVERLAPPING`, `MDBX_BAD_RSLOT`, `MDBX_BUSY` — если не включена
   опция `MDBX_NOSTICKYTHREADS` (передача транзакций между потоками; с ней
   вы должны точно понимать, что делаете). Write-транзакция обязана быть
@@ -120,5 +122,13 @@ write: попытки начать следующую будут блокиро�
 - Оценка объёма диапазонных запросов: `mdbx_estimate_*`.
 - Разрешение «БД заполнена» из-за долгих читателей: `mdbx_env_set_hsr()`.
 - Последовательности и canary-маркеры: `mdbx_dbi_sequence()`, `MDBX_canary`.
+- Эксклюзивный режим: `MDBX_EXCLUSIVE`.
+- Очистка БД: `mdbx_drop()`.
+- Обнаружение и обработка ошибок: группа
+  [`c_err`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html).
+- Статистика БД: группа
+  [`c_statinfo`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__statinfo.html).
+- Временное снижение надёжности ради скорости: [режимы долговечности](durability-modes.md).
+- Пользовательские порядки сортировки (делать не рекомендуется).
 - [Режимы долговечности](durability-modes.md) — компромиссы надёжность/скорость.
 - [Учебник: Том I](../textbook/01-tom-i-osnovy.md) — систематическое изложение.

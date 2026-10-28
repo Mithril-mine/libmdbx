@@ -2,7 +2,8 @@
 
 > **Примечание:** справочник API пока не переведён на русский язык — все
 > страницы справочника доступны только в английской локализации
-> (`/docs/en/reference/api/`). Перевод появится, когда будет решён вопрос
+> ([`/docs/en/reference/`](https://libmdbx.dqdkfa.ru/docs/en/reference/)).
+> Перевод появится, когда будет решён вопрос
 > хранения и синхронизации перевода между локализациями.
 
 Справочник по C и C++ API генерируется из аннотаций в исходниках (`mdbx.h`,
@@ -18,8 +19,12 @@
   а также C++ API (`mdbx.h++`)
 - [Члены классов](https://libmdbx.dqdkfa.ru/docs/en/reference/api/class_members.html) · [Макросы](https://libmdbx.dqdkfa.ru/docs/en/reference/api/macros.html)
 
-На этом же разделе: [утилиты командной строки](tooling.md);
-[журнал изменений](https://libmdbx.dqdkfa.ru/docs/en/reference/changelog.html) (английский).
+Сами заголовки с полной встроенной документацией:
+
+- [Заголовок C API `mdbx.h`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/mdbx_8h.html)
+- [Заголовок C++ API `mdbx.h++`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/mdbx_8h_09_09.html)
+
+На этом же разделе: [утилиты командной строки](tooling.md).
 
 Вводное руководство — в [гайдах](../index.md); страница
 [первых шагов](../getting-started/first-steps.md) показывает канонический поток

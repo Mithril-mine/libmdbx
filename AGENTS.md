@@ -1,6 +1,6 @@
 # libmdbx — agent guide
 
-_Package: v0.15.0-139-g634a8449 (2026-10-19T08:59:22+03:00)_
+_Package: v0.15.0-333-gebaaa06d (2026-10-28T23:41:11+03:00)_
 
 _libmdbx_ is an embedded transactional key-value database: compact, extremely fast
 (memory-mapped, B+tree, O(log N)), ACID, crash-safe by default, no WAL, no server

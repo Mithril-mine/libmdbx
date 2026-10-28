@@ -184,7 +184,7 @@ The most significant ones are listed below.
 - **GC diagnostics:** `mdbx_gc_info()` (state, histograms, record iteration) and the `gcrtime`
   counter — time spent searching and reclaiming.
 - **Refund/loose pages:** returning freed pages within the current transaction without touching GC
-  (options `MDBX_ENABLE_REFUND`, `MDBX_opt_loose_limit`, `dp_reserve_limit`).
+  (options `MDBX_opt_loose_limit`, `dp_reserve_limit`).
 - **RKL** — tracking GC-record identifiers (intervals + lists) with "weighted-reserve" allocation:
   one-pass GC update with O(1)..O(log N) complexity.
 - **Sparse and lock-free DBI handle sets** (`MDBX_ENABLE_DBI_SPARSE`, `MDBX_ENABLE_DBI_LOCKFREE`) —

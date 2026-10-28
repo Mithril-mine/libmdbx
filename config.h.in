@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00),
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-333-gebaaa06d at 2026-10-28T23:41:11+03:00),
  * it is the template for libmdbx's config.h
  ******************************************************************************/
 
@@ -36,13 +36,19 @@
 #ifndef MDBX_LOCKING_AUTO
 #cmakedefine MDBX_LOCKING @MDBX_LOCKING@
 #endif
+#cmakedefine01 MDBX_AVOID_FTOK
 #cmakedefine MDBX_TRUST_RTC_AUTO
 #ifndef MDBX_TRUST_RTC_AUTO
 #cmakedefine01 MDBX_TRUST_RTC
 #endif
 #cmakedefine01 MDBX_DISABLE_VALIDATION
 #cmakedefine01 MDBX_AVOID_MSYNC
-#cmakedefine01 MDBX_ENABLE_REFUND
+/* Clang on x86/x64: __builtin_cpu_supports() pulls __cpu_model from
+ * compiler-rt, whose availability is probed at configure time by
+ * cmake/compiler.cmake. Left empty for other compilers: the engine
+ * decides by itself (see options.h). */
+@MDBX_X86_CPU_FEATURES_DEFINE@
+#cmakedefine01 MDBX_ENABLE_EXCLUSIVE_FASTPATH
 #cmakedefine01 MDBX_ENABLE_BIGFOOT
 #cmakedefine01 MDBX_ENABLE_PGOP_STAT
 #cmakedefine01 MDBX_ENABLE_PGET_STAT

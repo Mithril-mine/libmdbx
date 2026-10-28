@@ -31,7 +31,6 @@ The full list of rules and tips is in the knowledge base (`knowledge-base/rules-
 
 - Set the geometry once before open; do not lower `upper`.
 - Lower `rp_augment_limit` — only together with `gc_time_limit`.
-- Do not use `MDBX_ENABLE_REFUND=0` in production (debug option).
 - Long values: increase the page size (up to 64 KB), split records.
 - A value spanning several overflow pages needs a run of **consecutive** pages: when large values are
   rewritten often, watch fragmentation (`mdbx_chk` histograms, overflow page counts in
@@ -84,7 +83,7 @@ Full code: [34-rules-counter.c++](examples/c++/34-rules-counter.c++).
 - One transaction — one thread: passing a transaction between threads is UB/an error (`MDBX_THREAD_MISMATCH`), even with `NOSTICKYTHREADS` a deadlock is possible.
 - An unclosed read-transaction "freezes" page reclamation — the file grows to `MDBX_MAP_FULL`; close/park it.
 - Do not open the database twice in one process; `fork()` — only with `resurrect_after_fork` in the child; copying — only `mdbx_copy`.
-- Do not use `MDBX_UTTERLY_NOSYNC` or debug options (`MDBX_ENABLE_REFUND=0`) in production.
+- Do not use `MDBX_UTTERLY_NOSYNC` in production.
 - Set the geometry once before open, do not lower `upper`; for long values increase the page size (up to 64 KB), split into chunks that fit into one page, or store outside the DB; values that do not fit one page need a contiguous run and are sensitive to fragmentation — until the streaming API ("Streaming BLOBs") arrives.
 - Do deletions before insertions; mass deletions — `bunch_delete`/`delete_range`; DUPSORT deletion while iterating — two cursors.
 - Typical counter-examples: violating thread discipline (`BAD_RSLOT`), double opening, a forgotten reader, a debug build in production.
@@ -95,7 +94,7 @@ Full code: [34-rules-counter.c++](examples/c++/34-rules-counter.c++).
 - [ ] Close/park read-transactions immediately after use.
 - [ ] Copy the database file only via `mdbx_copy`.
 - [ ] Set the geometry before open and do not lower `upper`.
-- [ ] Exclude `MDBX_UTTERLY_NOSYNC` and `MDBX_ENABLE_REFUND=0` from production configuration.
+- [ ] Exclude `MDBX_UTTERLY_NOSYNC` from production configuration.
 - [ ] Perform deletions before insertions; mass deletions — via `bunch_delete`/`delete_range`.
 - [ ] For DUPSORT deletion while iterating use two cursors.
 

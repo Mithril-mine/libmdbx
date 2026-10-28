@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-333-gebaaa06d at 2026-10-28T23:41:11+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -32,6 +32,16 @@
 #pragma warning(disable : 5054) /* deprecated between enumerations of different types */
 #endif
 #endif /* MSVC */
+
+#if MDBX_LOCKING == MDBX_LOCKING_SYSV
+#define MDBX_SYSVFTOK_SIGN_CHUNKS 6 /* ftok extended signature */
+typedef struct mdbx_ftok {
+  key_t key;
+  /* Extra semaphores whose semval holds the database signature, so a key
+   * collision with another database's live set can be detected. */
+  unsigned short signature[MDBX_SYSVFTOK_SIGN_CHUNKS];
+} mdbx_ftok_t;
+#endif /* MDBX_LOCKING_SYSV */
 
 typedef struct dp dp_t;
 typedef struct dpl dpl_t;
@@ -329,6 +339,7 @@ typedef union osal_srwlock {
 } osal_srwlock_t;
 
 typedef void(WINAPI *osal_srwlock_t_function)(osal_srwlock_t *);
+typedef BOOLEAN(WINAPI *osal_srwlock_t_try_function)(osal_srwlock_t *);
 
 #if _WIN32_WINNT < 0x0600 /* prior to Windows Vista */
 typedef enum _FILE_INFO_BY_HANDLE_CLASS {
@@ -429,6 +440,7 @@ struct libmdbx_imports {
   osal_srwlock_t_function srwl_ReleaseShared;
   osal_srwlock_t_function srwl_AcquireExclusive;
   osal_srwlock_t_function srwl_ReleaseExclusive;
+  osal_srwlock_t_try_function srwl_TryAcquireExclusive;
   MDBX_NtExtendSection NtExtendSection;
   MDBX_GetFileInformationByHandleEx GetFileInformationByHandleEx;
   MDBX_GetVolumeInformationByHandleW GetVolumeInformationByHandleW;
@@ -566,7 +578,9 @@ enum txn_flags {
   txn_rw_begin_flags = MDBX_TXN_NOMETASYNC | MDBX_TXN_NOSYNC | MDBX_TXN_TRY,
   txn_rw_already_locked = MDBX_TXN_RDONLY_PREPARE & ~MDBX_TXN_RDONLY,
   txn_nipped = UINT32_C(0x1000),
-  txn_shrink_allowed = UINT32_C(0x40000000),
+  /* The transaction may unmap/remap the database mapping (possibly with an
+   * address change) for resize; see dxb_resize()/osal_mresize(). */
+  txn_unmap_allowed = UINT32_C(0x40000000),
   txn_parked = MDBX_TXN_PARKED,
   txn_gc_drained = 0x100 /* GC was depleted up to oldest reader */,
   txn_may_have_cursors = 0x400,
@@ -637,9 +651,7 @@ struct MDBX_txn {
         rkl_t comeback;    /* The list of ids of records returned into GC during commit, etc */
       } gc;
       bool prefault_write_activated;
-#if MDBX_ENABLE_REFUND
       pgno_t loose_refund_wl /* FIXME: describe */;
-#endif /* MDBX_ENABLE_REFUND */
       /* a sequence to spilling dirty page with LRU policy */
       unsigned dirtylru;
       /* dirtylist room: Dirty array size - dirty pages visible to this txn.
@@ -873,6 +885,10 @@ struct MDBX_env {
     uint8_t spill_parent4child_denominator;
     uint16_t merge_threshold_dot16;
     uint16_t split_reserve_dot16;
+    /* Minimal period between attempts to shrink the datafile, in monotonic
+     * units (see osal_monotime()); zero means no throttling. Affects the
+     * current process only (issue #170). */
+    uint64_t shrink_retry_period;
 #if !IS_WINDOWS
     unsigned writethrough_threshold;
 #endif /* Windows */
@@ -910,9 +926,9 @@ struct MDBX_env {
   } geo_in_bytes;
 
 #if MDBX_LOCKING == MDBX_LOCKING_SYSV
-  union {
-    key_t key;
+  struct {
     int semid;
+    mdbx_ftok_t ft;
   } me_sysv_ipc;
 #endif /* MDBX_LOCKING == MDBX_LOCKING_SYSV */
   bool incore;
@@ -949,7 +965,21 @@ struct MDBX_env {
   osal_ioring_t ioring;
 
 #if IS_WINDOWS
+  /* Monotonic timestamp of the last datafile-shrink attempt, for the
+   * per-process throttling of shrink-through-un-map (issue #170). Kept here
+   * (a per-process field) rather than in the shared lck_t, so no lock-file
+   * format/version change is required. */
+  uint64_t shrink_last_attempt;
   osal_srwlock_t remap_lock;
+  /* Leaf lock serializing concurrent resizers (issue #154). remap_lock is now
+   * taken shared for a plain grow, so two growers (a read txn noticing the file
+   * grew by another process, and the writer growing it) could otherwise mutate
+   * env->dxb_mmap and call NtExtendSection() concurrently. This mutex makes
+   * grow-vs-grow and grow-vs-shrink mutually exclusive without blocking
+   * readers, which only ever hold remap_lock shared. Always acquired BEFORE
+   * remap_lock and released AFTER it, and never held across a blocking wait on
+   * remap_lock, so it stays a leaf (no deadlock cycle). */
+  osal_fastmutex_t resize_mutex;
   /* Workaround for LockFileEx and WriteFile multithread bug */
   CRITICAL_SECTION lck_event_cs;
   CRITICAL_SECTION dxb_event_cs;
@@ -1001,7 +1031,7 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 
   STATIC_ASSERT_MSG((txn_state_flags & (txn_rw_begin_flags | txn_ro_begin_flags)) == 0,
                     "Oops, some txn flags overlapped or wrong");
-  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_shrink_allowed) == 0,
+  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_unmap_allowed) == 0,
                     "Oops, some txn flags overlapped or wrong");
 
   STATIC_ASSERT(sizeof(reader_slot_t) == 32);
@@ -3020,6 +3050,14 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_debug_flags_t 
   }
   if (it & MDBX_DBG_LEGACY_OVERLAP) {
     out << delimiter << "DBG_LEGACY_OVERLAP";
+    delimiter = comma;
+  }
+  if (it & MDBX_DBG_DONT_UPGRADE) {
+    out << delimiter << "MDBX_DBG_DONT_UPGRADE";
+    delimiter = comma;
+  }
+  if (it & MDBX_DBG_ERR) {
+    out << delimiter << "MDBX_DBG_ERR";
     delimiter = comma;
   }
   if (delimiter != comma)

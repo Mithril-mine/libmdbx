@@ -455,6 +455,54 @@ if(CMAKE_C_COMPILER_LOADED)
   endif()
 endif()
 
+# Probing __builtin_cpu_supports() on Clang for x86/x64: it pulls in
+# __cpu_model/__cpu_indicator_init from compiler-rt, which is not always
+# linked automatically (and may be absent on the target). The MSVC-LLVM clang
+# is the key non-Linux case: it needs the clang_rt builtins library, whose
+# Windows path is a backslash string that must be normalized before it is
+# put into CMAKE_REQUIRED_LIBRARIES. Only for Clang the result line is emitted
+# into config-cmake.h as MDBX_HAVE_BUILTIN_CPU_SUPPORTS (0/1). For any other
+# compiler, or when MDBX_HAVE_BUILTIN_CPU_SUPPORTS was already provided on the
+# command line, the engine decides by itself (options.h).
+unset(MDBX_X86_CPU_FEATURES_DEFINE)
+if(CMAKE_COMPILER_IS_CLANG AND (X86_32 OR X86_64) AND NOT DEFINED MDBX_HAVE_BUILTIN_CPU_SUPPORTS)
+  set(_probe_src "int main(void){__builtin_cpu_init(); return __builtin_cpu_supports(\"sse2\")?0:1;}")
+  set(_save_libs ${CMAKE_REQUIRED_LIBRARIES})
+  set(_save_flags ${CMAKE_REQUIRED_FLAGS})
+  set(CMAKE_REQUIRED_FLAGS "-O0")
+  check_c_source_compiles("${_probe_src}" MDBX_CLANG_CPU_BUILTINS_OK)
+  if(MDBX_CLANG_CPU_BUILTINS_OK)
+    message(STATUS "Clang x86: __builtin_cpu_supports() links directly")
+    set(MDBX_X86_CPU_FEATURES_DEFINE "#define MDBX_HAVE_BUILTIN_CPU_SUPPORTS 1")
+  else()
+    execute_process(
+      COMMAND "${CMAKE_C_COMPILER}" --rtlib=compiler-rt -print-libgcc-file-name
+      OUTPUT_VARIABLE MDBX_CLANG_CPU_RT_LIB
+      OUTPUT_STRIP_TRAILING_WHITESPACE
+      ERROR_VARIABLE _rt_err
+      RESULT_VARIABLE _rt_rc)
+    if(_rt_rc EQUAL 0 AND EXISTS "${MDBX_CLANG_CPU_RT_LIB}")
+      # Normalize any backslash Windows path (e.g. MSVC-LLVM clang_rt builtins)
+      # so it parses in CMake code without '\' escapes.
+      file(TO_CMAKE_PATH "${MDBX_CLANG_CPU_RT_LIB}" MDBX_CLANG_CPU_RT_LIB_CMAKE)
+      set(CMAKE_REQUIRED_LIBRARIES "${MDBX_CLANG_CPU_RT_LIB_CMAKE}")
+      check_c_source_compiles("${_probe_src}" MDBX_CLANG_CPU_BUILTINS_RT_OK)
+      if(MDBX_CLANG_CPU_BUILTINS_RT_OK)
+        message(STATUS "Clang x86: __builtin_cpu_supports() via ${MDBX_CLANG_CPU_RT_LIB}")
+        set(MDBX_X86_CPU_FEATURES_DEFINE "#define MDBX_HAVE_BUILTIN_CPU_SUPPORTS 1")
+      else()
+        message(STATUS "Clang x86: __builtin_cpu_supports() unusable even with compiler-rt")
+        set(MDBX_X86_CPU_FEATURES_DEFINE "#define MDBX_HAVE_BUILTIN_CPU_SUPPORTS 0")
+      endif()
+    else()
+      message(STATUS "Clang x86: __builtin_cpu_supports() needs compiler-rt, but it is absent")
+      set(MDBX_X86_CPU_FEATURES_DEFINE "#define MDBX_HAVE_BUILTIN_CPU_SUPPORTS 0")
+    endif()
+  endif()
+  set(CMAKE_REQUIRED_LIBRARIES ${_save_libs})
+  set(CMAKE_REQUIRED_FLAGS ${_save_flags})
+endif()
+
 # Check for LTO support by GCC
 if(CMAKE_COMPILER_IS_GNU${CMAKE_PRIMARY_LANG}
    AND NOT CMAKE_COMPILER_IS_ELBRUSC

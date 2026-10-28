@@ -3,7 +3,7 @@
 > Related: [Installation and building](install-build.md) ·
 > [Tooling](../reference/tooling.md) · [Restrictions](../overview/restrictions.md) ·
 > [Textbook: Volume I "Fundamentals"](../textbook/01-tom-i-osnovy.md) ·
-> [C API reference](../reference/api/group__c__api.md)
+> [Quick CRUD](crud-quick.md) · [C API reference](../reference/api/group__c__api.md)
 
 Everything starts with an **environment** (`MDBX_env`): `mdbx_env_create()` →
 `mdbx_env_open()` → work → `mdbx_env_close()`. A non-zero `mode` argument of
@@ -89,7 +89,8 @@ one is committed or aborted. Reads are unaffected.
 - **Do not use the environment in a child after `fork()`** — libmdbx checks
   this at critical points. If needed —
   `mdbx_env_resurrect_after_fork()`.
-- **No more than one transaction per thread.** Violations are reported with
+- **No more than one transaction per thread.** A transaction is tied to the
+  thread by default (Thread Local Storage). Violations are reported with
   `MDBX_TXN_OVERLAPPING`, `MDBX_BAD_RSLOT`, `MDBX_BUSY` — unless the
   `MDBX_NOSTICKYTHREADS` option is set (transaction hand-off between threads;
   with it you must know exactly what you are doing). A write transaction must
@@ -125,6 +126,15 @@ while at least one transaction is using it.
 - Range query result estimation: `mdbx_estimate_*`.
 - Resolving a "database full" caused by slow readers: `mdbx_env_set_hsr()`.
 - Sequences and canary markers: `mdbx_dbi_sequence()`, `MDBX_canary`.
+- Exclusive mode: `MDBX_EXCLUSIVE`.
+- Drop and clean a database: `mdbx_drop()`.
+- Detect and report errors: the
+  [`c_err` group](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__err.html).
+- Gather statistics about the database: the
+  [`c_statinfo` group](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__statinfo.html).
+- Reduce (temporarily) robustness for more speed: the
+  [durability modes](durability-modes.md).
+- Define custom sort orders (but this is recommended to be avoided).
 - [Durability modes](durability-modes.md) — the reliability/performance
   trade-offs.
 - [Textbook: Volume I](../textbook/01-tom-i-osnovy.md) — the systematic

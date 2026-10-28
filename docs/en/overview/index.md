@@ -49,6 +49,22 @@ set of [improvements](../deep-dive/improvements.md).
 
 ## Key features
 
+- B+tree-based database management library, modeled loosely on the BerkeleyDB
+  API, but much simplified: the entire database ("environment") is exposed in a
+  memory map, and all data fetches return data directly from the mapped memory
+  — **no `malloc`'s or `memcpy`'s occur during data fetches**. The library is
+  extremely simple (no page-caching layer of its own), extremely high
+  performance and memory-efficient.
+- Fully thread-aware: supports concurrent read/write access from multiple
+  processes and threads; **writes are fully serialized** — only one write
+  transaction may be active at a time, which guarantees that writers can never
+  deadlock.
+- The memory map is **read-only by default**, providing total immunity to
+  corruption from stray pointer writes; read-write mapping offers much higher
+  write performance, but adds the possibility for stray application writes
+  through pointers to silently corrupt the database.
+- The database structure is multi-versioned, so readers run with no locks;
+  writers cannot block readers, and readers do not block writers.
 - Key-value data model, keys are always sorted; range lookups including range
   query volume estimation.
 - Fully [ACID](https://en.wikipedia.org/wiki/ACID) through
@@ -136,3 +152,22 @@ Go ([mdbx-go](https://github.com/torquem-ch/mdbx-go)),
 Python ([PyPi/libmdbx](https://pypi.org/project/libmdbx/)),
 .NET ([libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet)),
 NodeJS ([mdbxmou](https://github.com/ikonopistsev/mdbxmou)) and others.
+
+## Roadmap and the future
+
+- **MithrilDB** — the next-generation engine that removes the architectural
+  limitations inherited from LMDB: a common API for several storage formats,
+  reworked long-value handling, fundamental GC/freelist improvements, and no
+  more trouble with long-lived readers. See the [Textbook: Chapter 33 «Roadmap
+  and the future: MithrilDB»](../textbook/05-tom-v-ekspertnye-temy.md) and the
+  [Roadmap](../overview/restrictions.md#roadmap) section.
+- **Roadmap presentation** — the annotated slide-deck
+  «[_libmdbx_: successes, obstacles, goals and roadmap](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf)»
+  with important explanations embedded as comments (a
+  [Russian version](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-russian.pdf)).
+- **TODO** — the current open directions are tracked in
+  [`TODO.md`](https://sourcecraft.dev/dqdkfa/libmdbx/browse/TODO.md): new APIs,
+  WASM, bindings, tracing, and more.
+- **SkyNET** (Mission «Concordia Intellectuum») — an experimental AI model, a
+  coordinated hierarchical swarm/harness, used in the development and
+  maintenance of _libmdbx_.

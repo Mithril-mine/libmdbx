@@ -10,7 +10,20 @@ limitations, operational risks and their mitigations.
 
 ## MVCC and "long-lived" readers
 
-The most important operational nuance of libmdbx. The mechanics: every write
+Understanding the problem of long-lived readers requires a little background,
+but it can be difficult for a quick perception. So it is reasonable to
+simplify it as follows: the **garbage collection problem exists in all
+databases** one way or another — e.g. `VACUUM` in PostgreSQL. But in libmdbx
+it is even more discernible because of the high transaction rate and the
+intentional simplification of internals in favor of performance: libmdbx
+employs [Multiversion concurrency control](https://en.wikipedia.org/wiki/Multiversion_concurrency_control)
+on the [copy-on-write](https://en.wikipedia.org/wiki/Copy-on-write) basis,
+which allows multiple readers to run in parallel with a write transaction
+without blocking. Each write transaction needs free pages for the changed
+data; libmdbx efficiently recycles such pages from earlier unused snapshots,
+**but this is impossible while a read transaction holds an old snapshot**.
+
+The mechanics: every write
 transaction builds a new version of the changed pages (MVCC on a copy-on-write
 basis); readers work with snapshots and are never blocked. Pages freed by newer
 write transactions cannot be reused while at least one active older snapshot

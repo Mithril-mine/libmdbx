@@ -616,6 +616,8 @@ add_option(MDBX MMAP_NEEDS_JOLT "Assume system needs explicit syscall to sync/fl
 mark_as_advanced(MDBX_MMAP_NEEDS_JOLT)
 add_option(MDBX LOCKING "Locking method (Windows=-1, SystemV=5, POSIX=1988, POSIX=2001, POSIX=2008)" AUTO)
 mark_as_advanced(MDBX_LOCKING)
+add_option(MDBX AVOID_FTOK "Use own collision-resistant key derivation for System V IPC instead of the system ftok()" OFF)
+mark_as_advanced(MDBX_AVOID_FTOK)
 add_option(MDBX TRUST_RTC "Does a system have battery-backed Real-Time Clock or just a fake" AUTO)
 mark_as_advanced(MDBX_TRUST_RTC)
 add_option(
@@ -624,7 +626,16 @@ add_option(
   "Disable some checks to reduce an overhead and detection probability of database corruption to a values closer to the LMDB"
   OFF)
 mark_as_advanced(MDBX_DISABLE_VALIDATION)
-add_option(MDBX ENABLE_REFUND "Zerocost auto-compactification during write-transactions" ON)
+if(WIN32)
+  set(MDBX_ENABLE_EXCLUSIVE_FASTPATH_DEFAULT ON)
+else()
+  set(MDBX_ENABLE_EXCLUSIVE_FASTPATH_DEFAULT OFF)
+endif()
+add_option(
+  MDBX ENABLE_EXCLUSIVE_FASTPATH
+  "On Windows keep the normal write-through/dsync i/o path in MDBX_EXCLUSIVE mode, enforcing exclusivity by constant byte-range locks instead of an unshareable data file"
+  ${MDBX_ENABLE_EXCLUSIVE_FASTPATH_DEFAULT})
+mark_as_advanced(MDBX_ENABLE_EXCLUSIVE_FASTPATH)
 add_option(MDBX ENABLE_BIGFOOT
            "Chunking long list of retired pages during huge transactions commit to avoid use sequences of pages" ON)
 add_option(MDBX ENABLE_PGOP_STAT "Gathering statistics on pages modification operations" ON)
@@ -891,6 +902,15 @@ target_include_directories(
 if(MDBX_CLANG_BUILTINS_LIB)
   target_link_libraries(mdbx-static INTERFACE "${MDBX_CLANG_BUILTINS_LIB}")
 endif()
+if(MDBX_CLANG_CPU_RT_LIB)
+  # Normalized in cmake/compiler.cmake (backslash Windows paths are invalid here).
+  if(NOT MDBX_CLANG_CPU_RT_LINK)
+    file(TO_CMAKE_PATH "${MDBX_CLANG_CPU_RT_LIB}" MDBX_CLANG_CPU_RT_LINK)
+  endif()
+  if(MDBX_CLANG_CPU_RT_LINK AND NOT MDBX_CLANG_CPU_BUILTINS_OK)
+    target_link_libraries(mdbx-static INTERFACE "${MDBX_CLANG_CPU_RT_LINK}")
+  endif()
+endif()
 
 # ######################################################################################################################
 
@@ -944,6 +964,14 @@ if(MDBX_BUILD_SHARED_LIBRARY)
     INTERFACE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>" "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>")
   if(MDBX_CLANG_BUILTINS_LIB)
     target_link_libraries(mdbx PRIVATE "${MDBX_CLANG_BUILTINS_LIB}")
+  endif()
+  if(MDBX_CLANG_CPU_RT_LIB)
+    if(NOT MDBX_CLANG_CPU_RT_LINK)
+      file(TO_CMAKE_PATH "${MDBX_CLANG_CPU_RT_LIB}" MDBX_CLANG_CPU_RT_LINK)
+    endif()
+    if(MDBX_CLANG_CPU_RT_LINK AND NOT MDBX_CLANG_CPU_BUILTINS_OK)
+      target_link_libraries(mdbx PRIVATE "${MDBX_CLANG_CPU_RT_LINK}")
+    endif()
   endif()
 endif()
 

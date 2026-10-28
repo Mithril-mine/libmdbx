@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-139-g634a8449 at 2026-10-19T08:59:22+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-333-gebaaa06d at 2026-10-28T23:41:11+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY d683f6f71a995a0e035b722818df0fe93e2cc11219eaf561b2a8045aa4c17709_v0_15_0_139_g634a8449
+#define MDBX_BUILD_SOURCERY 6fb8f0b1db8531dc9f16cb267c5fc0bef8326635ec41934a5e1b3fbfffd5bc4f_v0_15_0_333_gebaaa06d
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1101,6 +1101,91 @@ template <typename T, size_t N> char (&__ArraySizeHelper(T (&array)[N]))[N];
 #endif
 #endif /* -Walignment-reduction-ignored */
 
+#if IS_WINDOWS && !(defined(__CYGWIN__) || defined(__MINGW__) || defined(__MINGW32__) || defined(__MINGW64__))
+/* Protection against leakage/use of POSIX identifiers during build for Windows,
+ * which may also be defined as unstable, arbitrary values dependent on the build environment.
+ *   git grep -h -w -o 'E[A-Z]\+' | sort | uniq
+ */
+#undef EACCES
+#undef EAFNOSUPPORT
+#undef EAGAIN
+#undef EBADF
+#undef EBADFD
+#undef EBUSY
+#undef ECHILD
+#undef EDEADLK
+#undef EDQUOT
+#undef EEXIST
+#undef EFAULT
+#undef EIDRM
+#undef EINTR
+#undef EINVAL
+#undef EIO
+#undef ENODATA
+#undef ENOENT
+#undef ENOFILE
+#undef ENOIMPL
+#undef ENOLCK
+#undef ENOMEM
+#undef ENOPROTOOPT
+#undef ENOSPC
+#undef ENOSUPP
+#undef ENOSYS
+#undef ENOTBLK
+#undef ENOTDIR
+#undef ENOTSUP
+#undef ENOTTY
+#undef EOPNOTSUPP
+#undef EOWNERDEAD
+#undef EPERM
+#undef EPIPE
+#undef EREMOTEIO
+#undef EROFS
+#undef ESRCH
+#undef EWOULDBLOCK
+#undef EXDEV
+#define POSIX_FUSE POSIX_error_codes_should_not_be_used_in_Windows_build
+#define EACCES POSIX_FUSE
+#define EAFNOSUPPORT POSIX_FUSE
+#define EAGAIN POSIX_FUSE
+#define EBADF POSIX_FUSE
+#define EBADFD POSIX_FUSE
+#define EBUSY POSIX_FUSE
+#define ECHILD POSIX_FUSE
+#define EDEADLK POSIX_FUSE
+#define EDQUOT POSIX_FUSE
+#define EEXIST POSIX_FUSE
+#define EFAULT POSIX_FUSE
+#define EIDRM POSIX_FUSE
+#define EINTR POSIX_FUSE
+extern int mdbx_POSIX_error_codes_should_not_be_used_in_Windows_build(void);
+#define EINVAL mdbx_POSIX_error_codes_should_not_be_used_in_Windows_build()
+#define EIO POSIX_FUSE
+#define ENODATA POSIX_FUSE
+#define ENOENT POSIX_FUSE
+#define ENOFILE POSIX_FUSE
+#define ENOIMPL POSIX_FUSE
+#define ENOLCK POSIX_FUSE
+#define ENOMEM POSIX_FUSE
+#define ENOPROTOOPT POSIX_FUSE
+#define ENOSPC POSIX_FUSE
+#define ENOSUPP POSIX_FUSE
+#define ENOSYS POSIX_FUSE
+#define ENOTBLK POSIX_FUSE
+#define ENOTDIR POSIX_FUSE
+#define ENOTSUP POSIX_FUSE
+#define ENOTTY POSIX_FUSE
+#define EOPNOTSUPP POSIX_FUSE
+#define EOWNERDEAD POSIX_FUSE
+#define EPERM POSIX_FUSE
+#define EPIPE POSIX_FUSE
+#define EREMOTEIO POSIX_FUSE
+#define EROFS POSIX_FUSE
+#define ESRCH POSIX_FUSE
+#define EWOULDBLOCK POSIX_FUSE
+#define EXDEV POSIX_FUSE
+#endif /* IS_WINDOWS */
+
 #if defined(xMDBX_ALLOY) && !defined(xMDBX_TOOLS)
 /* Amalgamated build */
 #define MDBX_INTERNAL static
@@ -1320,7 +1405,7 @@ typedef char pathchar_t;
 #endif
 
 MDBX_MAYBE_UNUSED static inline bool osal_yield(void) {
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   return SleepEx(0, true) == WAIT_IO_COMPLETION;
 #else
   return sched_yield() != 0;
@@ -1336,13 +1421,13 @@ typedef struct osal_mmap {
   size_t limit;   /* mapping length, but NOT a size of file nor DB */
   size_t current; /* mapped region size, i.e. the size of file and DB */
   uint64_t filesize /* in-process cache of a file size */;
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   HANDLE section; /* memory-mapped section handle */
 #endif
 } osal_mmap_t;
 
 #ifndef MDBX_HAVE_PWRITEV
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 
 #define MDBX_HAVE_PWRITEV 0
 
@@ -1379,7 +1464,7 @@ typedef struct osal_mmap {
 #endif /* MDBX_HAVE_PWRITEV */
 
 typedef struct ior_item {
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   OVERLAPPED ov;
 #define ior_sgv_gap4terminator 1
 #define ior_sgv_element FILE_SEGMENT_ELEMENT
@@ -1402,7 +1487,7 @@ typedef struct ior_item {
 typedef struct osal_ioring {
   unsigned slots_left;
   unsigned allocated;
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 #define IOR_STATE_LOCKED 1
   HANDLE overlapped_fd;
   unsigned pagesize;
@@ -1432,7 +1517,7 @@ typedef struct osal_ioring {
 
 MDBX_MAYBE_UNUSED static inline mdbx_pid_t osal_getpid(void) {
   STATIC_ASSERT(sizeof(mdbx_pid_t) <= sizeof(uint32_t));
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   return GetCurrentProcessId();
 #else
   STATIC_ASSERT(sizeof(pid_t) <= sizeof(uint32_t));
@@ -1443,7 +1528,7 @@ MDBX_MAYBE_UNUSED static inline mdbx_pid_t osal_getpid(void) {
 MDBX_MAYBE_UNUSED static inline uintptr_t osal_thread_self(void) {
   mdbx_tid_t thunk;
   STATIC_ASSERT(sizeof(uintptr_t) >= sizeof(thunk));
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   thunk = GetCurrentThreadId();
 #else
   thunk = pthread_self();
@@ -1455,7 +1540,7 @@ MDBX_MAYBE_UNUSED static inline uintptr_t osal_thread_self(void) {
 
 /* Actually this is not ioring for now, but on the way. */
 MDBX_INTERNAL int osal_ioring_create(osal_ioring_t *
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
                                      ,
                                      bool enable_direct, mdbx_filehandle_t overlapped_fd
 #endif /* Windows */
@@ -1481,7 +1566,7 @@ MDBX_MAYBE_UNUSED static inline unsigned osal_ioring_used(const osal_ioring_t *i
 
 MDBX_MAYBE_UNUSED static inline int osal_ioring_prepare(osal_ioring_t *ior, size_t items, size_t bytes) {
   items = (items > 32) ? items : 32;
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   if (ior->direct) {
     const size_t npages = bytes >> ior->pagesize_ln2;
     items = (items > npages) ? items : npages;
@@ -1495,7 +1580,7 @@ MDBX_MAYBE_UNUSED static inline int osal_ioring_prepare(osal_ioring_t *ior, size
   return osal_ioring_resize(ior, items);
 }
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 MDBX_INTERNAL HANDLE ior_get_event(osal_ioring_t *ior);
 MDBX_INTERNAL void ior_put_event(osal_ioring_t *ior, HANDLE event);
 #endif
@@ -1568,7 +1653,7 @@ MDBX_MAYBE_UNUSED MDBX_INTERNAL void osal_jitter(bool tiny);
 #endif /* !Windows */
 
 MDBX_MAYBE_UNUSED static inline int osal_get_errno(void) {
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   DWORD rc = GetLastError();
 #else
   int rc = errno;
@@ -1599,7 +1684,11 @@ MDBX_INTERNAL int osal_pwritev(mdbx_filehandle_t fd, struct iovec *iov, size_t s
 MDBX_INTERNAL int osal_pread(mdbx_filehandle_t fd, void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_pwrite(mdbx_filehandle_t fd, const void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_write(mdbx_filehandle_t fd, const void *buf, size_t bytes);
-#if defined(_WIN32) || defined(_WIN64)
+/* Auxiliary (stub) writes routed through the handle that owns the per-txn body
+ * lock; see the comment at the definitions in osal.c. */
+MDBX_INTERNAL int osal_dxb_write_stub(const MDBX_env *env, const void *buf, size_t bytes, uint64_t offset);
+MDBX_INTERNAL int osal_dxb_write_stubv(const MDBX_env *env, struct iovec *iov, size_t sgvcnt, uint64_t offset);
+#if IS_WINDOWS
 MDBX_INTERNAL int osal_pwrite_ev(mdbx_filehandle_t fd, HANDLE ev, const void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_pread_ev(mdbx_filehandle_t fd, HANDLE ev, void *buf, size_t bytes, uint64_t offset);
 #endif
@@ -1626,7 +1715,7 @@ enum osal_openfile_purpose {
   MDBX_OPEN_DXB_READ,
   MDBX_OPEN_DXB_LAZY,
   MDBX_OPEN_DXB_DSYNC,
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
   MDBX_OPEN_DXB_OVERLAPPED,
   MDBX_OPEN_DXB_OVERLAPPED_DIRECT,
 #endif /* Windows */
@@ -1638,7 +1727,7 @@ enum osal_openfile_purpose {
 
 MDBX_MAYBE_UNUSED static inline bool osal_isdirsep(pathchar_t c) {
   return
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
       c == '\\' ||
 #endif
       c == '/';
@@ -1651,9 +1740,6 @@ MDBX_INTERNAL int osal_fileexists(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_openfile(const enum osal_openfile_purpose purpose, const MDBX_env *env,
                                 const pathchar_t *pathname, mdbx_filehandle_t *fd, mdbx_mode_t unix_mode_bits);
 MDBX_INTERNAL int osal_closefile(mdbx_filehandle_t fd);
-#if !IS_WINDOWS
-MDBX_INTERNAL key_t osal_ftok(int fd, const char *pathname);
-#endif /* !Windows */
 MDBX_INTERNAL int osal_removefile(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_removedirectory(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_is_pipe(mdbx_filehandle_t fd);
@@ -1667,7 +1753,7 @@ MDBX_INTERNAL void osal_munmap(osal_mmap_t *map);
 #define MDBX_MRESIZE_MAY_MOVE 0x00000100
 #define MDBX_MRESIZE_MAY_UNMAP 0x00000200
 MDBX_INTERNAL int osal_mresize(const int flags, osal_mmap_t *map, size_t size, size_t limit);
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 typedef struct {
   unsigned limit, count;
   HANDLE handles[31];
@@ -1711,7 +1797,7 @@ MDBX_NORETURN MDBX_INTERNAL void osal_panic(const char *msg, const char *func, u
 MDBX_INTERNAL void osal_ctor(void);
 MDBX_INTERNAL void osal_dtor(void);
 
-#if defined(_WIN32) || defined(_WIN64)
+#if IS_WINDOWS
 MDBX_INTERNAL int osal_mb2w(const char *const src, wchar_t **const pdst);
 #endif /* Windows */
 
@@ -1826,13 +1912,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_TRUST_RTC_CONFIG MDBX_STRINGIFY(MDBX_TRUST_RTC)
 #endif /* MDBX_TRUST_RTC */
 
-/** Controls online database auto-compactification during write-transactions. */
-#ifndef MDBX_ENABLE_REFUND
-#define MDBX_ENABLE_REFUND 1
-#elif !(MDBX_ENABLE_REFUND == 0 || MDBX_ENABLE_REFUND == 1)
-#error MDBX_ENABLE_REFUND must be defined as 0 or 1
-#endif /* MDBX_ENABLE_REFUND */
-
 /** Controls profiling of GC search and updates. */
 #ifndef MDBX_ENABLE_PROFGC
 #define MDBX_ENABLE_PROFGC 0
@@ -1890,24 +1969,29 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #error MDBX_DISABLE_VALIDATION must be defined as 0 or 1
 #endif /* MDBX_DISABLE_VALIDATION */
 
+/** Controls pre-allocation of page number lists (PNL) for the radix sort. */
 #ifndef MDBX_PNL_PREALLOC_FOR_RADIXSORT
 #define MDBX_PNL_PREALLOC_FOR_RADIXSORT 1
 #elif !(MDBX_PNL_PREALLOC_FOR_RADIXSORT == 0 || MDBX_PNL_PREALLOC_FOR_RADIXSORT == 1)
 #error MDBX_PNL_PREALLOC_FOR_RADIXSORT must be defined as 0 or 1
 #endif /* MDBX_PNL_PREALLOC_FOR_RADIXSORT */
 
+/** Controls pre-allocation of dirty page lists (DPL) for the radix sort. */
 #ifndef MDBX_DPL_PREALLOC_FOR_RADIXSORT
 #define MDBX_DPL_PREALLOC_FOR_RADIXSORT 1
 #elif !(MDBX_DPL_PREALLOC_FOR_RADIXSORT == 0 || MDBX_DPL_PREALLOC_FOR_RADIXSORT == 1)
 #error MDBX_DPL_PREALLOC_FOR_RADIXSORT must be defined as 0 or 1
 #endif /* MDBX_DPL_PREALLOC_FOR_RADIXSORT */
 
+/** Controls pre-allocation of dirty multi-page lists (DML) for the radix sort. */
 #ifndef MDBX_DML_PREALLOC_FOR_RADIXSORT
 #define MDBX_DML_PREALLOC_FOR_RADIXSORT 1
 #elif !(MDBX_DML_PREALLOC_FOR_RADIXSORT == 0 || MDBX_DML_PREALLOC_FOR_RADIXSORT == 1)
 #error MDBX_DML_PREALLOC_FOR_RADIXSORT must be defined as 0 or 1
 #endif /* MDBX_DML_PREALLOC_FOR_RADIXSORT */
 
+/** Controls the DPL-cache size in pages; the reasonable default depends
+ * on the target architecture. */
 #ifndef MDBX_DPL_CACHE_NPAGES
 #if MDBX_WORDBITS >= 64
 #define MDBX_DPL_CACHE_NPAGES 1
@@ -1939,6 +2023,29 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #elif !(MDBX_AVOID_MSYNC == 0 || MDBX_AVOID_MSYNC == 1)
 #error MDBX_AVOID_MSYNC must be defined as 0 or 1
 #endif /* MDBX_AVOID_MSYNC */
+
+/** Controls whether `MDBX_EXCLUSIVE` on Windows keeps the normal (fast) durable
+ * i/o path: the data-file handles are opened shareable and exclusivity is
+ * enforced by constant byte-range locks (meta region via `fd4meta`, body via
+ * `fd4data`) held for the whole env lifetime, plus the unshareable lock-file.
+ *
+ * 0/OFF = Historical behavior: the data file is opened with ShareMode == 0 and
+ * the overlapped write-through / dsync handles are not opened at all, so an
+ * exclusive durable env commits through lazy writes + FlushFileBuffers (~2x
+ * slower, see https://github.com/Mithril-mine/libmdbx-devel/issues/179).
+ *
+ * 1/ON = The exclusive env uses the very same i/o path as a non-exclusive one.
+ * Ignored on non-Windows platforms (POSIX exclusive never switched the path)
+ * and under Wine (incomplete LockFileEx emulation falls back to ShareMode=0). */
+#ifndef MDBX_ENABLE_EXCLUSIVE_FASTPATH
+#if IS_WINDOWS
+#define MDBX_ENABLE_EXCLUSIVE_FASTPATH 1
+#else
+#define MDBX_ENABLE_EXCLUSIVE_FASTPATH 0
+#endif
+#elif !(MDBX_ENABLE_EXCLUSIVE_FASTPATH == 0 || MDBX_ENABLE_EXCLUSIVE_FASTPATH == 1)
+#error MDBX_ENABLE_EXCLUSIVE_FASTPATH must be defined as 0 or 1
+#endif /* MDBX_ENABLE_EXCLUSIVE_FASTPATH */
 
 /** Controls a supporting sparse sets of DBI-handles to reduce transaction startup and processing overhead. */
 #ifndef MDBX_ENABLE_DBI_SPARSE
@@ -2147,6 +2254,12 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_USE_OFDLOCKS_CONFIG MDBX_STRINGIFY(MDBX_USE_OFDLOCKS)
 #endif /* MDBX_USE_OFDLOCKS */
 
+/** Advanced: Using own collision-resistant key derivation for the System V IPC
+ * locking instead of the system ftok(); default OFF keeps the system behavior. */
+#ifndef MDBX_AVOID_FTOK
+#define MDBX_AVOID_FTOK 0
+#endif
+
 /** Advanced: Using sendfile() syscall (autodetection by default). */
 #ifndef MDBX_USE_SENDFILE
 #if ((defined(__linux__) || defined(__gnu_linux__)) && !defined(__ANDROID_API__)) ||                                   \
@@ -2186,6 +2299,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_USE_FALLOCATE_CONFIG MDBX_STRINGIFY(MDBX_USE_FALLOCATE)
 #endif /* MDBX_USE_FALLOCATE */
 
+/** Controls using 128-bit accumulators for internal histograms, which is
+ * reasonable on 64-bit architectures. */
 #ifndef MDBX_HISTOGRAM_USING_128BIT
 #if MDBX_WORDBITS >= 64
 #define MDBX_HISTOGRAM_USING_128BIT 1
@@ -2198,6 +2313,9 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 
 //------------------------------------------------------------------------------
 
+/** Indicates that the CPU requires explicit cache flush after write-back
+ * to the memory-mapped region; zero for the architectures with coherent
+ * caches. */
 #ifndef MDBX_CPU_WRITEBACK_INCOHERENT
 #if defined(__ia32__) || defined(__e2k__) || defined(__hppa) || defined(__hppa__) || defined(DOXYGEN)
 #define MDBX_CPU_WRITEBACK_INCOHERENT 0
@@ -2208,6 +2326,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #error MDBX_CPU_WRITEBACK_INCOHERENT must be defined as 0 or 1
 #endif /* MDBX_CPU_WRITEBACK_INCOHERENT */
 
+/** Indicates that writes to the memory-mapped region are not coherent with
+ * the file, i.e. an explicit sync is required; known only on OpenBSD. */
 #ifndef MDBX_MMAP_INCOHERENT_FILE_WRITE
 #ifdef __OpenBSD__
 #define MDBX_MMAP_INCOHERENT_FILE_WRITE 1
@@ -2218,6 +2338,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #error MDBX_MMAP_INCOHERENT_FILE_WRITE must be defined as 0 or 1
 #endif /* MDBX_MMAP_INCOHERENT_FILE_WRITE */
 
+/** Indicates that the CPU data-cache is not coherent with the memory-mapped
+ * region, i.e. an explicit cache management is required; known only on MIPS. */
 #ifndef MDBX_MMAP_INCOHERENT_CPU_CACHE
 #if defined(__mips) || defined(__mips__) || defined(__mips64) || defined(__mips64__) || defined(_M_MRX000) ||          \
     defined(_MIPS_) || defined(__MWERKS__) || defined(__sgi)
@@ -2244,6 +2366,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #error MDBX_MMAP_NEEDS_JOLT must be defined as 0 or 1
 #endif /* MDBX_MMAP_NEEDS_JOLT */
 
+/** Indicates availability of 64-bit atomic operations; the reasonable default
+ * depends on the target architecture. */
 #ifndef MDBX_64BIT_ATOMIC
 #if MDBX_WORDBITS >= 64 || defined(DOXYGEN)
 #define MDBX_64BIT_ATOMIC 1
@@ -2257,6 +2381,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_64BIT_ATOMIC_CONFIG MDBX_STRINGIFY(MDBX_64BIT_ATOMIC)
 #endif /* MDBX_64BIT_ATOMIC */
 
+/** Indicates availability of the 64-bit compare-and-swap operation; the
+ * reasonable default depends on the target toolchain. */
 #ifndef MDBX_64BIT_CAS
 #if defined(__GCC_ATOMIC_LLONG_LOCK_FREE)
 #if __GCC_ATOMIC_LLONG_LOCK_FREE > 1
@@ -2288,6 +2414,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_64BIT_CAS_CONFIG MDBX_STRINGIFY(MDBX_64BIT_CAS)
 #endif /* MDBX_64BIT_CAS */
 
+/** Controls allowing of unaligned access; the value is the maximum size
+ * in bytes of a word that could be accessed unaligned. */
 #ifndef MDBX_UNALIGNED_OK
 #if defined(__ALIGNED__) || defined(__SANITIZE_UNDEFINED__) || defined(ENABLE_UBSAN)
 #define MDBX_UNALIGNED_OK 0 /* no unaligned access allowed */
@@ -2313,6 +2441,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_UNALIGNED_OK 32 /* any unaligned access allowed */
 #endif                       /* MDBX_UNALIGNED_OK */
 
+/** The size of a CPU cache line in bytes, used for padding and aligning. */
 #ifndef MDBX_CACHELINE_SIZE
 #if defined(SYSTEM_CACHE_ALIGNMENT_SIZE)
 #define MDBX_CACHELINE_SIZE SYSTEM_CACHE_ALIGNMENT_SIZE
@@ -2323,7 +2452,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #endif
 #endif /* MDBX_CACHELINE_SIZE */
 
-/* Max length of iov-vector passed to writev() call, used for auxiliary writes */
+/** Max length of iov-vector passed to writev() call, used for auxiliary writes. */
 #ifndef MDBX_AUXILARY_IOV_MAX
 #define MDBX_AUXILARY_IOV_MAX 64
 #endif
@@ -2332,7 +2461,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_AUXILARY_IOV_MAX IOV_MAX
 #endif /* MDBX_AUXILARY_IOV_MAX */
 
-/* An extra/custom information provided during library build */
+/** An extra/custom information provided during library build. */
 #ifndef MDBX_BUILD_METADATA
 #define MDBX_BUILD_METADATA ""
 #endif /* MDBX_BUILD_METADATA */
@@ -2884,7 +3013,7 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline bool is_subpage(const
 typedef void osal_ipclock_t;
 #elif MDBX_LOCKING == MDBX_LOCKING_SYSV
 
-#define MDBX_LCK_SIGN UINT32_C(0xF18D)
+#define MDBX_LCK_SIGN UINT32_C(0xF81D)
 typedef mdbx_pid_t osal_ipclock_t;
 
 #elif MDBX_LOCKING == MDBX_LOCKING_POSIX2001 || MDBX_LOCKING == MDBX_LOCKING_POSIX2008
@@ -3235,6 +3364,17 @@ static inline unsigned mdbx_running_on_Valgrind(void) {
 #endif /* ENABLE_MEMCHECK */
 }
 
+/* Whether the process is running under Wine; always false on non-Windows.
+ * Used to fall back to conservative behavior where Wine's Win32 emulation
+ * is incomplete (e.g. LockFileEx byte-range lock semantics). */
+static inline bool mdbx_running_under_Wine(void) {
+#if IS_WINDOWS
+  return globals.running_under_Wine;
+#else
+  return false;
+#endif /* Windows */
+}
+
 #ifndef __Wpedantic_format_voidptr
 MDBX_MAYBE_UNUSED static inline const void *__Wpedantic_format_voidptr(const void *ptr) { return ptr; }
 #define __Wpedantic_format_voidptr(ARG) __Wpedantic_format_voidptr(ARG)
@@ -3487,13 +3627,13 @@ MDBX_INTERNAL const char *pagetype_caption(const uint8_t type, char buf4unknown[
 
 MDBX_INTERNAL void log_error(const int err, const char *func, unsigned line);
 
-MDBX_MAYBE_UNUSED static inline int log_if_error(const int err, const char *func, unsigned line) {
+MDBX_MAYBE_UNUSED static inline int handle_rc(const int err, const char *func, unsigned line) {
   if (unlikely(err != MDBX_SUCCESS))
     log_error(err, func, line);
   return err;
 }
 
-#define LOG_IFERR(err) log_if_error((err), __func__, __LINE__)
+#define LOG_IFERR(err) handle_rc((err), __func__, __LINE__)
 
 #endif /* !__cplusplus */
 
@@ -3615,7 +3755,9 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION static inline size_t ceil_powerof2
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL size_t ceil_log2n(size_t value_uintptr);
 
-MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL uint64_t rrxmrrxmsx_0(uint64_t v);
+MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL uint64_t nasam(uint64_t v);
+MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL uint64_t pelican(uint64_t v);
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL uint64_t stir(uint64_t a, uint64_t b);
 
 struct monotime_cache {
   uint64_t value;
@@ -3984,15 +4126,31 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL size_t pnl_search_nochk(const const_pnl
 
 MDBX_INTERNAL void pnl_sort_nochk(pnl_t pnl);
 
-MDBX_INTERNAL bool pnl_check(const const_pnl_t pnl, const size_t limit);
+/* A light-weight check of a page-number list: the list size bounds and the
+ * page-number range, all O(1). It intentionally does not scan the page
+ * numbers for disorder or duplicates, so it is suitable for assertions and
+ * other places where the list is expected to be valid by construction.
+ * Use pnl_check_full() for untrusted data, e.g. records read from the GC
+ * tree, where the O(n) ordering check must run. */
+MDBX_INTERNAL bool pnl_check_lite(const const_pnl_t pnl, const size_t limit);
+
+/* A full check of a page-number list: the same O(1) bounds as pnl_check_lite()
+ * plus a scan verifying that the list is strictly ordered, which also
+ * rejects internal duplicates. This is the variant for untrusted (on-disk
+ * or externally provided) data. */
+MDBX_INTERNAL bool pnl_check_full(const const_pnl_t pnl, const size_t limit);
 
 MDBX_MAYBE_UNUSED static inline bool pnl_check_allocated(const const_pnl_t pnl, const size_t limit) {
-  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check(pnl, limit));
+  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check_lite(pnl, limit));
+}
+
+MDBX_MAYBE_UNUSED static inline bool pnl_check_full_allocated(const const_pnl_t pnl, const size_t limit) {
+  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check_full(pnl, limit));
 }
 
 MDBX_MAYBE_UNUSED static inline void pnl_sort(pnl_t pnl, size_t limit4check) {
   pnl_sort_nochk(pnl);
-  ASSERT(pnl_check(pnl, limit4check));
+  ASSERT(pnl_check_lite(pnl, limit4check));
   (void)limit4check;
 }
 
@@ -4035,6 +4193,8 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool pnl_contains_spa
 }
 
 MDBX_INTERNAL size_t pnl_merge(pnl_t dst, const const_pnl_t src);
+
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool pnl_intersect(const const_pnl_t a, const const_pnl_t b);
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL size_t pnl_maxspan(const const_pnl_t pnl);
 

@@ -6,6 +6,8 @@ and no server process — safe for concurrent multi-process access.
 
 Choose a section:
 
+- **[Change Log](reference/changelog.md)** — the news and latest updates
+  (kept in English for the international audience).
 - **[Overview](overview/index.md)** — what libmdbx is, its characteristics,
   comparison with alternatives, and when to choose it (plus the honest list of
   [restrictions and gotchas](overview/restrictions.md)).
@@ -16,8 +18,7 @@ Choose a section:
   from the first steps to expert topics and bindings.
 - **[Deep dive](deep-dive/architecture.md)** — the architecture, internal
   mechanisms, and what libmdbx improves over LMDB.
-- **[Reference](reference/index.md)** — the C/C++ API reference, command-line tools,
-  and the change log.
+- **[Reference](reference/index.md)** — the C/C++ API reference and command-line tools.
 
 The documentation is available in English and Russian — use the language pill
 in the top-right corner of any page to switch.

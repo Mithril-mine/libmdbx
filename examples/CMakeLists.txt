@@ -18,9 +18,11 @@ if(NOT DEFINED MDBX_LIBRARY)
   set(MDBX_LIBRARY mdbx)
 endif()
 
-if(MDBX_BUILD_CXX
-   AND CMAKE_CXX_COMPILER_LOADED
-   AND NOT MDBX_CXX_STANDARD LESS 17)
+if(MDBX_BUILD_CXX AND CMAKE_CXX_COMPILER_LOADED)
+  # The main C++ example deliberately sticks to C++11 constructs, so it is
+  # built at whatever standard was requested (11/14/17/20/23). This is what
+  # verifies that the C++ API itself still compiles, links and works at the
+  # older standards — the `c++_api` ctest below runs it.
   add_executable(mdbx_modern_example example-mdbx.c++)
   set_target_properties(mdbx_modern_example PROPERTIES CXX_STANDARD ${MDBX_CXX_STANDARD} CXX_STANDARD_REQUIRED ON)
   target_link_libraries(mdbx_modern_example ${MDBX_LIBRARY})
@@ -29,9 +31,23 @@ if(MDBX_BUILD_CXX
                                                          $<BOOL:${INTERPROCEDURAL_OPTIMIZATION}>)
   endif()
 else()
-  message(NOTICE
-          "The C++ example will be skipped, since C++17 standard is unavailable or C++ API of libmdbx was disabled.")
+  message(NOTICE "The C++ example will be skipped, since the C++ API of libmdbx was disabled.")
   set(MDBX_BUILD_CXX FALSE)
+endif()
+
+# The textbook examples (examples/c++, examples/config-store) share
+# common/common.h++, which needs C++17 (std::string_view, inline functions), so
+# they are gated separately from the main example above.
+if(MDBX_BUILD_CXX AND CMAKE_CXX_COMPILER_LOADED AND NOT MDBX_CXX_STANDARD LESS 17)
+  set(MDBX_TEXTBOOK_CXX_AVAILABLE TRUE)
+else()
+  set(MDBX_TEXTBOOK_CXX_AVAILABLE FALSE)
+  if(MDBX_BUILD_CXX AND NOT MDBX_CXX_STANDARD LESS 11 AND MDBX_CXX_STANDARD LESS 17)
+    message(
+      NOTICE
+        "The C++ textbook examples will be skipped: they require C++17 (common.h++), "
+        "while C++${MDBX_CXX_STANDARD} was requested. The main C++ example is still built and tested.")
+  endif()
 endif()
 
 add_executable(mdbx_legacy_example example-mdbx.c)
@@ -84,6 +100,9 @@ function(mdbx_textbook_add_cxx target source)
   set_target_properties(${target} PROPERTIES CXX_STANDARD ${MDBX_CXX_STANDARD}
                                                         CXX_STANDARD_REQUIRED ON)
   target_link_libraries(${target} ${MDBX_LIBRARY})
+  # Reuse the shared examples PCH; a no-op when MDBX_ENABLE_PCH=OFF or the
+  # CMake/compiler does not support PCH reuse.
+  mdbx_examples_pch_apply(${target})
   if(DEFINED INTERPROCEDURAL_OPTIMIZATION)
     set_target_properties(${target} PROPERTIES INTERPROCEDURAL_OPTIMIZATION
                                                  $<BOOL:${INTERPROCEDURAL_OPTIMIZATION}>)
@@ -156,10 +175,26 @@ set(MDBX_TEXTBOOK_EXAMPLES_C
     18-tree-height.c
     38-migration.c)
 
-if(MDBX_BUILD_CXX)
+if(MDBX_TEXTBOOK_CXX_AVAILABLE)
+  # Shared precompiled header for the C++ textbook examples (see cmake/pch.cmake
+  # for the mechanics). The ~55 C++ example binaries each include
+  # examples/common/common.h++ (which pulls <mdbx.h++> and the std headers), so
+  # precompiling them once and reusing via REUSE_FROM saves a noticeable parse
+  # per binary on a clean build. The anchor mirrors the consumers' flags:
+  # C++ standard (17+, common.h++ requires it), the common/ include dir, -fPIE
+  # and the libmdbx include dirs (via a PRIVATE link). It is created only when
+  # the textbook examples are enabled: on C++11/14 or in dist builds there is
+  # nothing to precompile.
+  set(MDBX_EXAMPLES_PCH_ANCHOR_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/common/pch_anchor.cxx")
+  set(MDBX_EXAMPLES_PCH_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/common/pch.h++")
+  mdbx_add_pch_anchor(mdbx_examples_pch "${MDBX_EXAMPLES_PCH_HEADER}" "${MDBX_EXAMPLES_PCH_ANCHOR_SOURCE}"
+                      CXX_STANDARD ${MDBX_CXX_STANDARD}
+                      INCLUDE "${CMAKE_CURRENT_SOURCE_DIR}/common"
+                      LINK_PRIVATE ${MDBX_LIBRARY})
+
   foreach(source IN LISTS MDBX_TEXTBOOK_EXAMPLES_CXX)
     get_filename_component(name "${source}" NAME_WE)
-    mdbx_textbook_add_cxx("mdbx_ex_${name}" "c++/${source}")
+    mdbx_textbook_add_cxx("eg_${name}" "c++/${source}")
   endforeach()
 
   # Сквозной проект config-store: срезы 02–12 (C++17).
@@ -177,13 +212,13 @@ if(MDBX_BUILD_CXX)
   foreach(source IN LISTS MDBX_TEXTBOOK_CONFIG_STORE)
     get_filename_component(name "${source}" NAME_WE)
     string(REPLACE "config-store-" "" short "${name}")
-    mdbx_textbook_add_cxx("mdbx_config_store_${short}" "config-store/${source}")
+    mdbx_textbook_add_cxx("cs_${short}" "config-store/${source}")
   endforeach()
 endif()
 
 foreach(source IN LISTS MDBX_TEXTBOOK_EXAMPLES_C)
   get_filename_component(name "${source}" NAME_WE)
-  mdbx_textbook_add_c("mdbx_ex_${name}_c" "c/${source}")
+  mdbx_textbook_add_c("eg_${name}_c" "c/${source}")
 endforeach()
 
 endif() # NOT MDBX_AMALGAMATED_SOURCE (textbook examples not shipped in dist)
