@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-89-g2090f8e8 at 2026-10-19T12:05:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 0aaa109f876536c85ac973cd4fa4be219dba283137e8d0b9b216755be80f7470_v0_14_4_89_g2090f8e8
+#define MDBX_BUILD_SOURCERY 85ed407b20f238c9303d7c76283abfae2dfb30b70bfbce28b59e0710f0538c82_v0_14_4_110_g8d1bcf91
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1598,6 +1598,10 @@ MDBX_INTERNAL int osal_pwritev(mdbx_filehandle_t fd, struct iovec *iov, size_t s
 MDBX_INTERNAL int osal_pread(mdbx_filehandle_t fd, void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_pwrite(mdbx_filehandle_t fd, const void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_write(mdbx_filehandle_t fd, const void *buf, size_t bytes);
+/* Auxiliary (stub) writes routed through the handle that owns the per-txn body
+ * lock; see the comment at the definitions in osal.c. */
+MDBX_INTERNAL int osal_dxb_write_stub(const MDBX_env *env, const void *buf, size_t bytes, uint64_t offset);
+MDBX_INTERNAL int osal_dxb_write_stubv(const MDBX_env *env, struct iovec *iov, size_t sgvcnt, uint64_t offset);
 #if defined(_WIN32) || defined(_WIN64)
 MDBX_INTERNAL int osal_pwrite_ev(mdbx_filehandle_t fd, HANDLE ev, const void *buf, size_t bytes, uint64_t offset);
 MDBX_INTERNAL int osal_pread_ev(mdbx_filehandle_t fd, HANDLE ev, void *buf, size_t bytes, uint64_t offset);
@@ -1938,6 +1942,29 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #elif !(MDBX_AVOID_MSYNC == 0 || MDBX_AVOID_MSYNC == 1)
 #error MDBX_AVOID_MSYNC must be defined as 0 or 1
 #endif /* MDBX_AVOID_MSYNC */
+
+/** Controls whether `MDBX_EXCLUSIVE` on Windows keeps the normal (fast) durable
+ * i/o path: the data-file handles are opened shareable and exclusivity is
+ * enforced by constant byte-range locks (meta region via `fd4meta`, body via
+ * `fd4data`) held for the whole env lifetime, plus the unshareable lock-file.
+ *
+ * 0/OFF = Historical behavior: the data file is opened with ShareMode == 0 and
+ * the overlapped write-through / dsync handles are not opened at all, so an
+ * exclusive durable env commits through lazy writes + FlushFileBuffers (~2x
+ * slower, see https://github.com/Mithril-mine/libmdbx-devel/issues/179).
+ *
+ * 1/ON = The exclusive env uses the very same i/o path as a non-exclusive one.
+ * Ignored on non-Windows platforms (POSIX exclusive never switched the path)
+ * and under Wine (incomplete LockFileEx emulation falls back to ShareMode=0). */
+#ifndef MDBX_ENABLE_EXCLUSIVE_FASTPATH
+#if IS_WINDOWS
+#define MDBX_ENABLE_EXCLUSIVE_FASTPATH 1
+#else
+#define MDBX_ENABLE_EXCLUSIVE_FASTPATH 0
+#endif
+#elif !(MDBX_ENABLE_EXCLUSIVE_FASTPATH == 0 || MDBX_ENABLE_EXCLUSIVE_FASTPATH == 1)
+#error MDBX_ENABLE_EXCLUSIVE_FASTPATH must be defined as 0 or 1
+#endif /* MDBX_ENABLE_EXCLUSIVE_FASTPATH */
 
 /** Controls a supporting sparse sets of DBI-handles to reduce transaction startup and processing overhead. */
 #ifndef MDBX_ENABLE_DBI_SPARSE
@@ -3220,6 +3247,17 @@ static inline unsigned mdbx_running_on_Valgrind(void) {
 #endif /* ENABLE_MEMCHECK */
 }
 
+/* Whether the process is running under Wine; always false on non-Windows.
+ * Used to fall back to conservative behavior where Wine's Win32 emulation
+ * is incomplete (e.g. LockFileEx byte-range lock semantics). */
+static inline bool mdbx_running_under_Wine(void) {
+#if IS_WINDOWS
+  return globals.running_under_Wine;
+#else
+  return false;
+#endif /* Windows */
+}
+
 #ifndef __Wpedantic_format_voidptr
 MDBX_MAYBE_UNUSED static inline const void *__Wpedantic_format_voidptr(const void *ptr) { return ptr; }
 #define __Wpedantic_format_voidptr(ARG) __Wpedantic_format_voidptr(ARG)
@@ -3460,13 +3498,13 @@ MDBX_INTERNAL const char *pagetype_caption(const uint8_t type, char buf4unknown[
 
 MDBX_INTERNAL void log_error(const int err, const char *func, unsigned line);
 
-MDBX_MAYBE_UNUSED static inline int log_if_error(const int err, const char *func, unsigned line) {
+MDBX_MAYBE_UNUSED static inline int handle_rc(const int err, const char *func, unsigned line) {
   if (unlikely(err != MDBX_SUCCESS))
     log_error(err, func, line);
   return err;
 }
 
-#define LOG_IFERR(err) log_if_error((err), __func__, __LINE__)
+#define LOG_IFERR(err) handle_rc((err), __func__, __LINE__)
 
 #endif /* !__cplusplus */
 
@@ -3937,15 +3975,31 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL size_t pnl_search_nochk(const const_pnl
 
 MDBX_INTERNAL void pnl_sort_nochk(pnl_t pnl);
 
-MDBX_INTERNAL bool pnl_check(const const_pnl_t pnl, const size_t limit);
+/* A light-weight check of a page-number list: the list size bounds and the
+ * page-number range, all O(1). It intentionally does not scan the page
+ * numbers for disorder or duplicates, so it is suitable for assertions and
+ * other places where the list is expected to be valid by construction.
+ * Use pnl_check_full() for untrusted data, e.g. records read from the GC
+ * tree, where the O(n) ordering check must run. */
+MDBX_INTERNAL bool pnl_check_lite(const const_pnl_t pnl, const size_t limit);
+
+/* A full check of a page-number list: the same O(1) bounds as pnl_check_lite()
+ * plus a scan verifying that the list is strictly ordered, which also
+ * rejects internal duplicates. This is the variant for untrusted (on-disk
+ * or externally provided) data. */
+MDBX_INTERNAL bool pnl_check_full(const const_pnl_t pnl, const size_t limit);
 
 MDBX_MAYBE_UNUSED static inline bool pnl_check_allocated(const const_pnl_t pnl, const size_t limit) {
-  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check(pnl, limit));
+  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check_lite(pnl, limit));
+}
+
+MDBX_MAYBE_UNUSED static inline bool pnl_check_full_allocated(const const_pnl_t pnl, const size_t limit) {
+  return pnl == nullptr || (pnl_alloclen(pnl) >= pnl_size(pnl) && pnl_check_full(pnl, limit));
 }
 
 MDBX_MAYBE_UNUSED static inline void pnl_sort(pnl_t pnl, size_t limit4check) {
   pnl_sort_nochk(pnl);
-  ASSERT(pnl_check(pnl, limit4check));
+  ASSERT(pnl_check_lite(pnl, limit4check));
   (void)limit4check;
 }
 
@@ -3988,6 +4042,8 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool pnl_contains_spa
 }
 
 MDBX_INTERNAL size_t pnl_merge(pnl_t dst, const const_pnl_t src);
+
+MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool pnl_intersect(const const_pnl_t a, const const_pnl_t b);
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL size_t pnl_maxspan(const const_pnl_t pnl);
 

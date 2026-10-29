@@ -226,6 +226,76 @@ To build _libmdbx_ for iOS, please use CMake with the ["toolchain file"](https:/
 
 <!-- section-end -->
 
+## Packaging / Conan
+
+**The recommended way to consume libmdbx is the source-level route** — the
+amalgamated sources (`mdbx.h`, `mdbx.c`, `mdbx.h++`, `mdbx.c++`) for direct
+embedding, or CMake subproject / FetchContent. Then the library and the
+application are compiled by the same toolchain with the same flags in the
+same build, which structurally rules out ABI drift.
+
+A Conan recipe is also shipped (`conanfile.py`) as a convenience for
+prebuilt consumption. However, Conan resolves, builds and caches binaries
+according to the *active profile*, and nothing ties that profile to the
+compiler the consumer's project is actually built with. On any
+multi-compiler machine the profile and the consumer's real toolchain can
+silently diverge: `find_package(mdbx)` succeeds and the mismatch surfaces
+only at runtime.
+
+This is especially dangerous for the C++ binding: `mdbx.h++` is compiled by
+the *consumer's* compiler while the out-of-line definitions and extern
+template instantiations (e.g. `mdbx::default_buffer`) live in the package's
+binary, compiled by the *profile's* compiler. For a consistent C++ ABI the
+active Conan profile must exactly match the consumer's
+compiler/version, stdlib (`libstdc++` vs `libc++`), `_GLIBCXX_USE_CXX11_ABI`
+setting, build type and C++ standard. The recipe warns about this both when
+building and when consuming the package, and the `mdbx.cxx_standard` option
+lets you pin the C++ standard instead of relying on compiler auto-picking.
+
+For the pure-C core the risk is modest, since the platform C ABI is stable
+across compilers; a C++ consumer that is not diligent about toolchain match
+may prefer to embed the sources instead of using the prebuilt package.
+
+### Package binary identity
+
+Conan's binary identifier (`package_id`) is the hash of the *active profile*
+and **every** recipe option: the recipe does not opt out of any setting nor
+option. So for a given library version the following shape the identity — and
+equally important, what does *not*:
+
+| Part of the binary identity | NOT part of the identity (can silently diverge) |
+| --- | --- |
+| profile `settings`: os, arch, compiler & its version, build_type | compiler warnings and warning machinery |
+| every `mdbx.*` option: ABI knobs (`64bit_atomic`, `64bit_cas`, `unaligned_ok`, `cacheline_size`, `without_msvc_crt`, `build_cxx`, `cxx_standard`, `locking`), feature toggles (`build_tools`, `enable_*`, `force_assertions`, ...) | the exact `-O`-level details *inside* a given build_type |
+| `mdbx.lto`: `Default`/`True`/`False`/`Fat` produce distinct ids | the consumer's own CMake toolchain-file and its `CMAKE_*_FLAGS` |
+| `mdbx.sanitize`: `none`/`address`/`undefined`/`address,undefined` | libstdc++/glibc versions of the machine that built the cached binary |
+| `shared` | whether the consumer's own build engages LTO (only `mdbx.lto=Fat` keeps the packaged objects usable regardless) |
+
+The "NOT part" rows are exactly the silent ABI traps: Conan serves a cached
+binary with a matching hash while the consumer's real environment differs.
+Nothing but the profile ties the two together, so keep the profile in sync
+with what actually builds the consumer project.
+
+### mdbx.lto and mdbx.sanitize
+
+- `mdbx.lto=Default` leaves LTO to CMake's own default; `True`/`False` force
+  `INTERPROCEDURAL_OPTIMIZATION` on/off; `Fat` additionally sets
+  `MDBX_LTO_FAT_OBJECTS`, so GCC/Clang produce dual LTO+native object code
+  (`-ffat-lto-objects`) and the packaged library links into a consumer build
+  regardless of whether the consumer engages LTO. On MSVC `Fat` behaves as
+  `True`.
+- `mdbx.sanitize=none|address|undefined|address,undefined` adds
+  `-fsanitize=...` to the compile and link flags. A sanitized package must be
+  consumed by a sanitized build (the sanitizer runtime participates in the
+  ABI), hence both options participate in the package identity.
+
+On the roadmap the C++ API will become the native one, with the C API
+provided as a secondary interface (an emulation facade) over it. That
+transition is expected to be long and is *not* the case yet: currently the C
+core and the C ABI are first-class, and the toolchain-match requirement above
+applies mostly to consumers of the C++ binding. Once the transition lands,
+the requirement will apply to every consumer of a prebuilt package.
+
 ## API description
 
 Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers.

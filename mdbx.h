@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.14.4-89-g2090f8e8 at 2026-10-19T12:05:46+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -199,6 +199,13 @@ typedef mode_t mdbx_mode_t;
  * @{ */
 
 /*----------------------------------------------------------------------------*/
+
+/** \brief Transparent adding string literal `L` for wchar_t pathnames on Windows. */
+#if defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS)
+#define MDBX_PATHNAME_T(path) L ## path
+#else
+#define MDBX_PATHNAME_T(path) path
+#endif /* MDBX_PATHNAME_T */
 
 #ifndef __has_attribute
 #define __has_attribute(x) (0)
@@ -971,8 +978,11 @@ typedef enum MDBX_debug_flags {
    * \note Nonetheless a new write transactions will use and store the last signature regardless this flag */
   MDBX_DBG_DONT_UPGRADE = 64,
 
+  /** Enables logging of errors returned by the libmdbx API and critical internal API paths. */
+  MDBX_DBG_ERR = 128,
+
   /** Avoids UBSAN false-positive issues/traps. */
-  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 127
+  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 255
 } MDBX_debug_flags_t;
 MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
 
@@ -2474,7 +2484,26 @@ typedef enum MDBX_option {
    * \see MDBX_opt_sync_period
    *
    * The option value is specified in bytes: minimal 1, maximal 2147483648 (2 GiB), default is 256 KiB. */
-  MDBX_opt_presync_threshold
+  MDBX_opt_presync_threshold,
+
+  /** \brief Sets the minimal period between attempts to shrink the database file.
+   *
+   * Shrinking the file is not always possible right away. In particular, on Windows the file cannot be truncated while
+   * it is mapped by another process or while a read transaction of the current process holds the corresponding lock,
+   * so the attempt is deferred and repeated by a later commit. Repeating a doomed attempt on every commit is a waste
+   * of resources, so such attempts are rate-limited.
+   *
+   * This option sets how often the shrinking is allowed to be attempted. The zero value disables the rate-limiting,
+   * i.e. an attempt will be made on every commit that meets the shrinking condition.
+   *
+   * \note This option affects the current process only, is not stored in the lock file, and therefore neither is
+   * inherited by other processes nor requires any lock-file format change.
+   *
+   * \see MDBX_opt_sync_period
+   *
+   * The option value is specified in 1/65536 of second units: minimal 0 (no throttling), default is 5 seconds
+   * (327680). */
+  MDBX_opt_shrink_retry_period
 } MDBX_option_t;
 
 /** \brief Sets the value of a extra runtime options for an environment.
@@ -3526,11 +3555,15 @@ LIBMDBX_API int mdbx_env_get_fd(const MDBX_env *env, mdbx_filehandle_t *fd);
  *
  * If the mapsize is increased by another process, MDBX silently and
  * transparently adopt these changes at next transaction start. However,
- * \ref mdbx_txn_begin() will return \ref MDBX_UNABLE_EXTEND_MAPSIZE if new
- * mapping size could not be applied for current process (for instance if
- * address space is busy).  Therefore, in the case of
- * \ref MDBX_UNABLE_EXTEND_MAPSIZE error you need close and reopen the
- * environment to resolve error.
+ * \ref mdbx_txn_begin() and \ref mdbx_env_set_geometry() will return
+ * \ref MDBX_UNABLE_EXTEND_MAPSIZE if the new mapping size could not be applied
+ * for the current process, in particular:
+ *  - the address space for the larger mapping is busy;
+ *  - on Windows, a read transaction of this process currently holds the
+ *    remap-lock shared, so the mapping cannot be re-created right now. In this
+ *    case the operation should simply be retried once the read transactions
+ *    are closed, otherwise the environment must be closed and reopened to
+ *    resolve the error.
  *
  * \note Actual values may be different than your have specified because of
  * rounding to specified database page size, the system page size and/or the
@@ -3604,6 +3637,14 @@ LIBMDBX_API int mdbx_env_get_fd(const MDBX_env *env, mdbx_filehandle_t *fd);
  *                        geometry, but there read transaction(s) is running
  *                        and no corresponding thread(s) could be suspended
  *                        since the \ref MDBX_NOSTICKYTHREADS mode is used.
+ * \retval MDBX_UNABLE_EXTEND_MAPSIZE
+ *                        The requested geometry change needs the mapping to be
+ *                        re-created, but it could not be applied right now:
+ *                        either the address space for the new mapping is busy,
+ *                        or a read transaction of this process holds the
+ *                        remap-lock shared (Windows). Retry once the read
+ *                        transactions are closed, or close and reopen the
+ *                        environment.
  * \retval MDBX_EACCESS   The environment opened in read-only.
  * \retval MDBX_MAP_FULL  Specified size smaller than the space already
  *                        consumed by the environment.
@@ -3929,8 +3970,15 @@ MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API void *mdbx_env_get_userctx(const MDBX_env
  *                            environment must be shut down.
  * \retval MDBX_UNABLE_EXTEND_MAPSIZE  Another process wrote data beyond
  *                                     this MDBX_env's mapsize and this
- *                                     environment map must be resized as well.
- *                                     See \ref mdbx_env_set_mapsize().
+ *                                     environment map must be resized as well,
+ *                                     but the remap could not be applied right
+ *                                     now: the address space is busy, or on
+ *                                     Windows a read transaction of this
+ *                                     process holds the remap-lock shared.
+ *                                     Retry once the read transactions are
+ *                                     closed, or close and reopen the
+ *                                     environment.
+ *                                     See \ref mdbx_env_set_geometry().
  * \retval MDBX_READERS_FULL  A read-only transaction was requested and
  *                            the reader lock table is full.
  *                            See \ref mdbx_env_set_maxreaders().
@@ -3986,8 +4034,15 @@ LIBMDBX_API int mdbx_txn_begin_ex(MDBX_env *env, MDBX_txn *parent, MDBX_txn_flag
  *                            environment must be shut down.
  * \retval MDBX_UNABLE_EXTEND_MAPSIZE  Another process wrote data beyond
  *                                     this MDBX_env's mapsize and this
- *                                     environment map must be resized as well.
- *                                     See \ref mdbx_env_set_mapsize().
+ *                                     environment map must be resized as well,
+ *                                     but the remap could not be applied right
+ *                                     now: the address space is busy, or on
+ *                                     Windows a read transaction of this
+ *                                     process holds the remap-lock shared.
+ *                                     Retry once the read transactions are
+ *                                     closed, or close and reopen the
+ *                                     environment.
+ *                                     See \ref mdbx_env_set_geometry().
  * \retval MDBX_READERS_FULL  A read-only transaction was requested and
  *                            the reader lock table is full.
  *                            See \ref mdbx_env_set_maxreaders().
@@ -4296,6 +4351,19 @@ typedef struct MDBX_commit_latency MDBX_commit_latency;
  *    before or after transaction commit, either can be reused with
  *    \ref mdbx_cursor_renew() until it will be explicitly closed by
  *    \ref mdbx_cursor_close().
+ *
+ * \note On Windows the shrinking of the datafile (when enabled via
+ * `shrink_threshold` of \ref mdbx_env_set_geometry()) requires the mapping to
+ * be unmapped, which is impossible while a read transaction of this process is
+ * open. In that case the shrink is deferred: the commit still succeeds and the
+ * reported geometry is updated to the intended smaller size, while the physical
+ * datafile keeps its larger size until a later commit truncates it once the
+ * read transactions are closed. The transient mismatch shows up in
+ * \ref mdbx_env_info_ex() as the file size being larger than the reported `now`
+ * geometry value. Repeated deferrals are cheap: the durable sync that shrinking
+ * normally forces is only performed while it is still needed to keep the file
+ * consistent, so no redundant full sync happens while a reader holds the
+ * mapping.
  *
  * \param [in] txn  A transaction handle returned by \ref mdbx_txn_begin().
  * \param [out] latency             An optional pointer for getting information of latencies during the commit stages.
@@ -7096,6 +7164,69 @@ LIBMDBX_API int mdbx_env_open_for_recoveryW(MDBX_env *env, const wchar_t *pathna
  * leg(s). */
 LIBMDBX_API int mdbx_env_turn_for_recovery(MDBX_env *env, unsigned target_meta);
 
+/** \brief The mode of processing weak checkpoints during a preopen inspection.
+ * \ingroup c_opening
+ *
+ * Determines which meta-pages are considered usable by \ref mdbx_preopen_snapinfo_ex()
+ * when the newest one is a weak checkpoint, and which error is returned if the
+ * inspection cannot report usable geometry. */
+typedef enum MDBX_preopen_flags {
+  /** \brief Legacy behavior: if the newest meta-page is not steady, fail with
+   * \ref MDBX_CORRUPTED regardless of the boot-id. */
+  MDBX_PREOPEN_LEGACY = 0,
+  /** \brief If the newest meta-page is not steady, fail with
+   * \ref MDBX_WANNA_RECOVERY regardless of the boot-id, even if a usable steady
+   * checkpoint exists. */
+  MDBX_PREOPEN_PROPERLY,
+  /** \brief Use the newest steady checkpoint regardless of the boot-id, fail
+   * with \ref MDBX_CORRUPTED if there is no usable steady checkpoint. */
+  MDBX_PREOPEN_PESSIMISTIC,
+  /** \brief Treat a weak checkpoint whose boot-id matches the current one as
+   * if it was steady, so the newest usable meta-page is reported. Fail with
+   * \ref MDBX_CORRUPTED if there are no usable meta-pages. */
+  MDBX_PREOPEN_OPTIMISTIC
+} MDBX_preopen_flags;
+
+/** \brief Gets basic information about the database without opening it, with
+ * explicit control of weak-checkpoint processing.
+ * \ingroup c_opening
+ *
+ * The purpose of the function is to obtain basic information without opening the database nor mapping data to memory,
+ * which can be quite a costly action for the OS kernel. The information obtained in this way can be useful for
+ * adjusting the options for working with the database before opening it, as well as in scripts, file managers and other
+ * auxiliary utilities.
+ *
+ * \param [in]  pathname  The path to the directory or database file.
+ * \param [in]  mode      The mode of processing weak checkpoints, see \ref MDBX_preopen_flags.
+ * \param [out] info      A pointer to the \ref MDBX_envinfo structure to get information.
+ * \param [in]  bytes     The size of the \ref MDBX_envinfo structure,
+ *                        which is used to ensure ABI compatibility.
+ *
+ * \note Only some fields of the \ref MDBX_envinfo structure will be provided/filled-in, the values of which can be
+ * obtained without mapping database files to memory and without acquiring locks: the size of the database page, the
+ * geometry of the database, the size of the allocated space (the number of the last distributed page), the number of
+ * the last transaction, and the boot-id stored in the corresponding meta-page.
+ *
+ * \warning The information received is a snapshot for the moment of the function call and can be changed at any time by
+ * a process working with the database. In particular, there is no obstacle to another process deleting the database and
+ * recreating it with a different page size and/or changing any other parameters.
+ *
+ * \returns A non-zero error value on failure and 0 on success.
+ * \see mdbx_preopen_snapinfo() */
+LIBMDBX_API int mdbx_preopen_snapinfo_ex(const char *pathname, MDBX_preopen_flags mode, MDBX_envinfo *info,
+                                         size_t bytes);
+#if defined(_WIN32) || defined(_WIN64) || defined(DOXYGEN)
+/** \copydoc mdbx_preopen_snapinfo_ex()
+ * \ingroup c_opening
+ * \note Available only on Windows.
+ * \see mdbx_preopen_snapinfo_ex() */
+LIBMDBX_API int mdbx_preopen_snapinfo_exW(const wchar_t *pathname, MDBX_preopen_flags mode, MDBX_envinfo *info,
+                                          size_t bytes);
+#define mdbx_preopen_snapinfo_exT(pathname, mode, info, bytes) mdbx_preopen_snapinfo_exW(pathname, mode, info, bytes)
+#else
+#define mdbx_preopen_snapinfo_exT(pathname, mode, info, bytes) mdbx_preopen_snapinfo_ex(pathname, mode, info, bytes)
+#endif /* Windows */
+
 /** \brief Gets basic information about the database without opening it.
  * \ingroup c_opening
  *
@@ -7121,14 +7252,20 @@ LIBMDBX_API int mdbx_env_turn_for_recovery(MDBX_env *env, unsigned target_meta);
  * a process working with the database. In particular, there is no obstacle to another process deleting the database and
  * recreating it with a different page size and/or changing any other parameters.
  *
- * \returns A non-zero error value on failure and 0 on success. */
-LIBMDBX_API int mdbx_preopen_snapinfo(const char *pathname, MDBX_envinfo *info, size_t bytes);
+ * \returns A non-zero error value on failure and 0 on success.
+ * \see mdbx_preopen_snapinfo_ex() */
+LIBMDBX_INLINE_API(int, mdbx_preopen_snapinfo, (const char *pathname, MDBX_envinfo *info, size_t bytes)) {
+  return mdbx_preopen_snapinfo_ex(pathname, MDBX_PREOPEN_PROPERLY, info, bytes);
+}
+
 #if defined(_WIN32) || defined(_WIN64) || defined(DOXYGEN)
 /** \copydoc mdbx_preopen_snapinfo()
  * \ingroup c_opening
  * \note Available only on Windows.
  * \see mdbx_preopen_snapinfo() */
-LIBMDBX_API int mdbx_preopen_snapinfoW(const wchar_t *pathname, MDBX_envinfo *info, size_t bytes);
+LIBMDBX_INLINE_API(int, mdbx_preopen_snapinfoW, (const wchar_t *pathname, MDBX_envinfo *info, size_t bytes)) {
+  return mdbx_preopen_snapinfo_exW(pathname, MDBX_PREOPEN_PROPERLY, info, bytes);
+}
 #define mdbx_preopen_snapinfoT(pathname, info, bytes) mdbx_preopen_snapinfoW(pathname, info, bytes)
 #else
 #define mdbx_preopen_snapinfoT(pathname, info, bytes) mdbx_preopen_snapinfo(pathname, info, bytes)

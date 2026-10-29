@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-89-g2090f8e8 at 2026-10-19T12:05:46+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -324,6 +324,7 @@ typedef union osal_srwlock {
 } osal_srwlock_t;
 
 typedef void(WINAPI *osal_srwlock_t_function)(osal_srwlock_t *);
+typedef BOOLEAN(WINAPI *osal_srwlock_t_try_function)(osal_srwlock_t *);
 
 #if _WIN32_WINNT < 0x0600 /* prior to Windows Vista */
 typedef enum _FILE_INFO_BY_HANDLE_CLASS {
@@ -424,6 +425,7 @@ struct libmdbx_imports {
   osal_srwlock_t_function srwl_ReleaseShared;
   osal_srwlock_t_function srwl_AcquireExclusive;
   osal_srwlock_t_function srwl_ReleaseExclusive;
+  osal_srwlock_t_try_function srwl_TryAcquireExclusive;
   MDBX_NtExtendSection NtExtendSection;
   MDBX_GetFileInformationByHandleEx GetFileInformationByHandleEx;
   MDBX_GetVolumeInformationByHandleW GetVolumeInformationByHandleW;
@@ -561,7 +563,9 @@ enum txn_flags {
   txn_rw_begin_flags = MDBX_TXN_NOMETASYNC | MDBX_TXN_NOSYNC | MDBX_TXN_TRY,
   txn_rw_already_locked = MDBX_TXN_RDONLY_PREPARE & ~MDBX_TXN_RDONLY,
   txn_nipped = UINT32_C(0x1000),
-  txn_shrink_allowed = UINT32_C(0x40000000),
+  /* The transaction may unmap/remap the database mapping (possibly with an
+   * address change) for resize; see dxb_resize()/osal_mresize(). */
+  txn_unmap_allowed = UINT32_C(0x40000000),
   txn_parked = MDBX_TXN_PARKED,
   txn_gc_drained = 0x100 /* GC was depleted up to oldest reader */,
   txn_may_have_cursors = 0x400,
@@ -868,6 +872,10 @@ struct MDBX_env {
     uint8_t spill_parent4child_denominator;
     uint16_t merge_threshold_dot16;
     uint16_t split_reserve_dot16;
+    /* Minimal period between attempts to shrink the datafile, in monotonic
+     * units (see osal_monotime()); zero means no throttling. Affects the
+     * current process only (issue #170). */
+    uint64_t shrink_retry_period;
 #if !IS_WINDOWS
     unsigned writethrough_threshold;
 #endif /* Windows */
@@ -944,7 +952,21 @@ struct MDBX_env {
   osal_ioring_t ioring;
 
 #if IS_WINDOWS
+  /* Monotonic timestamp of the last datafile-shrink attempt, for the
+   * per-process throttling of shrink-through-un-map (issue #170). Kept here
+   * (a per-process field) rather than in the shared lck_t, so no lock-file
+   * format/version change is required. */
+  uint64_t shrink_last_attempt;
   osal_srwlock_t remap_lock;
+  /* Leaf lock serializing concurrent resizers (issue #154). remap_lock is now
+   * taken shared for a plain grow, so two growers (a read txn noticing the file
+   * grew by another process, and the writer growing it) could otherwise mutate
+   * env->dxb_mmap and call NtExtendSection() concurrently. This mutex makes
+   * grow-vs-grow and grow-vs-shrink mutually exclusive without blocking
+   * readers, which only ever hold remap_lock shared. Always acquired BEFORE
+   * remap_lock and released AFTER it, and never held across a blocking wait on
+   * remap_lock, so it stays a leaf (no deadlock cycle). */
+  osal_fastmutex_t resize_mutex;
   /* Workaround for LockFileEx and WriteFile multithread bug */
   CRITICAL_SECTION lck_event_cs;
   CRITICAL_SECTION dxb_event_cs;
@@ -996,7 +1018,7 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 
   STATIC_ASSERT_MSG((txn_state_flags & (txn_rw_begin_flags | txn_ro_begin_flags)) == 0,
                     "Oops, some txn flags overlapped or wrong");
-  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_shrink_allowed) == 0,
+  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_unmap_allowed) == 0,
                     "Oops, some txn flags overlapped or wrong");
 
   STATIC_ASSERT(sizeof(reader_slot_t) == 32);
@@ -2239,7 +2261,7 @@ __cold MDBX_env_flags_t env::operate_parameters::make_flags(bool accede, bool us
   if (options.enable_validation)
     flags |= MDBX_VALIDATION;
 
-  if (mode != readonly) {
+  if (mode != env::mode::readonly) {
     if (options.nested_transactions)
       flags &= ~MDBX_WRITEMAP;
     if (reclaiming.lifo)
@@ -2498,6 +2520,45 @@ __cold env_managed::env_managed(const MDBX_STD_FILESYSTEM_PATH &pathname, const 
 
 //------------------------------------------------------------------------------
 
+__cold env_managed env_managed::open_for_recovery(const char *pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  env_managed result(create_env());
+  if (max_maps > 0)
+    error::success_or_throw(::mdbx_env_set_maxdbs(result.handle_, max_maps));
+  error::success_or_throw(::mdbx_env_open_for_recovery(result.handle_, pathname, target_meta, writeable));
+  return result;
+}
+
+__cold env_managed env_managed::open_for_recovery(const ::std::string &pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  return open_for_recovery(pathname.c_str(), target_meta, writeable, max_maps);
+}
+
+#if defined(_WIN32) || defined(_WIN64)
+__cold env_managed env_managed::open_for_recovery(const wchar_t *pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  env_managed result(create_env());
+  if (max_maps > 0)
+    error::success_or_throw(::mdbx_env_set_maxdbs(result.handle_, max_maps));
+  error::success_or_throw(::mdbx_env_open_for_recoveryW(result.handle_, pathname, target_meta, writeable));
+  return result;
+}
+
+__cold env_managed env_managed::open_for_recovery(const ::std::wstring &pathname, unsigned target_meta, bool writeable,
+                                                  unsigned max_maps) {
+  return open_for_recovery(pathname.c_str(), target_meta, writeable, max_maps);
+}
+#endif /* Windows */
+
+#ifdef MDBX_STD_FILESYSTEM_PATH
+__cold env_managed env_managed::open_for_recovery(const MDBX_STD_FILESYSTEM_PATH &pathname, unsigned target_meta,
+                                                  bool writeable, unsigned max_maps) {
+  return open_for_recovery(pathname.native(), target_meta, writeable, max_maps);
+}
+#endif /* MDBX_STD_FILESYSTEM_PATH */
+
+//------------------------------------------------------------------------------
+
 void cursor_managed::close() {
   error::success_or_throw(::mdbx_cursor_close2(handle_));
   handle_ = nullptr;
@@ -2606,9 +2667,9 @@ void txn_managed::commit(finalization_latency *latency) {
 bool txn_managed::checkpoint(finalization_latency *latency) {
   const error err = static_cast<MDBX_error_t>(::mdbx_txn_checkpoint(handle_, MDBX_TXN_NOWEAKING, latency));
   if (MDBX_UNLIKELY(err.is_failure())) {
-    if (err.code() != MDBX_THREAD_MISMATCH && err.code() != MDBX_EINVAL)
+    if (err.code() != MDBX_THREAD_MISMATCH && err.code() != MDBX_EINVAL && err.code() != MDBX_BAD_TXN)
       /* do not reset the handle in case of errors that do not change the transaction state,
-       * including MDBX_EINVAL here. */
+       * including MDBX_EINVAL and MDBX_BAD_TXN here. */
       handle_ = nullptr;
     MDBX_CXX20_UNLIKELY err.throw_exception();
   }
@@ -2620,8 +2681,13 @@ void txn_managed::commit_embark_read(finalization_latency *latency) {
 }
 
 bool txn_managed::amend(bool dont_wait) {
-  return !error::boolean_or_throw(::mdbx_txn_amend(
-      handle_, &handle_, dont_wait ? MDBX_TXN_READWRITE | MDBX_TXN_TRY : MDBX_TXN_READWRITE, handle_->userctx));
+  error::throw_on_nullptr(handle_, MDBX_BAD_TXN);
+  const int err = ::mdbx_txn_amend(
+      handle_, &handle_, dont_wait ? MDBX_TXN_READWRITE | MDBX_TXN_TRY : MDBX_TXN_READWRITE, handle_->userctx);
+  if (dont_wait && err == MDBX_BUSY)
+    /* documented: `false` if the read-only transaction still continues */
+    return false;
+  return !error::boolean_or_throw(err);
 }
 
 //------------------------------------------------------------------------------
@@ -2743,7 +2809,7 @@ void cursor::update_current(const slice &value) {
   update(key, value);
 }
 
-slice cursor::reverse_current(size_t value_length) {
+slice cursor::reserve_current(size_t value_length) {
   default_buffer holder;
   auto key = current().key;
   if (error::boolean_or_throw(mdbx_is_dirty(handle_->txn, key.iov_base)))
@@ -2971,6 +3037,14 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_debug_flags_t 
   }
   if (it & MDBX_DBG_LEGACY_OVERLAP) {
     out << delimiter << "DBG_LEGACY_OVERLAP";
+    delimiter = comma;
+  }
+  if (it & MDBX_DBG_DONT_UPGRADE) {
+    out << delimiter << "MDBX_DBG_DONT_UPGRADE";
+    delimiter = comma;
+  }
+  if (it & MDBX_DBG_ERR) {
+    out << delimiter << "MDBX_DBG_ERR";
     delimiter = comma;
   }
   if (delimiter != comma)
