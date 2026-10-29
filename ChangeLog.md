@@ -28,6 +28,7 @@ Cutting-edge release with new core features and internal refactoring.
 
  - The `MDBX_ENABLE_REFUND` build option was removed; the zero-cost online auto-compactification it controlled is now always enabled ([#193](https://github.com/Mithril-mine/libmdbx-devel/issues/193)).
  - The C++ `mdbx::env::get_preopen_snapinfo()` overloads without an explicit mode argument were removed; the remaining overloads take `mode = MDBX_PREOPEN_PROPERLY` by default, so ordinary calls keep working, but code relying on the old overload set no longer compiles ([#182](https://github.com/Mithril-mine/libmdbx-devel/issues/182)).
+ - The C++ `mdbx::env::mode`/`mdbx::env::durability` enums are now scoped (`enum class`); the former `env::`-level enumerator names are kept as deprecated `[[deprecated(...)]]` aliases, so existing code keeps compiling while new code should use the scoped form (e.g. `mdbx::env::mode::nested_transactions` instead of `mdbx::env::nested_transactions`).
 
 ### Improvements:
 

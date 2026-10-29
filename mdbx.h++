@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-333-gebaaa06d at 2026-10-28T23:41:11+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -4901,6 +4901,27 @@ public:
     lazy_weak_tail,             ///< \copydoc MDBX_SAFE_NOSYNC
     whole_fragile               ///< \copydoc MDBX_UTTERLY_NOSYNC
   };
+
+  /* Deprecated backward-compatibility aliases: before the mode/durability enums
+   * became scoped (`enum class`), their enumerators leaked into `env::`.
+   * They are kept as deprecated static constants so existing code compiles,
+   * but new code should use the scoped form `env::mode::...`/`env::durability::...`. */
+  [[deprecated("use mdbx::env::mode::readonly instead")]] static constexpr mode readonly = mode::readonly;
+  [[deprecated("use mdbx::env::mode::write_file_io instead")]] static constexpr mode write_file_io =
+      mode::write_file_io;
+  [[deprecated("use mdbx::env::mode::write_mapped_io instead")]] static constexpr mode write_mapped_io =
+      mode::write_mapped_io;
+  [[deprecated("use mdbx::env::mode::nested_transactions instead")]] static constexpr mode nested_transactions =
+      mode::nested_transactions;
+  [[deprecated(
+      "use mdbx::env::durability::robust_synchronous instead")]] static constexpr durability robust_synchronous =
+      durability::robust_synchronous;
+  [[deprecated("use mdbx::env::durability::half_synchronous_weak_last instead")]] static constexpr durability
+      half_synchronous_weak_last = durability::half_synchronous_weak_last;
+  [[deprecated("use mdbx::env::durability::lazy_weak_tail instead")]] static constexpr durability lazy_weak_tail =
+      durability::lazy_weak_tail;
+  [[deprecated("use mdbx::env::durability::whole_fragile instead")]] static constexpr durability whole_fragile =
+      durability::whole_fragile;
 
   /// \brief Garbage reclaiming options.
   struct LIBMDBX_API_TYPE reclaiming_options {
