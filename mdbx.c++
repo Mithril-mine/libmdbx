@@ -2,7 +2,7 @@
 /// \author Леонид Юрьев aka Leonid Yuriev <leo@yuriev.ru> \date 2015-2026
 /* clang-format off */
 
-#define MDBX_BUILD_SOURCERY e0ae3583852f1b2691763de39e55b04c5152ce38ba99b17737beb006d542eaff_v0_13_12_208_gcf44b7ee
+#define MDBX_BUILD_SOURCERY 291b1faa50109180f7cbd2f6d144dcf7b5b545e6ae3ada35e00c010d7d0d1efa_v0_13_12_220_g33151ae6
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -4898,7 +4898,7 @@ __cold bool txn::rename_map(const ::std::string &old_name, const ::std::string &
 
 //------------------------------------------------------------------------------
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const slice &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const slice &it) {
   out << "{";
   if (!it.is_valid())
     out << "INVALID." << it.length();
@@ -4919,15 +4919,15 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const slice &it) {
   return out << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const pair &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const pair &it) {
   return out << "{" << it.key << " => " << it.value << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const pair_result &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const pair_result &it) {
   return out << "{" << (it.done ? "done: " : "non-done: ") << it.key << " => " << it.value << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const ::mdbx::env::geometry::size &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const ::mdbx::env::geometry::size &it) {
   switch (it.bytes) {
   case ::mdbx::env::geometry::default_value:
     return out << "default";
@@ -4967,7 +4967,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const ::mdbx::env::geomet
   return out;
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::geometry &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::geometry &it) {
   return                                                                //
       out << "\tlower " << env::geometry::size(it.size_lower)           //
           << ",\n\tnow " << env::geometry::size(it.size_now)            //
@@ -4977,7 +4977,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::geometry &it) 
           << ",\n\tpagesize " << env::geometry::size(it.pagesize) << "\n";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_parameters &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::operate_parameters &it) {
   return out << "{\n"                                 //
              << "\tmax_maps " << it.max_maps          //
              << ",\n\tmax_readers " << it.max_readers //
@@ -4988,7 +4988,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_parame
              << "\n}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::mode &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::mode &it) {
   switch (it) {
   case env::mode::readonly:
     return out << "readonly";
@@ -5001,7 +5001,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::mode &it) {
   }
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::durability &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::durability &it) {
   switch (it) {
   case env::durability::robust_synchronous:
     return out << "robust_synchronous";
@@ -5016,14 +5016,14 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::durability &it
   }
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::reclaiming_options &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::reclaiming_options &it) {
   return out << "{"                                            //
              << "lifo: " << (it.lifo ? "yes" : "no")           //
              << ", coalesce: " << (it.coalesce ? "yes" : "no") //
              << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_options &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env::operate_options &it) {
   static const char comma[] = ", ";
   const char *delimiter = "";
   out << "{";
@@ -5056,7 +5056,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env::operate_option
   return out << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const env_managed::create_parameters &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const env_managed::create_parameters &it) {
   return out << "{\n"                                                        //
              << "\tfile_mode " << std::oct << it.file_mode_bits << std::dec  //
              << ",\n\tsubdirectory " << (it.use_subdirectory ? "yes" : "no") //
@@ -5064,7 +5064,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const env_managed::create
              << it.geometry << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_log_level_t &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const MDBX_log_level_t &it) {
   switch (it) {
   case MDBX_LOG_FATAL:
     return out << "LOG_FATAL";
@@ -5089,7 +5089,7 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_log_level_t &i
   }
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_debug_flags_t &it) {
+__cold::std::ostream &operator<<(::std::ostream &out, const MDBX_debug_flags_t &it) {
   if (it == MDBX_DBG_DONTCHANGE)
     return out << "DBG_DONTCHANGE";
 
@@ -5120,12 +5120,20 @@ __cold ::std::ostream &operator<<(::std::ostream &out, const MDBX_debug_flags_t 
     out << delimiter << "DBG_LEGACY_OVERLAP";
     delimiter = comma;
   }
+  if (it & MDBX_DBG_DONT_UPGRADE) {
+    out << delimiter << "MDBX_DBG_DONT_UPGRADE";
+    delimiter = comma;
+  }
+  if (it & MDBX_DBG_ERR) {
+    out << delimiter << "MDBX_DBG_ERR";
+    delimiter = comma;
+  }
   if (delimiter != comma)
     out << "DBG_NONE";
   return out << "}";
 }
 
-__cold ::std::ostream &operator<<(::std::ostream &out, const ::mdbx::error &err) {
+__cold::std::ostream &operator<<(::std::ostream &out, const ::mdbx::error &err) {
   return out << err.what() << " (" << long(err.code()) << ")";
 }
 

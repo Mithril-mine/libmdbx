@@ -4,7 +4,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY e0ae3583852f1b2691763de39e55b04c5152ce38ba99b17737beb006d542eaff_v0_13_12_208_gcf44b7ee
+#define MDBX_BUILD_SOURCERY 291b1faa50109180f7cbd2f6d144dcf7b5b545e6ae3ada35e00c010d7d0d1efa_v0_13_12_220_g33151ae6
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -5152,6 +5152,18 @@ MDBX_NOTHROW_PURE_FUNCTION static inline size_t page_numkeys(const page_t *mp) {
 
 MDBX_NOTHROW_PURE_FUNCTION static inline size_t page_room(const page_t *mp) { return mp->upper - mp->lower; }
 
+/* O(1) sanity check of a sub-page header geometry, to be performed on the
+ * normal (non-MDBX_VALIDATION) paths against the region actually allocated
+ * for the nested page (node_ds). Without it, crafted upper/lower values make
+ * node_del()/cursor_put() underflow their memmove()/memcpy() lengths
+ * (issues #57 and #176). The full O(n) contents check stays in page_check().
+ * Call sites guard the call with !MDBX_DISABLE_VALIDATION so the check is
+ * compiled away together with the rest of the validation in LMDB-benchmark
+ * builds. */
+MDBX_NOTHROW_PURE_FUNCTION static inline bool subpage_geometry_ok(const page_t *sp, size_t limit) {
+  return !(sp->upper < sp->lower || (sp->lower & 1) || PAGEHDRSZ + sp->upper > limit);
+}
+
 MDBX_NOTHROW_PURE_FUNCTION static inline size_t page_space(const MDBX_env *env) {
   STATIC_ASSERT(PAGEHDRSZ % 2 == 0);
   return env->ps - PAGEHDRSZ;
@@ -7514,6 +7526,11 @@ __cold static THREAD_RESULT THREAD_CALL compacting_write_thread(void *arg) {
     osal_condpair_signal(&ctx->condpair, false);
   }
 bailout:
+  /* Wake up a producer sleeping on the part=false cond: it waits with an
+   * infinite timeout and re-checks ctx->error, so without this signal a failed
+   * osal_write() would leave mdbx_env_copy() hanging forever. The signal is
+   * issued while holding the lock, exactly as the normal loop does. */
+  osal_condpair_signal(&ctx->condpair, false);
   osal_condpair_unlock(&ctx->condpair);
   return (THREAD_RESULT)0;
 }
@@ -16614,12 +16631,20 @@ int cursor_dupsort_setup(MDBX_cursor *mc, const node_t *node, const page_t *mp) 
     }
     mx->cursor.top_and_flags = z_fresh_mark | z_inner;
     break;
-  case N_DUP:
-    if (!MDBX_DISABLE_VALIDATION && unlikely(node_ds(node) <= PAGEHDRSZ)) {
-      ERROR("invalid nested-page size %zu", node_ds(node));
+  case N_DUP:;
+    const size_t dsize = node_ds(node);
+    page_t *const sp = node_data(node);
+    if (!MDBX_DISABLE_VALIDATION && unlikely(!subpage_geometry_ok(sp, dsize))) {
+      /* Crafted nested-page lower/upper make node_del()/cursor_put()
+       * underflow their memmove()/memcpy() lengths even on the normal
+       * (non-MDBX_VALIDATION) path. (issue #176) */
+      ERROR("invalid nested sub-page lower(%u)/upper(%u) for size %zu", sp->lower, sp->upper, dsize - PAGEHDRSZ);
       goto bailout;
     }
-    page_t *sp = node_data(node);
+    if (!MDBX_DISABLE_VALIDATION && unlikely(dsize <= PAGEHDRSZ)) {
+      ERROR("invalid nested-page size %zu", dsize);
+      goto bailout;
+    }
     mx->nested_tree.height = 1;
     mx->nested_tree.branch_pages = 0;
     mx->nested_tree.leaf_pages = 1;
@@ -18415,8 +18440,9 @@ __hot int cursor_ops(MDBX_cursor *mc, MDBX_val *key, MDBX_val *data, const MDBX_
   case MDBX_NEXT:
   case MDBX_NEXT_NODUP:
     rc = outer_next(mc, key, data, op);
-    /* The z_eof_hard flag reflects internal intermediate state and must not be exposed to outer code after an next-ops.
-     * Elsewise a tree rebalance after deletion may going wrong. So just clear z_eof_hard flag in both cursors anyway.
+    /* The z_eof_hard flag reflects internal intermediate state and must not be exposed to outer code after an
+     * next-ops. Elsewise a tree rebalance after deletion may going wrong. So just clear z_eof_hard flag in both
+     * cursors anyway.
      */
     mc->flags &= ~z_eof_hard;
     ((cursor_couple_t *)mc)->inner.cursor.flags &= ~z_eof_hard;
@@ -19997,7 +20023,7 @@ __cold int dxb_read_header(MDBX_env *env, meta_t *dest, const int lck_exclusive,
     bool latch;
     if (env->stuck_meta >= 0)
       latch = (meta_number == (unsigned)env->stuck_meta);
-    else if (meta_bootid_match(meta))
+    else if (meta_bootid_match(meta) && env->lck_mmap.lck)
       latch = meta_choice_recent(meta->unsafe_txnid, SIGN_IS_STEADY(meta->unsafe_sign), dest->unsafe_txnid,
                                  SIGN_IS_STEADY(dest->unsafe_sign));
     else
@@ -21565,7 +21591,7 @@ __cold int env_open(MDBX_env *env, mdbx_mode_t mode) {
 #if defined(_WIN32) || defined(_WIN64)
   eASSERT(env, env->ioring.overlapped_fd == 0);
   bool ior_direct = false;
-  if (!(env->flags & (MDBX_RDONLY | MDBX_SAFE_NOSYNC | MDBX_NOMETASYNC | MDBX_EXCLUSIVE))) {
+  if (!(env->flags & (MDBX_RDONLY | MDBX_SAFE_NOSYNC | MDBX_NOMETASYNC))) {
     if (MDBX_AVOID_MSYNC && (env->flags & MDBX_WRITEMAP)) {
       /* Запрошен режим MDBX_SYNC_DURABLE | MDBX_WRITEMAP при активной опции
        * MDBX_AVOID_MSYNC.
@@ -21629,11 +21655,7 @@ __cold int env_open(MDBX_env *env, mdbx_mode_t mode) {
     osal_fseek(env->lck_mmap.fd, safe_parking_lot_offset);
 
   eASSERT(env, env->dsync_fd == INVALID_HANDLE_VALUE);
-  if (!(env->flags & (MDBX_RDONLY | MDBX_SAFE_NOSYNC | DEPRECATED_MAPASYNC
-#if defined(_WIN32) || defined(_WIN64)
-                      | MDBX_EXCLUSIVE
-#endif /* !Windows */
-                      ))) {
+  if (!(env->flags & (MDBX_RDONLY | MDBX_SAFE_NOSYNC | DEPRECATED_MAPASYNC))) {
     rc = osal_openfile(MDBX_OPEN_DXB_DSYNC, env, env->pathname.dxb, &env->dsync_fd, 0);
     if (unlikely(MDBX_IS_ERROR(rc)))
       return rc;
@@ -21828,8 +21850,7 @@ __cold int env_close(MDBX_env *env, bool resurrect_after_fork) {
   if (!resurrect_after_fork) {
     if (env->kvs) {
       for (size_t i = CORE_DBS; i < env->n_dbi; ++i)
-        if (env->kvs[i].name.iov_len)
-          osal_free(env->kvs[i].name.iov_base);
+        osal_free(env->kvs[i].name.iov_base);
       osal_free(env->kvs);
       env->n_dbi = CORE_DBS;
       env->kvs = nullptr;
@@ -22940,13 +22961,35 @@ next_gc:;
 #if MDBX_ENABLE_PROFGC
   const uint64_t merge_begin = osal_monotime();
 #endif /* MDBX_ENABLE_PROFGC */
-  pnl_merge(txn->tw.repnl, gc_pnl);
+  const size_t expected_after_merge = gc_len + MDBX_PNL_GETSIZE(txn->tw.repnl);
+  const bool has_duplicates = pnl_merge(txn->tw.repnl, gc_pnl) != expected_after_merge;
 #if MDBX_ENABLE_PROFGC
   prof->pnl_merge.calls += 1;
   prof->pnl_merge.volume += MDBX_PNL_GETSIZE(txn->tw.repnl);
   prof->pnl_merge.time += osal_monotime() - merge_begin;
 #endif /* MDBX_ENABLE_PROFGC */
   flags |= ALLOC_SHOULD_SCAN;
+  /* Defence-in-depth after the merge: The pnl read from GC was checked above in gc_check_rowdata(),
+   * and the thoroughness of the check depends on MDBX_VALIDATION:
+   *  - without MDBX_VALIDATION, a lightweight check is performed using pnl_check_lite();
+   *  - when MDBX_VALIDATION is enabled, a full check is performed using pnl_check_full() with items order checking.
+   *
+   * Next, here we check that the length after merge is equal to the total length of the source pnls.
+   * Thus, depending on MDBX_VALIDATION, we get two situations:
+   *   - without MDBX_VALIDATION, a minimum of O(1) checks is performed,
+   *     but if the order is violated within pnl from GC, we may not notice duplicates;
+   *   - with MDBX_VALIDATION enabled, the cost of checks is O(n),
+   *     but we will notice both order violations and duplicates.
+   *
+   * Overall, we get a manageable compromise:
+   *  - without MDBX_VALIDATION, there are minimal checks and performance is optimized,
+   *    but control can be enabled via build options;
+   *  - with MDBX_VALIDATION enabled, full checks are performed for maximum resilience against untrusted data. */
+  if (unlikely(has_duplicates)) {
+    ERROR("%s/%d: %s", "MDBX_CORRUPTED", MDBX_CORRUPTED, "duplicate page in the retired-pages list");
+    ret.err = MDBX_CORRUPTED;
+    goto fail;
+  }
   if (AUDIT_ENABLED()) {
     if (unlikely(!pnl_check(txn->tw.repnl, txn->geo.first_unallocated))) {
       ERROR("%s/%d: %s", "MDBX_CORRUPTED", MDBX_CORRUPTED, "invalid txn retired-list");
@@ -26420,11 +26463,14 @@ __cold void debug_log(int level, const char *function, int line, const char *fmt
 
 __cold void log_error(const int err, const char *func, unsigned line) {
   assert(err != MDBX_SUCCESS);
-  if (unlikely(globals.loglevel >= MDBX_LOG_DEBUG)) {
+  if (unlikely((globals.runtime_flags & MDBX_DBG_ERR) || globals.loglevel >= MDBX_LOG_DEBUG)) {
     const bool is_error = err != MDBX_RESULT_TRUE && err != MDBX_NOTFOUND;
-    char buf[256];
-    debug_log(is_error ? MDBX_LOG_ERROR : MDBX_LOG_VERBOSE, func, line, "%s %d (%s)\n",
-              is_error ? "error" : "condition", err, mdbx_strerror_r(err, buf, sizeof(buf)));
+    const MDBX_log_level_t level = is_error ? MDBX_LOG_ERROR : MDBX_LOG_VERBOSE;
+    if (level <= globals.loglevel || (globals.runtime_flags & MDBX_DBG_ERR)) {
+      char buf[256];
+      debug_log(level, func, line, "%s %d (%s)\n", is_error ? "error" : "condition", err,
+                mdbx_strerror_r(err, buf, sizeof(buf)));
+    }
   }
 }
 
@@ -26583,7 +26629,7 @@ __cold static int setup_debug(MDBX_log_level_t level, MDBX_debug_flags_t flags, 
 #if MDBX_DEBUG
         MDBX_DBG_ASSERT | MDBX_DBG_AUDIT | MDBX_DBG_JITTER |
 #endif
-        MDBX_DBG_DUMP | MDBX_DBG_LEGACY_MULTIOPEN | MDBX_DBG_LEGACY_OVERLAP | MDBX_DBG_DONT_UPGRADE;
+        MDBX_DBG_DUMP | MDBX_DBG_LEGACY_MULTIOPEN | MDBX_DBG_LEGACY_OVERLAP | MDBX_DBG_DONT_UPGRADE | MDBX_DBG_ERR;
     globals.runtime_flags = (uint8_t)flags;
   }
 
@@ -38088,10 +38134,10 @@ __dll_export
         0,
         13,
         12,
-        208,
+        220,
         "", /* pre-release suffix of SemVer
-                                        0.13.12.208 */
-        {"2026-10-19T15:29:45+03:00", "ff8f7ebfc7dab6c4cf7e5b4c443b36b7cebe45b8", "cf44b7eedf6db69ddaabac4404d294e83d51b603", "v0.13.12-208-gcf44b7ee"},
+                                        0.13.12.220 */
+        {"2026-10-30T00:58:32+03:00", "4c04d253a1d3f7c82e7c41c07901ac4592a583ea", "33151ae6174202e3d214b9016ec577b3df76bd63", "v0.13.12-220-g33151ae6"},
         sourcery};
 
 __dll_export

@@ -1827,6 +1827,7 @@ private:
       return is_reference ? false : move(std::move(other));
     }
 
+    using swap_alloc = allocation_aware_details::swap_alloc<struct silo, allocator_type>;
     static MDBX_CXX20_CONSTEXPR std::pair<bool, bool>
     exchange(silo &left, const bool left_is_reference, silo &right,
              const bool right_is_reference) noexcept(swap_alloc::is_nothrow()) {

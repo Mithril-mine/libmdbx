@@ -52,6 +52,11 @@ A long-term support phase with periodic releases as fixes accumulate.
     - Fixed `mdbx_jsonInteger_from_key()` decoding the stored integer `0` as `INT64_MAX`; zero now round-trips correctly ([#87](https://github.com/Mithril-mine/libmdbx-devel/issues/87)) (backport).
     - On MacOS and other relevant platforms POSIX shared anonymous semaphores are now preferred over the legacy System V IPC ([#80](https://github.com/Mithril-mine/libmdbx-devel/issues/80)) (backport).
     - Excluded OpenBSD from the POSIX-semaphore locking auto-selection, since its `sem_init()` always fails with `EPERM` for process-shared semaphores and thus a default build could not open any environment; also corrected the misleading comment naming macOS, which uses the POSIX-2001 path anyway ([#115](https://github.com/Mithril-mine/libmdbx-devel/issues/115)) (backport).
+    - Fixed `mdbx_preopen_snapinfo()` reporting a database as corrupted when its newest checkpoint was a weak one of the current boot, even though a usable steady checkpoint existed; the inspection now reports the steady-checkpoint geometry instead ([#182](https://github.com/Mithril-mine/libmdbx-devel/issues/182)) (backport).
+    - Fixed a page listed by two garbage-collection records being handed out twice to b-tree nodes in a single write transaction; such corrupted GC is now rejected (backport).
+    - Fixed crafted databases with invalid offsets inside a nested duplicate-values sub-page crashing or corrupting memory even without validation; the sub-page geometry is now checked on every path ([#176](https://github.com/Mithril-mine/libmdbx-devel/issues/176)) (backport).
+    - Fixed `mdbx_env_copy()` with compaction hanging forever when the dedicated writer thread hit a write error (e.g. a closed destination pipe or a full disk); the error is now reported instead ([#171](https://github.com/Mithril-mine/libmdbx-devel/issues/171)) (backport).
+    - Added a dedicated `MDBX_DBG_ERR` flag for `mdbx_setup_debug()`, so error messages are logged even when the debug log level is quieted (backport).
 
  - Windows:
     - Fixed a spurious internal assertion failure during page allocation on Windows ([#52](https://github.com/Mithril-mine/libmdbx-devel/issues/52)) (backport).
@@ -61,6 +66,7 @@ A long-term support phase with periodic releases as fixes accumulate.
     - Fixed building with CLANG/LLVM on Windows, including the Microsoft Clang from Visual Studio (backport).
     - Fixed a scan-code path bug on ARM64-Windows with LLP64 (backport).
     - Fixed a Windows performance regression: every no-sync commit in write-map mode flushed the whole mapping ([#65](https://github.com/Mithril-mine/libmdbx-devel/issues/65)) (backport).
+    - Fixed opening a database in exclusive mode switching to the slow flush-based commit path; exclusive-mode commits are now as fast as usual ([#179](https://github.com/Mithril-mine/libmdbx-devel/issues/179)) (backport).
 
  - Tools:
     - Fixed `mdbx_load` failing with a missing-file error when reading a dump from standard input ([#50](https://github.com/Mithril-mine/libmdbx-devel/issues/50)) (backport).
@@ -90,6 +96,7 @@ A long-term support phase with periodic releases as fixes accumulate.
     - Fixed an OS handle leak when querying system memory on macOS (backport).
     - Fixed a Windows handle leak in the environment-resize failure path (backport).
     - Fixed a synchronization-object leak in the error path of `mdbx_env_copy()` with compaction (backport).
+    - Fixed a memory leak when a named table with an empty (zero-length) name was closed: the name buffer is now freed unconditionally (backport).
 
  - Spilling:
     - Fixed a spurious assertion in the spilled-pages handling (backport).
@@ -113,8 +120,8 @@ A long-term support phase with periodic releases as fixes accumulate.
     - Fixed the `[[maybe_unused]] const` workaround for an MSVC bug (backport).
     - Fixed minor copy-and-paste mistakes and other typos across the codebase (backport).
     - Fixed a lot of typos and a few minor bugs detected by CodeQL (backport).
-    - Fixed `mdbx_liberr2str()` having no message for `MDBX_BACKLOG_DEPLETED`, so `mdbx_strerror()` fell back to the (unrelated) system message table and C++ `mdbx::error::what()` returned a null pointer, crashing typical error handlers; the code now has its own message ([#96](https://github.com/Mithril-mine/libmdbx-devel/issues/96)) (backport).
-
+    - Fixed `mdbx_liberr2str()` having no message for `MDBX_BACKLOG_DEPLETED`.
+    - Clean up invalid escape in the semver regex.
     - etc...
 
 --------------------------------------------------------------------------------

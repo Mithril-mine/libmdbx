@@ -7,7 +7,7 @@
 
 /* This is a minimal example now, which will be expanded soon. */
 
-static void тысяча(const mdbx::path &database_pathname, const mdbx::env::mode mode, mdbx::env::durability durability) {
+static void thousand(const mdbx::path &database_pathname, const mdbx::env::mode mode, mdbx::env::durability durability) {
   mdbx::env::remove(database_pathname);
   std::cout << "INSERTIONx1000(" << mode << ", " << durability << ")" << std::endl;
 
@@ -91,14 +91,14 @@ int main(int, const char *[]) {
         "/tmp/"
 #endif /* !Windows */
         "bench_example_database.mdbx";
-    тысяча(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::robust_synchronous);
-    тысяча(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::half_synchronous_weak_last);
-    тысяча(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::lazy_weak_tail);
-    тысяча(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::whole_fragile);
-    тысяча(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::robust_synchronous);
-    тысяча(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::half_synchronous_weak_last);
-    тысяча(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::lazy_weak_tail);
-    тысяча(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::whole_fragile);
+    thousand(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::robust_synchronous);
+    thousand(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::half_synchronous_weak_last);
+    thousand(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::lazy_weak_tail);
+    thousand(bench_database, mdbx::env::mode::write_file_io, mdbx::env::durability::whole_fragile);
+    thousand(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::robust_synchronous);
+    thousand(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::half_synchronous_weak_last);
+    thousand(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::lazy_weak_tail);
+    thousand(bench_database, mdbx::env::mode::write_mapped_io, mdbx::env::durability::whole_fragile);
     return doit("example_database") ? EXIT_SUCCESS : EXIT_FAILURE;
   } catch (const std::exception &ex) {
     std::cerr << "Exception: " << ex.what() << "\n";

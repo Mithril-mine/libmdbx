@@ -940,8 +940,12 @@ typedef enum MDBX_debug_flags {
    * the last signature regardless this flag */
   MDBX_DBG_DONT_UPGRADE = 64,
 
+  /** Enables logging of errors returned by the libmdbx API and critical
+   * internal API paths. */
+  MDBX_DBG_ERR = 128,
+
   /** Avoids UBSAN false-positive issues/traps. */
-  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 127
+  MDBX_DBG_MAX = ((unsigned)MDBX_LOG_MAX) << 16 | 255
 } MDBX_debug_flags_t;
 DEFINE_ENUM_FLAG_OPERATORS(MDBX_debug_flags)
 
