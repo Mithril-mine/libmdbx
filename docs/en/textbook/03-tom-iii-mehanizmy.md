@@ -754,6 +754,17 @@ offsets of the key `lck_t` fields, so the constants above are just the per-primi
 The LCK format is versioned **separately** from the data format: a structure change breaks only
 shared access to an already-open database, not the data file itself.
 
+> **Warning: `POSIX2001` has no recovery from a dead lock owner.** The mode uses plain
+> (non-robust) process-shared mutexes: when a writer dies holding the write-lock, the surviving
+> processes can neither detect the death nor acquire the lock — with the glibc priority-inheriting
+> mutex a new waiter is even aborted or hung by the C-library itself. A stale ownership token can
+> also be satisfied by a recycled thread id, which breaks the single-writer exclusion and leads to
+> a double commit of the same transaction id, i.e. a corrupted database. Therefore the
+> auto-selection never chooses this mode anymore: where robust mutexes are undetectable it falls
+> back to `SYSV`, whose semaphores the kernel releases on a process death. `POSIX2001` remains
+> opt-in for the setups where System V IPC is unusable, with the limitation above accepted
+> deliberately — and with the exclusive re-seize at a fresh open as the only (coarse) repair.
+
 ### 19.3. Why LockFileEx on Windows Instead of Named Mutexes
 
 File locks (`LockFileEx`) were chosen deliberately: they work on network drives and protect against

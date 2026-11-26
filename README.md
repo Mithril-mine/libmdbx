@@ -2,8 +2,6 @@
 libmdbx
 =======
 
-<!-- section-begin overview -->
-
 _libmdbx_ is an extremely fast, compact, powerful, embedded, transactional [key-value database](https://en.wikipedia.org/wiki/Key-value_database), with [Apache 2.0 license](https://sourcecraft.dev/dqdkfa/libmdbx/blob?file=LICENSE). _libmdbx_ has a specific set of properties and capabilities, focused on creating unique lightweight solutions.
 
 1. Allows **a swarm of multi-threaded processes to [ACID](https://en.wikipedia.org/wiki/ACID)ly read and update** several key-value [maps](https://en.wikipedia.org/wiki/Associative_array) and [multimaps](https://en.wikipedia.org/wiki/Multimap) in a locally-shared database.
@@ -20,19 +18,15 @@ _libmdbx_ is an extremely fast, compact, powerful, embedded, transactional [key-
 
 7. **Compact and friendly for full embedding**. Just a few flat source code files. Here no internal threads nor server process(es), but implements the core of the [Berkeley DB](https://en.wikipedia.org/wiki/Berkeley_DB) API with many powerful extensions.
 
-<!-- section-end -->
-
 Historically, _libmdbx_ is a deeply revised and extended descendant of the legendary [Lightning Memory-Mapped Database](https://en.wikipedia.org/wiki/Lightning_Memory-Mapped_Database). _libmdbx_ inherits all benefits from _LMDB_, but resolves some issues and adds [a large set of improvements](#improvements-beyond-lmdb).
 
 [![Telegram: Support | Discussions | News](https://img.shields.io/endpoint?color=scarlet&logo=telegram&label=Support%20%7C%20Discussions%20%7C%20News&url=https%3A%2F%2Ftg.sumanjay.workers.dev%2Flibmdbx)](https://t.me/libmdbx)
 
-> Please rely on  the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__api.html) API, etc.
+> Please rely on the [libmdbx.dqdkfa.ru](https://libmdbx.dqdkfa.ru) site with [FAQ](https://libmdbx.dqdkfa.ru/#sec-faq), [Tips](https://libmdbx.dqdkfa.ru/#sec-tips), [Rules/Checklists](https://libmdbx.dqdkfa.ru/#sec-rules), [Knowledge base](https://libmdbx.dqdkfa.ru/#sec-knowledge), references for [`C++`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__cxx__api.html) and [`C`](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__api.html) API, etc.
 
 -----
 
 # Characteristics
-
-<!-- section-begin characteristics -->
 
 ## Features
 
@@ -106,28 +100,15 @@ On the other hand, if you make something suboptimally, you can notice its detrim
 
 ## Durability and synchronization modes
 
-_libmdbx_ provides a set of trade-offs between durability and write performance, selected per environment via `mdbx_env_set_option()`:
+_libmdbx_ provides a set of trade-offs between durability and write performance, selected per environment via `mdbx_env_set_option()`: from `MDBX_DURABLE` (the default — every commit syncs both the data and the meta pages) through `MDBX_NOMETASYNC` and `MDBX_SAFE_NOSYNC` (lazy self-managed syncing with guaranteed integrity) to `MDBX_UTTERLY_NOSYNC` (speed over guarantees, matching LMDB `MDB_NOSYNC`). In addition, `MDBX_WRITEMAP` maps data pages and writes through `mmap`, which combines with the modes above (typically with `MDBX_NOMETASYNC`) to reduce data copying.
 
-| Mode | DB data synced to disk | Meta-page synced | Survives OS crash | Survives power loss |
-| --- | --- | --- | --- | --- |
-| `MDBX_DURABLE` (default) | each commit | each commit | yes | yes |
-| `MDBX_NOMETASYNC` | each commit | no | yes | last commits may roll back |
-| `MDBX_SAFE_NOSYNC` | lazy (thresholds/timeout) | lazy | yes | recent commits may be lost, integrity guaranteed |
-| `MDBX_UTTERLY_NOSYNC` | no explicit sync | no | no | possible corruption (matches LMDB `MDB_NOSYNC`) |
-
-In addition, `MDBX_WRITEMAP` maps data pages and writes through `mmap`, which can be combined with the modes above (typically with `MDBX_NOMETASYNC`) to reduce data copying at the cost of more memory-mapped I/O. See the [API reference](https://libmdbx.dqdkfa.ru/docs/en/reference/api/group__c__opening.html) for the exact semantics.
+The full comparison table, the exact semantics of every mode, the auto-sync thresholds and recommendations are in [docs/en/getting-started/durability-modes.md](docs/en/getting-started/durability-modes.md) (also published on the [site](https://libmdbx.dqdkfa.ru/docs/en/getting-started/durability-modes.html)).
 
 ## Comparison with other databases
-For now please refer to [chapter of "BoltDB comparison with other databases"](https://github.com/coreos/bbolt#comparison-with-other-databases) which is also (mostly) applicable to _libmdbx_ with minor clarification:
- - a database could be shared by multiple processes, i.e. no multi-process issues;
- - no issues with moving a cursor(s) after the deletion;
- - _libmdbx_ provides zero-overhead database compactification, so a database file could be shrunk/truncated in particular cases;
- - excluding disk I/O time _libmdbx_ could be ≈3 times faster than BoltDB and up to 10–100,000× faster than both BoltDB and LMDB in specific edge cases;
- - _libmdbx_ provides even more features compared to BoltDB and/or LMDB.
 
-<!-- section-end -->
+_libmdbx_ belongs to the same family of copy-on-write B+tree engines as LMDB and BoltDB/bbolt: a single serialized writer, non-blocking snapshot readers, no WAL. Compared with them it adds multi-process access, on-the-fly auto-resizing, longer keys, safe asynchronous durability modes, zero-overhead compactification, stable cursor navigation over deletions, and a larger feature set — excluding disk I/O time it is ≈3 times faster than BoltDB and up to 10–100,000× faster than both BoltDB and LMDB in specific edge cases. LSM-based engines (RocksDB) and SQL databases (SQLite) answer different trade-offs.
 
-<!-- section-begin bindings -->
+The detailed comparison table — licensing, durability, concurrency, limits, compactification, tooling, platform support — is in [docs/en/overview/comparison.md](docs/en/overview/comparison.md) (also published on the [site](https://libmdbx.dqdkfa.ru/docs/en/overview/comparison.html)).
 
 Bindings
 ========
@@ -137,19 +118,15 @@ The full list of all bindings (several dozen) is available in the [Bindings and 
 | Runtime |  Repo  | Author |
 | ------- | ------ | ------ |
 | Rust    | [libmdbx-rs](https://github.com/vorot93/libmdbx-rs)   | [Artem Vorotnikov](https://github.com/vorot93) |
-| Go      | [mdbx-go](https://github.com/torquem-ch/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
+| Go      | [mdbx-go](https://github.com/erigontech/mdbx-go)      | [Alex Sharov](https://github.com/AskAlexSharov) |
 | .NET    | [libmdbx-dotnet](https://public.git.amsoft.spb.ru/libmdbx/libmdbx-dotnet) | [Anton Maisak](mailto:anton@maisak.ru) |
 | CPython | [PyPi/clibmdbx](https://pypi.org/project/clibmdbx/)   | [`@jyj117`](https://github.com/jyj117) |
 | Python  | [PyPi/libmdbx](https://pypi.org/project/libmdbx/)     | [Lazymio](https://github.com/wtdcode) |
 | NodeJS  | [mdbxmou](https://github.com/ikonopistsev/mdbxmou)    | [Igor Ikonopistsev](https://github.com/ikonopistsev) |
-| Zig     | [mdbx-zig](https://github.com/theseyan/lmdbx-zig)     | [Sayan J. Das](https://github.com/theseyan) |
-
-<!-- section-end -->
+| Zig     | [lmdbx-zig](https://github.com/theseyan/lmdbx-zig)    | [Sayan J. Das](https://github.com/theseyan) |
 
 Usage
 =====
-
-<!-- section-begin usage -->
 
 Since December 2025 _libmdbx_ is available only in an amalgamated source code form like [SQLite](https://www.sqlite.org/amalgamation.html), without additional dependencies and internal resources needed only for development of _libmdbx_ itself. Package support for common Linux distributions is planned in the future, after the `1.0` release.
 
@@ -165,7 +142,7 @@ All build ways are completely traditional and have minimal prerequisites like `b
 So just use CMake or GNU Make in your habitual manner, and feel free to file an issue in case something is unexpected or breaks down.
 
 ### Testing
-Amalgamated source code does not contain most of the tests and other internal components for several reasons. You can find explanations of the reasons in the comments to the presentation of [_libmdbx_ roadmap](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf) on the eve of 2026. However, an extended example of using the C++ API will be added soon, which can also be used as a simple smoke-test.
+Amalgamated source code does not contain most of the tests and other internal components for several reasons. You can find explanations of the reasons in the comments to the presentation of [_libmdbx_ roadmap](https://libmdbx.dqdkfa.ru/release/libmdbx-roadmap-HNY2026-english.pdf) on the eve of 2026. However, runnable examples are included (see [`examples/`](examples/README.md), including the extended `example-mdbx.c++` tour of the C++ API), which can also be used as a simple smoke-test.
 
 ### Common important details
 
@@ -236,8 +213,6 @@ Please use CMake to build _libmdbx_ for Android. Please refer to the [official g
 
 ### iOS
 To build _libmdbx_ for iOS, please use CMake with the ["toolchain file"](https://cmake.org/cmake/help/latest/variable/CMAKE_TOOLCHAIN_FILE.html) from the [ios-cmake](https://github.com/leetal/ios-cmake) project.
-
-<!-- section-end -->
 
 ## Packaging / Conan
 
@@ -311,21 +286,15 @@ the requirement will apply to every consumer of a prebuilt package.
 
 ## API description
 
-Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers.
+Please refer to the online [_libmdbx_ API reference](https://libmdbx.dqdkfa.ru/docs) and/or see the [mdbx.h++](mdbx.h%2B%2B) and [mdbx.h](mdbx.h) headers — the headers are self-documented and serve as the offline reference. The amalgamated package also ships an offline copy of the guides and the textbook in `docs/`.
 
 ## Textbook
 
 A complete practical guide to libmdbx — six volumes from the first steps to expert topics and bindings — is available online in [Russian](https://libmdbx.dqdkfa.ru/docs/ru/textbook/) and [English](https://libmdbx.dqdkfa.ru/docs/en/textbook/); each online version links a downloadable PDF.
 
-The textbook's source (markdown, in `docs/textbook/ru` and `docs/textbook/en`) and all code examples (`examples/` — compilable C11/C++17 programs, exercised by CTest) are part of this repository. Both localizations are built into HTML + PDF with `make books` (requires `pip install mkdocs mkdocs-material mkdocs-with-pdf`).
-
-## Contributing
-
-Contributions are welcome. The project uses [CMake](https://cmake.org/)+[CTest](https://cmake.org/cmake/help/latest/module/CTest.html) for building and testing and [LLVM](https://llvm.org/) code style; build support for at least Linux and Windows is expected for any change. Please keep the amalgamated build green (`make dist`), avoid enabling link-time optimization in test builds, and add/update tests together with your change. For the project structure, build details and workflows, see `docs/` and the [home site](https://libmdbx.dqdkfa.ru).
+The textbook's source (markdown, in [`docs/ru/textbook/`](docs/ru/textbook/index.md) and [`docs/en/textbook/`](docs/en/textbook/index.md)) and all code examples (`examples/` — compilable C11/C++17 programs, exercised by CTest) are part of this repository.
 
 --------------------------------------------------------------------------------
-
-<!-- section-begin history -->
 
 # History
 
@@ -334,7 +303,7 @@ Historically, _libmdbx_ is a deeply revised and extended descendant of the [Ligh
 Since 2017 _libmdbx_ is used in [Fast Positive Tables](https://sourcecraft.dev/dqdkfa/libfpta), and until 2025 development was funded by [Positive Technologies](https://www.ptsecurity.com). Since 2020 _libmdbx_ is used in Ethereum: [Erigon](https://github.com/erigontech/erigon), [Akula](https://github.com/akula-bft/akula), [Silkworm](https://github.com/erigontech/silkworm), [Reth](https://github.com/paradigmxyz/reth), etc.
 
 On 2022-04-15 the GitHub administration, without any warning nor explanation, deleted _libmdbx_ along with a lot of other projects, simultaneously blocking access for many developers. Therefore on 2022-04-21 I have migrated to a reliable trusted infrastructure.
-The origin for now is at [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and ~~GitHub~~ is blacklisted forever to play this role.
+The origin since then is [SourceCraft](https://sourcecraft.dev/dqdkfa/libmdbx) and will remain so; [GitHub](https://github.com/Mithril-mine/libmdbx) serves only as a mirror of the amalgamated sources and as an additional issue tracker.
 
 Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 license. Please refer to the [`COPYRIGHT` file](https://sourcecraft.dev/dqdkfa/libmdbx/blob/raw?file=COPYRIGHT) for license change explanation.
 
@@ -342,10 +311,6 @@ Since May 2024 and version 0.13 _libmdbx_ was re-licensed under Apache-2.0 licen
 Howard Chu <hyc@openldap.org> and Hallvard Furuseth <hallvard@openldap.org> are the authors of _LMDB_, from which _libmdbx_ was forked in 2015.
 
 Martin Hedenfalk <martin@bzero.se> is the author of `btree.c` code, which was used to begin development of _LMDB_.
-
-<!-- section-end -->
-
-<!-- section-begin improvements -->
 
 Improvements beyond LMDB
 ========================
@@ -426,13 +391,9 @@ _libmdbx_ is superior to legendary _[LMDB](https://symas.com/lmdb/)_ in terms of
 
 * On **Windows** the `LockFileEx()` syscall is used for locking, since it allows placing the database on network drives, and provides protection against misuse (aka [poka-yoke](https://en.wikipedia.org/wiki/Poka-yoke)). Therefore _libmdbx_ may be a little lag in performance tests from LMDB where the named mutexes are used.
 
-<!-- section-end -->
-
 --------------------------------------------------------------------------------
 
 ## MithrilDB and Future
-
-<!-- section-begin mithril -->
 
 The next version is under non-public development and will be released as **MithrilDB** and `libmithrildb` for libraries & packages. Admittedly mythical [Mithril](https://en.wikipedia.org/wiki/Mithril) resembles silver, but is stronger and lighter than steel. Therefore _MithrilDB_ is an aptly relevant name.
 
@@ -448,4 +409,3 @@ Nonetheless, I try not to make any promises regarding _MithrilDB_ until release.
 
 Contrary to _MithrilDB_, _libmdbx_ will forever remain free and open source. Moreover with high-quality support whenever possible. Tu deviens responsable pour toujours de ce que tu as apprivoisé. Regardless of the earlier GitHub incident and the current sanctions, _libmdbx_ will continue to comply with the original open license and the principles of constructive cooperation. I will also keep supporting Windows, even though it is no longer a technology we use ourselves.
 
-<!-- section-end -->

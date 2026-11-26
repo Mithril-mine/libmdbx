@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -70,9 +70,12 @@ static inline void tool_break_setup(void) {
 
 #endif /* IS_WINDOWS */
 
-/* Returns true if `-h` or `--help` was requested anywhere in the command
- * line, while honoring the options that consume an argument (per `optstring`),
- * so e.g. `-s --help` is NOT treated as a help request. */
+/* Returns true if `-h` or `--help` was requested in the command line before
+ * the first positional argument, while honoring the options that consume an
+ * argument (per `optstring`), so e.g. `-s --help` is NOT treated as a help
+ * request. The scan stops at the first positional like getopt() does: a `-h`
+ * after a positional is an extra operand for getopt to reject, not a help
+ * request (chk-interrupt-exit-code). */
 static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
   bool consume_next = false;
   for (int i = 1; i < argc; ++i) {
@@ -82,7 +85,7 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
     }
     const char *const arg = argv[i];
     if (arg[0] != '-' || arg[1] == '\0')
-      continue; /* positional argument */
+      break; /* the first positional: getopt stops here, so must the scan */
     if (strcmp(arg, "--") == 0)
       break; /* end of options */
     if (strcmp(arg, "--help") == 0)
@@ -158,6 +161,8 @@ MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level,
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -221,7 +226,7 @@ static void error(const char *func, int rc) {
 }
 
 /* Dump in BDB-compatible format */
-static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
+static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name, const char *const *skip_names, const unsigned skip_count) {
   unsigned flags;
   int rc = mdbx_dbi_flags(txn, dbi, &flags);
   if (unlikely(rc != MDBX_SUCCESS)) {
@@ -311,6 +316,18 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
       rc = MDBX_EINTR;
       break;
     }
+    if (skip_names) {
+      /* the records of named tables are dumped as their own sections */
+      bool skipped = false;
+      for (unsigned i = 0; i < skip_count; ++i) {
+        if (key.iov_len == strlen(skip_names[i]) && memcmp_checklen(key.iov_base, skip_names[i], key.iov_len) == 0) {
+          skipped = true;
+          break;
+        }
+      }
+      if (skipped)
+        continue;
+    }
     dumpval(&key);
     dumpval(&data);
     if ((flags & MDBX_DUPSORT) && (mode & CONCISE)) {
@@ -326,7 +343,9 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
         break;
     }
   }
-  printf("DATA=END\n");
+  /* Without the trailer `mdbx_load` reports a truncated dump; rescue mode closes a damaged table to go on. */
+  if (rc == MDBX_NOTFOUND || (rescue && rc != MDBX_EINTR))
+    printf("DATA=END\n");
   if (rc == MDBX_NOTFOUND)
     rc = MDBX_SUCCESS;
   if (unlikely(rc != MDBX_SUCCESS))
@@ -369,7 +388,7 @@ static void help(void) {
 }
 
 static int equal_or_greater(const MDBX_val *a, const MDBX_val *b) {
-  return (a->iov_len == b->iov_len && memcmp(a->iov_base, b->iov_base, a->iov_len) == 0) ? 0 : 1;
+  return (a->iov_len == b->iov_len && memcmp_checklen(a->iov_base, b->iov_base, a->iov_len) == 0) ? 0 : 1;
 }
 
 int main(int argc, char *argv[]) {
@@ -535,6 +554,10 @@ int main(int argc, char *argv[]) {
     bool have_raw = false;
     int count = 0;
     MDBX_val key;
+    /* The named tables' records are dumped as their own sections below, so
+     * the trailing main-table section must skip them. */
+    char **table_names = nullptr;
+    unsigned n_table_names = 0;
     while (MDBX_SUCCESS == (err = mdbx_cursor_get(cursor, &key, nullptr, MDBX_NEXT_NODUP))) {
       if (user_break) {
         err = MDBX_EINTR;
@@ -550,7 +573,7 @@ int main(int argc, char *argv[]) {
       }
 
       buf4free = subname;
-      memcpy(subname, key.iov_base, key.iov_len);
+      memcpy_checklen(subname, key.iov_base, key.iov_len);
       subname[key.iov_len] = '\0';
 
       MDBX_dbi sub_dbi;
@@ -566,11 +589,18 @@ int main(int argc, char *argv[]) {
           break;
       } else {
         count++;
+        char **resized = osal_realloc(table_names, (n_table_names + 1) * sizeof(char *));
+        if (!resized) {
+          err = MDBX_ENOMEM;
+          break;
+        }
+        table_names = resized;
+        table_names[n_table_names++] = osal_strdup(subname);
         if (list) {
           tool_print_sanitized(subname, strlen(subname));
           putchar('\n');
         } else {
-          err = dump_tbl(txn, sub_dbi, subname);
+          err = dump_tbl(txn, sub_dbi, subname, nullptr, 0);
           if (unlikely(err != MDBX_SUCCESS)) {
             if (!rescue)
               break;
@@ -606,15 +636,27 @@ int main(int argc, char *argv[]) {
     mdbx_cursor_close(cursor);
     cursor = nullptr;
 
-    if (have_raw && (!count /* || rescue */))
-      err = dump_tbl(txn, MAIN_DBI, nullptr);
-    else if (!count) {
+    /* The plain main-table records are dumped as a trailing section with an
+     * explicitly empty `database=` value, which names the main table (see the
+     * `database=` handling in mdbx_load); the named-table records are skipped
+     * here as they belong to the tables' own sections above. */
+    if (!list && have_raw && (err == MDBX_SUCCESS || err == MDBX_NOTFOUND)) {
+      /* name = nullptr: the section carries no `database=` line, so mdbx_load
+       * (which resets the name at every section header) restores the records
+       * into the main table. */
+      err = dump_tbl(txn, MAIN_DBI, nullptr, (const char *const *)table_names, n_table_names);
+      if (unlikely(err != MDBX_SUCCESS))
+        error("dump_tbl", err);
+    } else if (!have_raw && !count && err == MDBX_NOTFOUND) {
       if (!quiet)
         fprintf(stderr, "%s: %s does not contain multiple databases\n", prog, envname);
       err = MDBX_NOTFOUND;
     }
+    for (i = 0; i < (int)n_table_names; ++i)
+      osal_free(table_names[i]);
+    osal_free(table_names);
   } else {
-    err = dump_tbl(txn, dbi, subname);
+    err = dump_tbl(txn, dbi, subname, nullptr, 0);
   }
 
   fflush(stdout);

@@ -73,6 +73,13 @@ int main() {
       auto table = txn.open_map(nullptr);
       std::cout << "child reads: " << txn.get(table, mdbx::slice("k")).as_string() << std::endl;
       txn.abort();
+      // EN: Close the environment before _exit(), since _exit skips the
+      // EN: destructors and the memcheck sweeps would report the still-open
+      // EN: environment as leaks.
+      // RU: Закрываем окружение перед _exit(), поскольку _exit пропускает
+      // RU: деструкторы и memcheck-прогоны засчитали бы незакрытое
+      // RU: окружение как утечку.
+      env.close();
       _exit(EXIT_SUCCESS);
     }
 

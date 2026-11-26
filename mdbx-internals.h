@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -22,9 +22,9 @@
 
 /* clang-format off */
 
-#define xMDBX_ALLOY 1  /* alloyed build */
+#define xMDBX_ALLOY 1 /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY ec9bd6c5302a5644c947b9a23471e486b61e1d9cbf5024cfa936ce55cd6f0392_v0_15_0_334_gb8f2dad5
+#define MDBX_BUILD_SOURCERY 455fcfe0d06ff072e08f871afbe2c3ddcf650a27cc8c0c1f0f0431f451e923cd_v0_15_0_722_g1b4977460
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -38,6 +38,22 @@
 
 #ifdef MDBX_CONFIG_H
 #include MDBX_CONFIG_H
+#endif
+
+#ifndef MDBX_PRAGMA_PUSHPOP_MACRO
+#if defined(_MSC_VER) || (defined(__GNUC__) && !defined(__LCC__))
+#define MDBX_PRAGMA_PUSHPOP_MACRO 1
+#else
+#define MDBX_PRAGMA_PUSHPOP_MACRO 0
+#endif
+#elif !(MDBX_PRAGMA_PUSHPOP_MACRO == 0 || MDBX_PRAGMA_PUSHPOP_MACRO == 1)
+#error MDBX_PRAGMA_PUSHPOP_MACRO must be defined as 0 or 1
+#endif /* MDBX_PRAGMA_PUSHPOP_MACRO */
+
+#if defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS)
+#define IS_WINDOWS 1
+#else
+#define IS_WINDOWS 0
 #endif
 
 /*----------------------------------------------------------------------------*/
@@ -67,12 +83,6 @@
 #if (defined(__MINGW__) || defined(__MINGW32__) || defined(__MINGW64__)) && !defined(__USE_MINGW_ANSI_STDIO)
 #define __USE_MINGW_ANSI_STDIO 1
 #endif /* MinGW */
-
-#if defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS)
-#define IS_WINDOWS 1
-#else
-#define IS_WINDOWS 0
-#endif
 
 #if IS_WINDOWS
 #ifndef _WIN32_WINNT
@@ -1101,90 +1111,14 @@ template <typename T, size_t N> char (&__ArraySizeHelper(T (&array)[N]))[N];
 #endif
 #endif /* -Walignment-reduction-ignored */
 
-#if IS_WINDOWS && !(defined(__CYGWIN__) || defined(__MINGW__) || defined(__MINGW32__) || defined(__MINGW64__))
-/* Protection against leakage/use of POSIX identifiers during build for Windows,
- * which may also be defined as unstable, arbitrary values dependent on the build environment.
- *   git grep -h -w -o 'E[A-Z]\+' | sort | uniq
- */
-#undef EACCES
-#undef EAFNOSUPPORT
-#undef EAGAIN
-#undef EBADF
-#undef EBADFD
-#undef EBUSY
-#undef ECHILD
-#undef EDEADLK
-#undef EDQUOT
-#undef EEXIST
-#undef EFAULT
-#undef EIDRM
-#undef EINTR
-#undef EINVAL
-#undef EIO
-#undef ENODATA
-#undef ENOENT
-#undef ENOFILE
-#undef ENOIMPL
-#undef ENOLCK
-#undef ENOMEM
-#undef ENOPROTOOPT
-#undef ENOSPC
-#undef ENOSUPP
-#undef ENOSYS
-#undef ENOTBLK
-#undef ENOTDIR
-#undef ENOTSUP
-#undef ENOTTY
-#undef EOPNOTSUPP
-#undef EOWNERDEAD
-#undef EPERM
-#undef EPIPE
-#undef EREMOTEIO
-#undef EROFS
-#undef ESRCH
-#undef EWOULDBLOCK
-#undef EXDEV
-#define POSIX_FUSE POSIX_error_codes_should_not_be_used_in_Windows_build
-#define EACCES POSIX_FUSE
-#define EAFNOSUPPORT POSIX_FUSE
-#define EAGAIN POSIX_FUSE
-#define EBADF POSIX_FUSE
-#define EBADFD POSIX_FUSE
-#define EBUSY POSIX_FUSE
-#define ECHILD POSIX_FUSE
-#define EDEADLK POSIX_FUSE
-#define EDQUOT POSIX_FUSE
-#define EEXIST POSIX_FUSE
-#define EFAULT POSIX_FUSE
-#define EIDRM POSIX_FUSE
-#define EINTR POSIX_FUSE
-extern int mdbx_POSIX_error_codes_should_not_be_used_in_Windows_build(void);
-#define EINVAL mdbx_POSIX_error_codes_should_not_be_used_in_Windows_build()
-#define EIO POSIX_FUSE
-#define ENODATA POSIX_FUSE
-#define ENOENT POSIX_FUSE
-#define ENOFILE POSIX_FUSE
-#define ENOIMPL POSIX_FUSE
-#define ENOLCK POSIX_FUSE
-#define ENOMEM POSIX_FUSE
-#define ENOPROTOOPT POSIX_FUSE
-#define ENOSPC POSIX_FUSE
-#define ENOSUPP POSIX_FUSE
-#define ENOSYS POSIX_FUSE
-#define ENOTBLK POSIX_FUSE
-#define ENOTDIR POSIX_FUSE
-#define ENOTSUP POSIX_FUSE
-#define ENOTTY POSIX_FUSE
-#define EOPNOTSUPP POSIX_FUSE
-#define EOWNERDEAD POSIX_FUSE
-#define EPERM POSIX_FUSE
-#define EPIPE POSIX_FUSE
-#define EREMOTEIO POSIX_FUSE
-#define EROFS POSIX_FUSE
-#define ESRCH POSIX_FUSE
-#define EWOULDBLOCK POSIX_FUSE
-#define EXDEV POSIX_FUSE
-#endif /* IS_WINDOWS */
+/* NOTE: the POSIX errno/E*-macros poison for the Windows dev-tree builds
+ * is NOT pushed here. essentials.h is also included by the library's
+ * consumers (tests, tools, examples) together with the STL and other
+ * non-library headers, and the poison would break their parsing (the STL
+ * uses EINVAL/EAGAIN and errno internally). The poison is pushed instead
+ * by src/internals.h - the library-internal entry header - so it covers
+ * exactly the library code. The amalgamated (dist) sources carry no
+ * poison at all: the dist rules strip the push/pop include lines. */
 
 #if defined(xMDBX_ALLOY) && !defined(xMDBX_TOOLS)
 /* Amalgamated build */
@@ -1230,69 +1164,8 @@ typedef union bin128 {
 #endif
 } bin128_t;
 
-/*----------------------------------------------------------------------------*/
-/* Memory/Compiler barriers, cache coherence */
-
-#if __has_include(<sys/cachectl.h>)
-#include <sys/cachectl.h>
-#elif defined(__mips) || defined(__mips__) || defined(__mips64) || defined(__mips64__) || defined(_M_MRX000) ||        \
-    defined(_MIPS_) || defined(__MWERKS__) || defined(__sgi)
-/* MIPS should have explicit cache control */
-#include <sys/cachectl.h>
-#endif
-
-MDBX_MAYBE_UNUSED static inline void osal_compiler_barrier(void) {
-#if defined(__clang__) || defined(__GNUC__)
-  __asm__ __volatile__("" ::: "memory");
-#elif defined(_MSC_VER)
-  _ReadWriteBarrier();
-#elif defined(__INTEL_COMPILER) /* LY: Intel Compiler may mimic GCC and MSC */
-  __memory_barrier();
-#elif defined(__SUNPRO_C) || defined(__sun) || defined(sun)
-  __compiler_barrier();
-#elif (defined(_HPUX_SOURCE) || defined(__hpux) || defined(__HP_aCC)) && (defined(HP_IA64) || defined(__ia64))
-  _Asm_sched_fence(/* LY: no-arg meaning 'all expect ALU', e.g. 0x3D3D */);
-#elif defined(_AIX) || defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__) || defined(__powerpc64__)
-  __fence();
-#else
-#error "Could not guess the kind of compiler, please report to us."
-#endif
-}
-
-MDBX_MAYBE_UNUSED static inline void osal_memory_barrier(void) {
-#ifdef MDBX_HAVE_C11ATOMICS
-  atomic_thread_fence(memory_order_seq_cst);
-#elif defined(__ATOMIC_SEQ_CST)
-#ifdef __clang__
-  __c11_atomic_thread_fence(__ATOMIC_SEQ_CST);
-#else
-  __atomic_thread_fence(__ATOMIC_SEQ_CST);
-#endif
-#elif defined(__clang__) || defined(__GNUC__)
-  __sync_synchronize();
-#elif IS_WINDOWS
-  MemoryBarrier();
-#elif defined(__INTEL_COMPILER) /* LY: Intel Compiler may mimic GCC and MSC */
-#if defined(__ia32__)
-  _mm_mfence();
-#else
-  __mf();
-#endif
-#elif defined(__SUNPRO_C) || defined(__sun) || defined(sun)
-  __machine_rw_barrier();
-#elif (defined(_HPUX_SOURCE) || defined(__hpux) || defined(__HP_aCC)) && (defined(HP_IA64) || defined(__ia64))
-  _Asm_mf();
-#elif defined(_AIX) || defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__) || defined(__powerpc64__)
-  __lwsync();
-#else
-#error "Could not guess the kind of compiler, please report to us."
-#endif
-}
-
-/*----------------------------------------------------------------------------*/
-/* system-depended definitions */
-
 #if IS_WINDOWS
+
 #define HAVE_SYS_STAT_H
 #define HAVE_SYS_TYPES_H
 typedef HANDLE osal_thread_t;
@@ -1357,7 +1230,148 @@ static inline void osal_free(void *ptr) { HeapFree(GetProcessHeap(), 0, ptr); }
 #define strncasecmp _strnicmp /* ntdll */
 #endif
 
-#else /*----------------------------------------------------------------------*/
+typedef wchar_t pathchar_t;
+#define MDBX_PRIsPATH "ls"
+
+/*----------------------------------------------------------------------------*/
+
+typedef union osal_srwlock {
+  __anonymous_struct_extension__ struct {
+    long volatile readerCount;
+    long volatile writerCount;
+  };
+  RTL_SRWLOCK native;
+} osal_srwlock_t;
+
+typedef void(WINAPI *osal_srwlock_t_function)(osal_srwlock_t *);
+typedef BOOLEAN(WINAPI *osal_srwlock_t_try_function)(osal_srwlock_t *);
+
+#if _WIN32_WINNT < 0x0600 /* prior to Windows Vista */
+typedef enum _FILE_INFO_BY_HANDLE_CLASS {
+  FileBasicInfo,
+  FileStandardInfo,
+  FileNameInfo,
+  FileRenameInfo,
+  FileDispositionInfo,
+  FileAllocationInfo,
+  FileEndOfFileInfo,
+  FileStreamInfo,
+  FileCompressionInfo,
+  FileAttributeTagInfo,
+  FileIdBothDirectoryInfo,
+  FileIdBothDirectoryRestartInfo,
+  FileIoPriorityHintInfo,
+  FileRemoteProtocolInfo,
+  MaximumFileInfoByHandleClass
+} FILE_INFO_BY_HANDLE_CLASS,
+    *PFILE_INFO_BY_HANDLE_CLASS;
+
+typedef struct _FILE_END_OF_FILE_INFO {
+  LARGE_INTEGER EndOfFile;
+} FILE_END_OF_FILE_INFO, *PFILE_END_OF_FILE_INFO;
+
+#define REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK 0x00000001
+#define REMOTE_PROTOCOL_INFO_FLAG_OFFLINE 0x00000002
+
+typedef struct _FILE_REMOTE_PROTOCOL_INFO {
+  USHORT StructureVersion;
+  USHORT StructureSize;
+  DWORD Protocol;
+  USHORT ProtocolMajorVersion;
+  USHORT ProtocolMinorVersion;
+  USHORT ProtocolRevision;
+  USHORT Reserved;
+  DWORD Flags;
+  struct {
+    DWORD Reserved[8];
+  } GenericReserved;
+  struct {
+    DWORD Reserved[16];
+  } ProtocolSpecificReserved;
+} FILE_REMOTE_PROTOCOL_INFO, *PFILE_REMOTE_PROTOCOL_INFO;
+
+#endif /* _WIN32_WINNT < 0x0600 (prior to Windows Vista) */
+
+typedef BOOL(WINAPI *MDBX_GetFileInformationByHandleEx)(_In_ HANDLE hFile,
+                                                        _In_ FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
+                                                        _Out_ LPVOID lpFileInformation, _In_ DWORD dwBufferSize);
+
+typedef BOOL(WINAPI *MDBX_GetVolumeInformationByHandleW)(
+    _In_ HANDLE hFile, _Out_opt_ LPWSTR lpVolumeNameBuffer, _In_ DWORD nVolumeNameSize,
+    _Out_opt_ LPDWORD lpVolumeSerialNumber, _Out_opt_ LPDWORD lpMaximumComponentLength,
+    _Out_opt_ LPDWORD lpFileSystemFlags, _Out_opt_ LPWSTR lpFileSystemNameBuffer, _In_ DWORD nFileSystemNameSize);
+
+typedef DWORD(WINAPI *MDBX_GetFinalPathNameByHandleW)(_In_ HANDLE hFile, _Out_ LPWSTR lpszFilePath,
+                                                      _In_ DWORD cchFilePath, _In_ DWORD dwFlags);
+
+typedef BOOL(WINAPI *MDBX_SetFileInformationByHandle)(_In_ HANDLE hFile,
+                                                      _In_ FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
+                                                      _Out_ LPVOID lpFileInformation, _In_ DWORD dwBufferSize);
+
+typedef NTSTATUS(NTAPI *MDBX_NtFsControlFile)(IN HANDLE FileHandle, IN OUT HANDLE Event,
+                                              IN OUT PVOID /* PIO_APC_ROUTINE */ ApcRoutine, IN OUT PVOID ApcContext,
+                                              OUT PIO_STATUS_BLOCK IoStatusBlock, IN ULONG FsControlCode,
+                                              IN OUT PVOID InputBuffer, IN ULONG InputBufferLength,
+                                              OUT OPTIONAL PVOID OutputBuffer, IN ULONG OutputBufferLength);
+
+typedef uint64_t(WINAPI *MDBX_GetTickCount64)(void);
+
+#if !defined(_WIN32_WINNT_WIN8) || _WIN32_WINNT < _WIN32_WINNT_WIN8
+typedef struct _WIN32_MEMORY_RANGE_ENTRY {
+  PVOID VirtualAddress;
+  SIZE_T NumberOfBytes;
+} WIN32_MEMORY_RANGE_ENTRY, *PWIN32_MEMORY_RANGE_ENTRY;
+#endif /* Windows 8.x */
+
+typedef BOOL(WINAPI *MDBX_PrefetchVirtualMemory)(HANDLE hProcess, ULONG_PTR NumberOfEntries,
+                                                 PWIN32_MEMORY_RANGE_ENTRY VirtualAddresses, ULONG Flags);
+
+typedef enum _SECTION_INHERIT { ViewShare = 1, ViewUnmap = 2 } SECTION_INHERIT;
+
+typedef NTSTATUS(NTAPI *MDBX_NtExtendSection)(IN HANDLE SectionHandle, IN PLARGE_INTEGER NewSectionSize);
+
+typedef LSTATUS(WINAPI *MDBX_RegGetValueA)(HKEY hkey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, LPDWORD pdwType,
+                                           PVOID pvData, LPDWORD pcbData);
+
+typedef long(WINAPI *MDBX_CoCreateGuid)(bin128_t *guid);
+
+NTSYSAPI ULONG RtlRandomEx(PULONG Seed);
+
+typedef BOOL(WINAPI *MDBX_SetFileIoOverlappedRange)(HANDLE FileHandle, PUCHAR OverlappedRangeStart, ULONG Length);
+
+struct libmdbx_imports {
+  osal_srwlock_t_function srwl_Init;
+  osal_srwlock_t_function srwl_AcquireShared;
+  osal_srwlock_t_function srwl_ReleaseShared;
+  osal_srwlock_t_function srwl_AcquireExclusive;
+  osal_srwlock_t_function srwl_ReleaseExclusive;
+  osal_srwlock_t_try_function srwl_TryAcquireExclusive;
+  MDBX_NtExtendSection NtExtendSection;
+  MDBX_GetFileInformationByHandleEx GetFileInformationByHandleEx;
+  MDBX_GetVolumeInformationByHandleW GetVolumeInformationByHandleW;
+  MDBX_GetFinalPathNameByHandleW GetFinalPathNameByHandleW;
+  MDBX_SetFileInformationByHandle SetFileInformationByHandle;
+  MDBX_NtFsControlFile NtFsControlFile;
+  MDBX_PrefetchVirtualMemory PrefetchVirtualMemory;
+  MDBX_GetTickCount64 GetTickCount64;
+  MDBX_RegGetValueA RegGetValueA;
+  MDBX_SetFileIoOverlappedRange SetFileIoOverlappedRange;
+  MDBX_CoCreateGuid CoCreateGuid;
+};
+
+#ifndef __cplusplus
+MDBX_INTERNAL void windows_import(void);
+MDBX_INTERNAL int osal_mb2w(const char *const src, wchar_t **const pdst);
+#endif /* !__cplusplus */
+
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_pathname_absent_error(int err) {
+  return err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND;
+}
+
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_sharing_violation_error(int err) {
+  return err == ERROR_SHARING_VIOLATION || err == ERROR_LOCK_VIOLATION;
+}
+#else
 
 typedef pthread_t osal_thread_t;
 typedef pthread_key_t osal_thread_key_t;
@@ -1375,7 +1389,102 @@ typedef pthread_mutex_t osal_fastmutex_t;
 #define osal_free free
 #define osal_strdup strdup
 
-#endif /* Platform */
+typedef char pathchar_t;
+#define MDBX_PRIsPATH "s"
+
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_pathname_absent_error(int err) {
+  return err == ENOENT || err == ENOTDIR;
+}
+
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_sharing_violation_error(int err) {
+  /* LY: Legacy/Bogus NFS lock-managers could return EACCES in such cases.
+   * However, we need to move forward, not tinker with old, problematic systems. */
+  return err == EAGAIN || err == EBUSY || (EWOULDBLOCK != EAGAIN && err == EWOULDBLOCK) || err == EDEADLK;
+}
+#endif /* IS_WINDOWS */
+
+/*----------------------------------------------------------------------------*/
+/* Memory/Compiler barriers, cache coherence */
+
+#if __has_include(<sys/cachectl.h>)
+#include <sys/cachectl.h>
+#elif defined(__mips) || defined(__mips__) || defined(__mips64) || defined(__mips64__) || defined(_M_MRX000) ||        \
+    defined(_MIPS_) || defined(__MWERKS__) || defined(__sgi)
+/* MIPS should have explicit cache control */
+#include <sys/cachectl.h>
+#endif
+
+MDBX_MAYBE_UNUSED static inline void osal_fence_full(void) {
+#ifdef MDBX_HAVE_C11ATOMICS
+  atomic_thread_fence(memory_order_seq_cst);
+#elif defined(__ATOMIC_SEQ_CST)
+#ifdef __clang__
+  __c11_atomic_thread_fence(__ATOMIC_SEQ_CST);
+#else
+  __atomic_thread_fence(__ATOMIC_SEQ_CST);
+#endif
+#elif defined(__clang__) || defined(__GNUC__)
+  __sync_synchronize();
+#elif IS_WINDOWS
+  MemoryBarrier();
+#elif defined(__INTEL_COMPILER) /* LY: Intel Compiler may mimic GCC and MSC */
+#if defined(__ia32__)
+  _mm_mfence();
+#else
+  __mf();
+#endif
+#elif defined(__SUNPRO_C) || defined(__sun) || defined(sun)
+  __machine_rw_barrier();
+#elif (defined(_HPUX_SOURCE) || defined(__hpux) || defined(__HP_aCC)) && (defined(HP_IA64) || defined(__ia64))
+  _Asm_mf();
+#elif defined(_AIX) || defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__) || defined(__powerpc64__)
+  __lwsync();
+#else
+#error "Could not guess the kind of compiler, please report to us."
+#endif
+}
+
+/* A consumer (acquire-side) fence: no later load/store may be reordered
+ * before the prior reads. Must be applied after the access being ordered. */
+MDBX_MAYBE_UNUSED static inline void osal_fence_consumer(void) {
+#ifdef MDBX_HAVE_C11ATOMICS
+  atomic_thread_fence(memory_order_acquire);
+#elif defined(__ATOMIC_ACQUIRE) && (defined(__clang__) || defined(__GNUC__))
+#ifdef __clang__
+  __c11_atomic_thread_fence(__ATOMIC_ACQUIRE);
+#else
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+#endif
+#elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+  /* TSO: acquire ordering only requires the compiler barrier */
+  _ReadWriteBarrier();
+#else
+  osal_fence_full();
+#endif
+}
+
+/* A producer (release-side) fence: no earlier load/store may be reordered
+ * after the subsequent writes. Must be applied before the access being
+ * ordered. */
+MDBX_MAYBE_UNUSED static inline void osal_fence_producer(void) {
+#ifdef MDBX_HAVE_C11ATOMICS
+  atomic_thread_fence(memory_order_release);
+#elif defined(__ATOMIC_RELEASE) && (defined(__clang__) || defined(__GNUC__))
+#ifdef __clang__
+  __c11_atomic_thread_fence(__ATOMIC_RELEASE);
+#else
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+#endif
+#elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+  /* TSO: release ordering only requires the compiler barrier */
+  _ReadWriteBarrier();
+#else
+  osal_fence_full();
+#endif
+}
+
+/*----------------------------------------------------------------------------*/
+/* system-depended definitions */
 
 #if __GLIBC_PREREQ(2, 12) || defined(__FreeBSD__) || defined(malloc_usable_size)
 #define osal_malloc_usable_size(ptr) malloc_usable_size(ptr)
@@ -1395,14 +1504,6 @@ LIBMDBX_API char *osal_strdup(const char *str);
 
 /*----------------------------------------------------------------------------*/
 /* OS abstraction layer stuff */
-
-#if IS_WINDOWS
-typedef wchar_t pathchar_t;
-#define MDBX_PRIsPATH "ls"
-#else
-typedef char pathchar_t;
-#define MDBX_PRIsPATH "s"
-#endif
 
 MDBX_MAYBE_UNUSED static inline bool osal_yield(void) {
 #if IS_WINDOWS
@@ -1536,7 +1637,25 @@ MDBX_MAYBE_UNUSED static inline uintptr_t osal_thread_self(void) {
   return (uintptr_t)thunk;
 }
 
+/* The identity of a file: on POSIX the dev+inode pair from fstat()/stat(), on Windows the volume
+ * serial number with the file index from BY_HANDLE_FILE_INFORMATION. A zeroed structure denotes
+ * "not set/unknown". Note: this is a system-level identity of the given file, but NOT a content
+ * identity: a copy/backup of a database has another fileid, and a hardlink shares it. */
+typedef struct osal_fileid {
+  uint64_t a, b;
+} osal_fileid_t;
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool osal_fileid_eq(const osal_fileid_t *a,
+                                                                               const osal_fileid_t *b) {
+  return a->a == b->a && a->b == b->b;
+}
+MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool osal_fileid_is_set(const osal_fileid_t *id) {
+  return id->a || id->b;
+}
+
 #ifndef __cplusplus
+MDBX_INTERNAL int osal_fileid_by_path(const pathchar_t *pathname, osal_fileid_t *id);
+MDBX_INTERNAL int osal_fileid_by_fd(mdbx_filehandle_t fd, osal_fileid_t *id);
 
 /* Actually this is not ioring for now, but on the way. */
 MDBX_INTERNAL int osal_ioring_create(osal_ioring_t *
@@ -1591,6 +1710,8 @@ MDBX_INTERNAL void ior_put_event(osal_ioring_t *ior, HANDLE event);
 #if (defined(__GLIBC__) && __GLIBC_PREREQ(2, 1)) && (defined(_GNU_SOURCE) || defined(_BSD_SOURCE))
 #define osal_asprintf asprintf
 #define osal_vasprintf vasprintf
+MDBX_MAYBE_UNUSED extern int asprintf(char **strp, const char *fmt, ...);
+MDBX_MAYBE_UNUSED extern int vasprintf(char **strp, const char *fmt, va_list ap);
 #else
 MDBX_MAYBE_UNUSED MDBX_INTERNAL MDBX_PRINTF_ARGS(2, 3) int osal_asprintf(char **strp, const char *fmt, ...);
 MDBX_INTERNAL int osal_vasprintf(char **strp, const char *fmt, va_list ap);
@@ -1604,7 +1725,12 @@ MDBX_INTERNAL int osal_vasprintf(char **strp, const char *fmt, va_list ap);
 #define MADV_DONTDUMP MADV_NOCORE
 #endif /* MADV_NOCORE -> MADV_DONTDUMP */
 
-MDBX_MAYBE_UNUSED MDBX_INTERNAL void osal_jitter(bool tiny);
+/* No MDBX_INTERNAL here, deliberately: the header-inlined jitter4testing()
+ * references osal_jitter() in every TU compiled with MDBX_DEBUG > 0,
+ * including the foreign TUs (the white-box tests), so the definition must
+ * stay externally linkable although the alloyed build makes the other
+ * internals static. */
+MDBX_MAYBE_UNUSED void osal_jitter(bool tiny);
 
 /* max bytes to write in one call */
 #if defined(_WIN64)
@@ -1659,6 +1785,14 @@ MDBX_MAYBE_UNUSED static inline int osal_get_errno(void) {
   int rc = errno;
 #endif
   return rc;
+}
+
+MDBX_MAYBE_UNUSED static inline void osal_set_errno(int err) {
+#if IS_WINDOWS
+  SetLastError(err);
+#else
+  errno = err;
+#endif
 }
 
 #ifndef osal_memalign_alloc
@@ -1742,6 +1876,8 @@ MDBX_INTERNAL int osal_openfile(const enum osal_openfile_purpose purpose, const 
 MDBX_INTERNAL int osal_closefile(mdbx_filehandle_t fd);
 MDBX_INTERNAL int osal_removefile(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_removedirectory(const pathchar_t *pathname);
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_pathname_absent_error(int err);
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_sharing_violation_error(int err);
 MDBX_INTERNAL int osal_is_pipe(mdbx_filehandle_t fd);
 MDBX_INTERNAL int osal_lockfile(mdbx_filehandle_t fd, bool wait);
 
@@ -1750,8 +1886,9 @@ MDBX_INTERNAL int osal_lockfile(mdbx_filehandle_t fd, bool wait);
 MDBX_INTERNAL int osal_mmap(const int flags, osal_mmap_t *map, size_t size, const size_t limit, const unsigned options,
                             const pathchar_t *pathname4logging);
 MDBX_INTERNAL void osal_munmap(osal_mmap_t *map);
-#define MDBX_MRESIZE_MAY_MOVE 0x00000100
-#define MDBX_MRESIZE_MAY_UNMAP 0x00000200
+#define MDBX_MRESIZE_MAY_MOVE txn_mapmove_allowed
+#define MDBX_MRESIZE_MAY_UNMAP txn_unmap_allowed
+#define MDBX_MRESIZE_MAY_SHRINK txn_shrink_allowed
 MDBX_INTERNAL int osal_mresize(const int flags, osal_mmap_t *map, size_t size, size_t limit);
 #if IS_WINDOWS
 typedef struct {
@@ -1797,10 +1934,7 @@ MDBX_NORETURN MDBX_INTERNAL void osal_panic(const char *msg, const char *func, u
 MDBX_INTERNAL void osal_ctor(void);
 MDBX_INTERNAL void osal_dtor(void);
 
-#if IS_WINDOWS
-MDBX_INTERNAL int osal_mb2w(const char *const src, wchar_t **const pdst);
-#endif /* Windows */
-
+MDBX_INTERNAL bin128_t osal_bootid(void);
 MDBX_INTERNAL bin128_t osal_guid(const MDBX_env *);
 
 MDBX_INTERNAL bool osal_safe_peek_int32(const void *ptr, int32_t *dest);
@@ -2125,6 +2259,24 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #ifndef MDBX_HAVE_C11ATOMICS
 #endif /* MDBX_HAVE_C11ATOMICS */
 
+/** MDBX_CHECK_MEMZEROLEN controls guards for mem(...)-family calls with a
+ * possibly-zero length: ASAN/UBSAN/MEMCHECK tools treat such calls as UB,
+ * while the actual platforms handle the zero-length case internally. */
+#ifndef MDBX_CHECK_MEMZEROLEN
+#if defined(ENABLE_MEMCHECK) || defined(ENABLE_UBSAN) || defined(ENABLE_ASAN) || defined(__SANITIZE_ADDRESS__) ||      \
+    defined(__SANITIZE_UNDEFINED__)
+#define MDBX_CHECK_MEMZEROLEN 1
+#elif defined(__GLIBC__) || defined(_MSC_VER) || defined(__MINGW__) || defined(__ANDROID_API__) ||                     \
+    defined(__APPLE__) || defined(_DARWIN_C_SOURCE) || defined(__FreeBSD__) || defined(__NetBSD__) ||                  \
+    defined(__OpenBSD__) || defined(__BSD__)
+#define MDBX_CHECK_MEMZEROLEN 0
+#else
+#define MDBX_CHECK_MEMZEROLEN 1
+#endif
+#elif !(MDBX_CHECK_MEMZEROLEN == 0 || MDBX_CHECK_MEMZEROLEN == 1)
+#error MDBX_CHECK_MEMZEROLEN must be defined as 0 or 1
+#endif /* MDBX_CHECK_MEMZEROLEN */
+
 /** If defined then enables use the GCC's `__builtin_cpu_supports()`
  * for runtime dispatching depending on the CPU's capabilities.
  * \note Defining `MDBX_HAVE_BUILTIN_CPU_SUPPORTS` to `0` should avoided unless
@@ -2208,10 +2360,18 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_LOCKING MDBX_LOCKING_WIN32FILES
 #else
 #ifndef MDBX_LOCKING
-#if defined(_POSIX_THREAD_PROCESS_SHARED) && _POSIX_THREAD_PROCESS_SHARED >= 200112L && !defined(__FreeBSD__)
-
+#if defined(_POSIX_THREAD_PROCESS_SHARED) && _POSIX_THREAD_PROCESS_SHARED >= 200112L
+#if !defined(__FreeBSD__)
 /* Some platforms define the EOWNERDEAD error code even though they
- * don't support Robust Mutexes. If doubt compile with -MDBX_LOCKING=2001. */
+ * don't support Robust Mutexes. Without robust mutexes there is no
+ * recovery from a dead lock owner: a crashed writer strands the
+ * write-lock for all other processes, and a non-robust PI mutex even
+ * makes glibc abort or hang for its new waiters. Therefore the System
+ * V semaphores are preferred as the fallback: SEM_UNDO releases them
+ * on a process death and the owner's pid stays detectable in the lock
+ * word. The POSIX-2001 mutexes remain available opt-in, for the setups
+ * where the System V IPC is unusable, but they provide no dead-writer
+ * recovery (see the textbook's "Lock Implementations" and #565). */
 #if defined(EOWNERDEAD) && _POSIX_THREAD_PROCESS_SHARED >= 200809L &&                                                  \
     ((defined(_POSIX_THREAD_ROBUST_PRIO_INHERIT) && _POSIX_THREAD_ROBUST_PRIO_INHERIT > 0) ||                          \
      (defined(_POSIX_THREAD_ROBUST_PRIO_PROTECT) && _POSIX_THREAD_ROBUST_PRIO_PROTECT > 0) ||                          \
@@ -2220,14 +2380,34 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
     !defined(__OHOS__) /* Harmony OS doesn't support robust mutexes at the end of 2025 */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2008
 #else
+/* Bionic declares the System V semaphore functions only since the API
+ * level 26, so below it the SYSV fallback is unbuildable and the
+ * POSIX-2001 process-shared mutexes are the only choice (without the
+ * dead-owner recovery, see #565). */
+#if !defined(__ANDROID_API__) || __ANDROID_API__ >= 26
+#define MDBX_LOCKING MDBX_LOCKING_SYSV
+#else
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2001
 #endif
-#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__) ||                                  \
-    (defined(_POSIX_SEMAPHORES) && _POSIX_SEMAPHORES >= 200112L &&                                                     \
-     !defined(__OpenBSD__)) /* OpenBSD's sem_init() always fails with EPERM on pshared */
-/* Prefer POSIX shared anonymous semaphores (POSIX1988) over the legacy System V IPC
- * (SysV) whenever the platform provides process-shared semaphores, e.g. FreeBSD and
- * NetBSD where the pthread process-shared primitives are not usable but POSIX are. */
+#endif
+#else /* FreeBSD: the __GLIBC_PREREQ() macro is unavailable there, so the robust check is separate. */
+/* The process-shared robust mutexes are supported since 11.0 (2016): the kernel
+ * maintains the per-thread umtx robust lists and performs the dead-owner recovery
+ * in the shared memory by itself. Without the robust attribute the mutexes hang
+ * forever on a dead owner, so SysV is the only safe fallback. */
+#if defined(EOWNERDEAD) && _POSIX_THREAD_PROCESS_SHARED >= 200809L &&                                                  \
+    (defined(_POSIX_THREAD_ROBUST_PRIO_INHERIT) || defined(_POSIX_THREAD_ROBUST_PRIO_PROTECT) ||                       \
+     defined(PTHREAD_MUTEX_ROBUST) || defined(PTHREAD_MUTEX_ROBUST_NP))
+#define MDBX_LOCKING MDBX_LOCKING_POSIX2008
+#else
+#define MDBX_LOCKING MDBX_LOCKING_SYSV
+#endif
+#endif
+#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__)
+/* POSIX shared anonymous semaphores (POSIX1988) cannot detect a dead lock owner,
+ * while System V IPC (SysV) can: SEM_UNDO releases the semaphore and the owner's
+ * pid stays in the lock word. Solaris/SVR4 and Haiku keep POSIX1988 as before,
+ * so their lock-file format does not change. */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX1988
 #else
 #define MDBX_LOCKING MDBX_LOCKING_SYSV
@@ -2312,19 +2492,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #endif /* MDBX_HISTOGRAM_USING_128BIT */
 
 //------------------------------------------------------------------------------
-
-/** Indicates that the CPU requires explicit cache flush after write-back
- * to the memory-mapped region; zero for the architectures with coherent
- * caches. */
-#ifndef MDBX_CPU_WRITEBACK_INCOHERENT
-#if defined(__ia32__) || defined(__e2k__) || defined(__hppa) || defined(__hppa__) || defined(DOXYGEN)
-#define MDBX_CPU_WRITEBACK_INCOHERENT 0
-#else
-#define MDBX_CPU_WRITEBACK_INCOHERENT 1
-#endif
-#elif !(MDBX_CPU_WRITEBACK_INCOHERENT == 0 || MDBX_CPU_WRITEBACK_INCOHERENT == 1)
-#error MDBX_CPU_WRITEBACK_INCOHERENT must be defined as 0 or 1
-#endif /* MDBX_CPU_WRITEBACK_INCOHERENT */
 
 /** Indicates that writes to the memory-mapped region are not coherent with
  * the file, i.e. an explicit sync is required; known only on OpenBSD. */
@@ -2554,9 +2721,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_DEBUG_GCU 0
 #endif /* MDBX_DEBUG_GCU */
 
-/* Since 2026-04-01 alternatives to MDBX_PNL_ASCENDING = 0 are no longer supported. */
-#define MDBX_PNL_ASCENDING 0
-
 #endif /* DOXYGEN */
 
 #ifndef MDBX_64BIT_ATOMIC
@@ -2735,8 +2899,12 @@ typedef union {
 /* FROZEN: The version number for a database's datafile format. */
 #define MDBX_DATA_VERSION 3
 
-#define MDBX_DATA_MAGIC ((MDBX_MAGIC << 8) + MDBX_PNL_ASCENDING * 64 + MDBX_DATA_VERSION)
-#define MDBX_DATA_MAGIC_LEGACY_COMPAT ((MDBX_MAGIC << 8) + MDBX_PNL_ASCENDING * 64 + 2)
+/* FROZEN: the magic encodes the datafile layout generation. The ascending
+ * PNL order used to contribute its own flag (scaled by 64), which has been
+ * fixed to zero (descending) since 2026-04-01 - the formula below yields
+ * the very same values as before. */
+#define MDBX_DATA_MAGIC ((MDBX_MAGIC << 8) + MDBX_DATA_VERSION)
+#define MDBX_DATA_MAGIC_LEGACY_COMPAT ((MDBX_MAGIC << 8) + 2)
 #define MDBX_DATA_MAGIC_LEGACY_DEVEL ((MDBX_MAGIC << 8) + 255)
 
 /* handle for the DB used to track free pages. */
@@ -3005,7 +3173,10 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline bool is_subpage(const
 }
 
 /* The version number for a database's lockfile format. */
-#define MDBX_LOCK_VERSION 7
+/* The lockfile format version. Bumped to 8: the bait_uniqueness field was removed from
+ * the region layout after the bait/poke neighbors-check was replaced by the fileid-based
+ * one. */
+#define MDBX_LOCK_VERSION 8
 
 #if MDBX_LOCKING == MDBX_LOCKING_WIN32FILES
 
@@ -3212,9 +3383,6 @@ typedef struct shared_lck {
    * example clock_gettime(CLOCK_BOOTTIME) or clock_gettime(CLOCK_MONOTONIC).
    * Zero means timed auto-sync is disabled. */
   mdbx_atomic_uint64_t autosync_period;
-
-  /* Marker to distinguish uniqueness of DB/CLK. */
-  mdbx_atomic_uint64_t bait_uniqueness;
 
   /* Paired counter of processes that have mlock()ed part of mmapped DB.
    * The (mlcnt[0] - mlcnt[1]) > 0 means at least one process
@@ -3751,6 +3919,15 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION static inline size_t ceil_powerof2
   return floor_powerof2(value + granularity - 1, granularity);
 }
 
+MDBX_MAYBE_UNUSED static inline void *memcpy_checklen(void *dst, const void *src, ptrdiff_t bytes) {
+  return (!MDBX_CHECK_MEMZEROLEN || likely(bytes > 0)) ? memcpy(dst, src, bytes) : dst;
+}
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline int memcmp_checklen(const void *s1, const void *s2,
+                                                                               ptrdiff_t bytes) {
+  return (!MDBX_CHECK_MEMZEROLEN || likely(bytes > 0)) ? memcmp(s1, s2, bytes) : 0;
+}
+
 #ifndef __cplusplus
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL size_t ceil_log2n(size_t value_uintptr);
@@ -3781,6 +3958,36 @@ typedef struct ratio2digits_buffer {
 MDBX_INTERNAL char *ratio2digits(const uint64_t v, const uint64_t d, ratio2digits_buffer_t *const buffer,
                                  int precision);
 MDBX_INTERNAL char *ratio2percent(uint64_t v, uint64_t d, ratio2digits_buffer_t *buffer);
+
+/* Number of 1-bits in a word (population count, SWAR implementation). */
+MDBX_MAYBE_UNUSED static inline size_t hamming_weight(size_t v) {
+  const size_t m1 = (size_t)UINT64_C(0x5555555555555555);
+  const size_t m2 = (size_t)UINT64_C(0x3333333333333333);
+  const size_t m4 = (size_t)UINT64_C(0x0f0f0f0f0f0f0f0f);
+  const size_t h01 = (size_t)UINT64_C(0x0101010101010101);
+  v -= (v >> 1) & m1;
+  v = (v & m2) + ((v >> 2) & m2);
+  v = (v + (v >> 4)) & m4;
+  return (v * h01) >> (sizeof(v) * 8 - 8);
+}
+
+/* Same for a 64-bit value on the platforms where size_t is 32-bit. */
+MDBX_MAYBE_UNUSED static inline size_t hw64(uint64_t v) {
+  size_t r = hamming_weight((size_t)v);
+  if (sizeof(v) > sizeof(r))
+    r += hamming_weight((size_t)(v >> sizeof(r) * 4 >> sizeof(r) * 4));
+  return r;
+}
+
+/* Bob Jenkins's small PRNG: https://burtleburtle.net/bob/rand/smallprng.html.
+ * Mutates the given 128-bit state in-place, used to shake the boot id. */
+MDBX_MAYBE_UNUSED static inline void jenkins_prng(bin128_t *p) {
+  const uint32_t e = p->a - (p->b << 23 | p->b >> 9);
+  p->a = p->b ^ (p->c << 16 | p->c >> 16);
+  p->b = p->c + (p->d << 11 | p->d >> 21);
+  p->c = p->d + e;
+  p->d = e + p->a;
+}
 
 MDBX_INTERNAL bin128_t mul64x64_128_fallback(uint64_t x, uint64_t y);
 
@@ -3999,9 +4206,8 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION static inline size_t log2n_powerof
 /* An PNL is an Page Number List, a sorted array of IDs.
  *
  * The first element of the array is a counter for how many actual page-numbers
- * are in the list. By default PNLs are sorted in descending order, this allow
- * cut off a page with lowest pgno (at the tail) just truncating the list. The
- * sort order of PNLs is controlled by the MDBX_PNL_ASCENDING build option. */
+ * are in the list. PNLs are sorted in descending order, this allow cut off a
+ * page with lowest pgno (at the tail) just truncating the list. */
 typedef pgno_t *pnl_t;
 typedef const pgno_t *const_pnl_t;
 
@@ -4010,15 +4216,6 @@ typedef const pgno_t *const_pnl_t;
 #define MDBX_PNL_BEGIN(pl) (&(pl)[1])
 #define MDBX_PNL_END(pl) (&(pl)[pnl_size(pl) + 1])
 
-#if MDBX_PNL_ASCENDING
-#define MDBX_PNL_ORDERED(first, last) ((first) < (last))
-#define MDBX_PNL_DISORDERED(first, last) ((first) >= (last))
-#define MDBX_PNL_REVERSED(first, last) ((first) > (last))
-#define MDBX_PNL_EDGE(pl) ((pl) + 1)
-#define MDBX_PNL_LEAST(pl) MDBX_PNL_FIRST(pl)
-#define MDBX_PNL_MOST(pl) MDBX_PNL_LAST(pl)
-#define MDBX_PNL_CONTIGUOUS(prev, next, span) (((next) - (prev)) == (span))
-#else
 #define MDBX_PNL_ORDERED(first, last) ((first) > (last))
 #define MDBX_PNL_DISORDERED(first, last) ((first) <= (last))
 #define MDBX_PNL_REVERSED(first, last) ((first) < (last))
@@ -4026,7 +4223,6 @@ typedef const pgno_t *const_pnl_t;
 #define MDBX_PNL_LEAST(pl) MDBX_PNL_LAST(pl)
 #define MDBX_PNL_MOST(pl) MDBX_PNL_FIRST(pl)
 #define MDBX_PNL_CONTIGUOUS(prev, next, span) (((prev) - (next)) == (span))
-#endif /* MDBX_PNL_ASCENDING */
 
 #ifndef __cplusplus
 
@@ -4185,11 +4381,7 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool pnl_contains(con
 MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool pnl_contains_span(const const_pnl_t pnl, pgno_t pgno,
                                                                                   pgno_t span) {
   size_t n = pnl_search_nochk(pnl, pgno);
-#if MDBX_PNL_ASCENDING
-#error "FIXME: Since 2026-04-01 alternatives to MDBX_PNL_ASCENDING = 0 are no longer supported."
-#else
   return n >= span && pnl[n] == pgno && MDBX_PNL_CONTIGUOUS(pnl[n - span + 1], pnl[n], span - 1);
-#endif /* MDBX_PNL_ASCENDING */
 }
 
 MDBX_INTERNAL size_t pnl_merge(pnl_t dst, const const_pnl_t src);

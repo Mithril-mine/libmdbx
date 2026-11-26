@@ -9,7 +9,7 @@ from conan import ConanFile
 required_conan_version = '>=2.7'
 
 def semver_parse(s):
-    m = re.match('^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(\\.(?P<tweak>0|[1-9]\d*))?(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$', s)
+    m = re.match(r'^v?(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)(\\.(?P<tweak>0|[1-9]\d*))?(?:-(?P<prerelease>(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*)(?:\.(?:0|[1-9]\d*|\d*[a-zA-Z-][0-9a-zA-Z-]*))*))?(?:\+(?P<buildmetadata>[0-9a-zA-Z-]+(?:\.[0-9a-zA-Z-]+)*))?$', s)
     return m.groupdict() if m else None
 
 def semver_string(semver):
@@ -88,7 +88,6 @@ class libmdbx(ConanFile):
         'mdbx.enable_pgop_stat': ['Default', True, False],
         'mdbx.enable_pget_stat': ['Default', True, False],
         'mdbx.enable_profgc': ['Default', True, False],
-        'mdbx.enable_refund': ['Default', True, False],
         'mdbx.env_checkpid': ['Default', True, False],
         'mdbx.force_assertions': ['Default', True, False],
         'mdbx.have_builtin_cpu_supports': ['Auto', True, False],
@@ -126,7 +125,6 @@ class libmdbx(ConanFile):
         'mdbx.enable_pgop_stat': 'Default',
         'mdbx.enable_pget_stat': 'Default',
         'mdbx.enable_profgc': 'Default',
-        'mdbx.enable_refund': 'Default',
         'mdbx.env_checkpid': 'Default',
         'mdbx.force_assertions': 'Default',
         'mdbx.have_builtin_cpu_supports': 'Auto',
@@ -164,7 +162,6 @@ class libmdbx(ConanFile):
         'mdbx.enable_pgop_stat': 'Gathering statistics for page operations. ',
         'mdbx.enable_pget_stat': 'Gathering the number of page get operations for each transaction. ',
         'mdbx.enable_profgc': 'Profiling of GC search and updates. ',
-        'mdbx.enable_refund': 'Online database zero-cost auto-compactification during write-transactions. ',
         'mdbx.env_checkpid': "Checking PID inside libmdbx's API against reuse database environment after the `fork()`. ",
         'mdbx.force_assertions': 'Forces assertion checking even for release builds. ',
         'mdbx.have_builtin_cpu_supports': 'Advanced: Assume the compiler and target system has `__builtin_cpu_supports()`. ',
@@ -297,7 +294,6 @@ class libmdbx(ConanFile):
         self.handle_option(tc, 'mdbx.enable_pgop_stat')
         self.handle_option(tc, 'mdbx.enable_profgc')
         self.handle_option(tc, 'mdbx.enable_pget_stat')
-        self.handle_option(tc, 'mdbx.enable_refund')
         self.handle_option(tc, 'mdbx.env_checkpid')
         self.handle_option(tc, 'mdbx.force_assertions')
         self.handle_option(tc, 'mdbx.have_builtin_cpu_supports', True)

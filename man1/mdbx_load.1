@@ -2,7 +2,7 @@
 .\" Copyright 2015,2016 Peter-Service R&D LLC <http://billing.ru/>.
 .\" Copyright 2014-2015 Howard Chu, Symas Corp. All Rights Reserved.
 .\" Copying restrictions apply.  See COPYRIGHT/LICENSE.
-.TH MDBX_LOAD 1 "2026-10-14" "MDBX 0.15"
+.TH MDBX_LOAD 1 "2026-11-07" "MDBX 0.15"
 .SH NAME
 mdbx_load \- MDBX environment import tool
 .SH SYNOPSIS
@@ -116,21 +116,34 @@ for more information.
 Read from the specified file instead of from the standard input.
 .TP
 .BR \-s \ table
-Load a specific table. If no table is specified, data is loaded into the main table.
+Load a specific table. The name takes priority over the
+.B database=
+lines of the input: every section of the input is loaded into this table, and
+with
+.B \-p
+it is purged only once, before the first section.
+If no table is specified, data is loaded into the table named by the input,
+or the main table.
 .TP
 .BR \-N
-Don't overwrite existing records when loading into an already existing table; just skip them.
+Don't overwrite existing records when loading into an already existing table;
+just skip them and continue with the remaining records.
 .TP
 .BR \-p
-Purge target table(s) before loading data.
+Purge target table(s) before loading data. The purge runs before the
+.B sequence=
+value of the input is restored, so it is preserved.
 .TP
 .BR \-T
 Load data from simple text files. The input must be paired lines of text, where the first
 line of the pair is the key item, and the second line of the pair is its corresponding
-data item.
+data item. With
+.B \-s \ table
+the paired records are loaded into the given table.
 .TP
 .BR \-r
-Rescue mode. Ignore errors to load corrupted DB dump.
+Rescue mode. Ignore errors to load corrupted DB dump;
+the unreadable records are skipped and the rest is loaded.
 .TP
 .BR \-n
 Open an MDBX database which does not use subdirectories.

@@ -17,6 +17,24 @@
 
 #include <mdbx.h++>
 
+// EN: The runtime Valgrind detection, with the include-order caveat: the
+// EN: library's preface.h provides its own fallback stubs, so valgrind.h
+// EN: must be included only when its client-request macros are not there
+// EN: yet. Used to cap the default geometry (see env_open below).
+// RU: Детектирование запуска под Valgrind во время исполнения с оговоркой
+// RU: о порядке включений: preface.h библиотеки определяет собственные
+// RU: заглушки-fallback, поэтому valgrind.h включается только если его
+// RU: клиентские макросы ещё не определены. Используется для ограничения
+// RU: геометрии по умолчанию (см. env_open ниже).
+#if !defined(RUNNING_ON_VALGRIND) && defined(__has_include)
+#if __has_include(<valgrind/valgrind.h>)
+#include <valgrind/valgrind.h>
+#endif
+#endif
+#if !defined(RUNNING_ON_VALGRIND)
+#define RUNNING_ON_VALGRIND (0)
+#endif
+
 namespace example {
 
 // EN: Directory for temporary DBs: $TMPDIR (on Windows — %TEMP%) or /tmp.
@@ -54,14 +72,32 @@ inline const char *tmpdir() {
 // EN: By default only the main table is available in libmdbx; the number of named
 // EN: tables is set via max_maps. Here 0 (default) is replaced with a value
 // EN: sufficient for all textbook examples.
+// EN: Under Valgrind the engine's default upper bound (a fraction of the
+// EN: system RAM, i.e. terabytes) must be mapped inside the Valgrind's own
+// EN: address space, which is unreliable and may fail/restrain (the textbook
+// EN: warns "TOO_LARGE/ENOMEM are possible under ASAN/Valgrind - always set
+// EN: a reasonable upper explicitly"), so a modest cap is applied here.
 // RU: Открывает (создавая при необходимости) окружение по пути path
 // RU: с параметрами params (геометрия по умолчанию).
 // RU: По умолчанию в libmdbx доступна только главная таблица; число именованных
 // RU: таблиц задаётся через max_maps. Здесь 0 (default) заменяется на достаточное
 // RU: для всех примеров учебника значение.
+// RU: Под Valgrind верхнюю границу движка по умолчанию (доля системной ОЗУ,
+// RU: т.е. терабайты) приходится отображать внутри адресного пространства
+// RU: самого Valgrind — это ненадёжно и может отказывать/притормаживать
+// RU: (учебник предупреждает: «TOO_LARGE/ENOMEM возможны под ASAN/Valgrind —
+// RU: всегда задавайте разумный upper явно»), поэтому здесь применяется
+// RU: скромное ограничение.
 inline mdbx::env_managed env_open(std::string_view path, mdbx::env::operate_parameters params = {}) {
   if (params.max_maps == 0)
     params.max_maps = 64;
+#if !defined(_WIN32) && !defined(_WIN64)
+  if (RUNNING_ON_VALGRIND) {
+    mdbx::env::geometry geo;
+    geo.size_upper = intptr_t(64) << 20 /* 64 MiB is ample for the textbook examples */;
+    return mdbx::env_managed(std::string(path), mdbx::env_managed::create_parameters().set_geometry(geo), params);
+  }
+#endif
   return mdbx::env_managed(std::string(path), mdbx::env_managed::create_parameters(), params);
 }
 

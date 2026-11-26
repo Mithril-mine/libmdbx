@@ -1010,6 +1010,14 @@ macro(setup_compile_flags)
       add_compile_flags("C;CXX" "/fsanitize=address")
     endif()
     add_definitions(-DASAN_ENABLED=1)
+    # The tests link the ASan-instrumented code against the system
+    # (uninstrumented) libstdc++: the inline globals (e.g.
+    # std::piecewise_construct) differ in size/section between the
+    # instrumented copies and the library ones, so the ODR detector fires
+    # at the startup and kills the test before it runs. This is the
+    # documented ASan false-positive class for C++ programs (seen with
+    # GCC 15 and -O3 codegen, silent at other optimization levels).
+    set(MDBX_TESTS_ASAN_OPTIONS "ASAN_OPTIONS=detect_odr_violation=0")
   endif()
 
   if(ENABLE_UBSAN)
@@ -1027,10 +1035,37 @@ macro(setup_compile_flags)
     endif()
 
     add_compile_flags("C;CXX" "-fprofile-arcs" "-ftest-coverage")
+    # Linker flags: these local variables are re-flushed into the standard
+    # CMAKE_*_LINKER_FLAGS cache by setup_compile_flags() at its end, so they
+    # DO reach every target (the earlier belief that they never applied was
+    # wrong). On mingw-w64 the gcc driver does NOT pull the gcov runtime
+    # (libgcov) into executables automatically at link time the way it does
+    # on ELF/Linux, so link it explicitly: without libgcov the arc-counters
+    # never register, __gcov_dump() writes nothing, and no .gcda appear
+    # despite valid .gcno (the win-mingw coverage cell mystery).
     set(EXE_LINKER_FLAGS "${EXE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
     set(SHARED_LINKER_FLAGS "${SHARED_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
     set(MODULE_LINKER_FLAGS "${MODULE_LINKER_FLAGS} -fprofile-arcs -ftest-coverage")
-    # add_library(gcov SHARED IMPORTED)
+    if(MINGW OR MSYS OR CYGWIN)
+      # Attempt 3: driver-level --coverage at LINK time (replaces attempts
+      # 1-2: -lgcov and -Wl,--no-gc-sections did not change anything). The
+      # mingw gcc driver drives the whole runtime setup: it links libgcov
+      # AND the startup objects that register the arc counters — hand-picked
+      # flags leave the registration out, which is exactly the observed
+      # "132 .gcno, tests pass, __gcov_dump() called, zero .gcda" state.
+      set(EXE_LINKER_FLAGS "${EXE_LINKER_FLAGS} --coverage")
+      set(SHARED_LINKER_FLAGS "${SHARED_LINKER_FLAGS} --coverage")
+      set(MODULE_LINKER_FLAGS "${MODULE_LINKER_FLAGS} --coverage")
+    endif()
+    # Windows/mingw test binaries define MDBX_GCOV_FLUSH globally (not
+    # per-target) so the precompiled header is compiled with the SAME macro
+    # set as every test target: a per-target define made the PCH invalid
+    # (cmake_pch.hxx.gch "not used because 'MDBX_GCOV_FLUSH' is defined",
+    # -Werror=invalid-pch). test-env.h uses it to register
+    # atexit(__gcov_dump) because mingw-w64 does not flush .gcda at exit.
+    if(MINGW OR MSYS OR CYGWIN)
+      add_compile_definitions(MDBX_GCOV_FLUSH)
+    endif()
   endif()
 
   if(ENABLE_GPROF)

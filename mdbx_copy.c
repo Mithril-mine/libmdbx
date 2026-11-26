@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -70,9 +70,12 @@ static inline void tool_break_setup(void) {
 
 #endif /* IS_WINDOWS */
 
-/* Returns true if `-h` or `--help` was requested anywhere in the command
- * line, while honoring the options that consume an argument (per `optstring`),
- * so e.g. `-s --help` is NOT treated as a help request. */
+/* Returns true if `-h` or `--help` was requested in the command line before
+ * the first positional argument, while honoring the options that consume an
+ * argument (per `optstring`), so e.g. `-s --help` is NOT treated as a help
+ * request. The scan stops at the first positional like getopt() does: a `-h`
+ * after a positional is an extra operand for getopt to reject, not a help
+ * request (chk-interrupt-exit-code). */
 static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
   bool consume_next = false;
   for (int i = 1; i < argc; ++i) {
@@ -82,7 +85,7 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
     }
     const char *const arg = argv[i];
     if (arg[0] != '-' || arg[1] == '\0')
-      continue; /* positional argument */
+      break; /* the first positional: getopt stops here, so must the scan */
     if (strcmp(arg, "--") == 0)
       break; /* end of options */
     if (strcmp(arg, "--help") == 0)
@@ -158,6 +161,8 @@ MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level,
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -214,45 +219,60 @@ int main(int argc, char *argv[]) {
   bool quiet = false;
   bool warmup = false;
   MDBX_warmup_flags_t warmup_flags = MDBX_warmup_default;
+  int opt;
 
   prog = argv[0];
   if (tool_help_requested(argc, argv, "VqcfdpnuUnh"))
     help();
 
-  for (; argc > 1 && argv[1][0] == '-'; argc--, argv++) {
-    if (argv[1][1] == 'n' && argv[1][2] == '\0')
-      flags |= MDBX_NOSUBDIR;
-    else if (argv[1][1] == 'c' && argv[1][2] == '\0')
-      cpflags |= MDBX_CP_COMPACT;
-    else if (argv[1][1] == 'd' && argv[1][2] == '\0')
-      cpflags |= MDBX_CP_FORCE_DYNAMIC_SIZE;
-    else if (argv[1][1] == 'p' && argv[1][2] == '\0')
-      cpflags |= MDBX_CP_THROTTLE_MVCC;
-    else if (argv[1][1] == 'f' && argv[1][2] == '\0')
-      cpflags |= MDBX_CP_OVERWRITE;
-    else if (argv[1][1] == 'q' && argv[1][2] == '\0')
-      quiet = true;
-    else if (argv[1][1] == 'u' && argv[1][2] == '\0')
-      warmup = true;
-    else if (argv[1][1] == 'U' && argv[1][2] == '\0') {
-      warmup = true;
-      warmup_flags = MDBX_warmup_force | MDBX_warmup_touchlimit | MDBX_warmup_lock;
-    } else if (argv[1][1] == 'V' && argv[1][2] == '\0') {
+  while ((opt = getopt(argc, argv, "VqcfdpnuUnh")) != -1)
+    switch (opt) {
+    case 'V':
       tool_version_print("copy");
       return EXIT_SUCCESS;
-    } else
-      argc = 0;
-  }
+    case 'q':
+      quiet = true;
+      break;
+    case 'c':
+      cpflags |= MDBX_CP_COMPACT;
+      break;
+    case 'd':
+      cpflags |= MDBX_CP_FORCE_DYNAMIC_SIZE;
+      break;
+    case 'p':
+      cpflags |= MDBX_CP_THROTTLE_MVCC;
+      break;
+    case 'f':
+      cpflags |= MDBX_CP_OVERWRITE;
+      break;
+    case 'n':
+      flags |= MDBX_NOSUBDIR;
+      break;
+    case 'u':
+      warmup = true;
+      break;
+    case 'U':
+      warmup = true;
+      warmup_flags = MDBX_warmup_force | MDBX_warmup_touchlimit | MDBX_warmup_lock;
+      break;
+    case 'h':
+      help();
+      break; /* noreturn */
+    default:
+      usage();
+    }
 
-  if (argc < 2 || argc > 3)
+  argc -= optind;
+  argv += optind;
+  if (argc < 1 || argc > 2)
     usage();
 
   tool_break_setup();
 
   if (!quiet) {
-    fprintf((argc == 2) ? stderr : stdout, "mdbx_copy %s (%s, T-%s)\nRunning for copy %s to %s...\n",
-            mdbx_version.git.describe, mdbx_version.git.datetime, mdbx_version.git.tree, argv[1],
-            (argc == 2) ? "stdout" : argv[2]);
+    fprintf((argc == 1) ? stderr : stdout, "mdbx_copy %s (%s, T-%s)\nRunning for copy %s to %s...\n",
+            mdbx_version.git.describe, mdbx_version.git.datetime, mdbx_version.git.tree, argv[0],
+            (argc == 1) ? "stdout" : argv[1]);
     fflush(nullptr);
     mdbx_setup_debug(MDBX_LOG_NOTICE, MDBX_DBG_DONTCHANGE, tool_logger_default);
   }
@@ -260,16 +280,23 @@ int main(int argc, char *argv[]) {
   act = "opening environment";
   rc = mdbx_env_create(&env);
   if (rc == MDBX_SUCCESS)
-    rc = mdbx_env_open(env, argv[1], flags, 0);
+    rc = mdbx_env_open(env, argv[0], flags, 0);
 
   if (rc == MDBX_SUCCESS && warmup) {
     act = "warming up";
     rc = mdbx_env_warmup(env, nullptr, warmup_flags, 3600 * 65536);
   }
 
+  if (user_break) {
+    /* the break handlers are installed, so SIGINT/SIGTERM must not be
+     * swallowed silently between the stages (chk-interrupt-exit-code) */
+    act = "interrupted";
+    rc = MDBX_EINTR;
+  }
+
   if (!MDBX_IS_ERROR(rc)) {
     act = "copying";
-    if (argc == 2) {
+    if (argc == 1) {
       mdbx_filehandle_t fd;
 #if IS_WINDOWS
       fd = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -278,10 +305,12 @@ int main(int argc, char *argv[]) {
 #endif
       rc = mdbx_env_copy2fd(env, fd, cpflags);
     } else
-      rc = mdbx_env_copy(env, argv[2], cpflags);
+      rc = mdbx_env_copy(env, argv[1], cpflags);
   }
   if (rc)
     fprintf(stderr, "%s: %s failed, error %d (%s)\n", prog, act, rc, mdbx_strerror(rc));
+  else if (user_break)
+    fprintf(stderr, "%s: interrupted by signal after copying\n", prog);
   mdbx_env_close(env);
 
   return rc ? EXIT_FAILURE : EXIT_SUCCESS;

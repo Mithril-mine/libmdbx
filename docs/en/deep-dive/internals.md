@@ -643,8 +643,8 @@ with FIFO it walks forward (`MDBX_NEXT`) from the last reclaimed record:
   first returned". The circulation loop of pages becomes **minimally short**.
 
 Page numbers themselves are sorted independently of the policy: page lists (PNL) inside records and
-in the transaction working list (`wr.repnl`) are ordered ascending (`MDBX_PNL_ASCENDING`), and a
-single page is handed out from the repnl head — the smallest number (`repnl_get_single`,
+in the transaction working list (`wr.repnl`) are ordered descending, and a
+single page is handed out from the repnl tail — the smallest number (`repnl_get_single`,
 `src/gc-get.c`). The "frees↔page-number" correlation is statistical (recent frees often come from the
 file tail), but not guaranteed by the format.
 
@@ -662,8 +662,8 @@ On systems with a disk write-back cache this can increase write performance by s
   frequency of `env_sync()`, not by the FIFO/LIFO choice.
 - LIFO intensifies the "hotness" of a small page set: fill unevenness grows, which matters when
   assessing WAF and locality.
-- The policy sets the GC-record order by txnid; within a record page numbers are sorted ascending
-  (`MDBX_PNL_ASCENDING=1`). The policy choice affects which records and in what order the lists are
+- The policy sets the GC-record order by txnid; within a record page numbers are sorted
+  descending. The policy choice affects which records and in what order the lists are
   merged when searching sequences (section 17.1).
 
 ### 14.2. BigFoot: what problem and how it is solved

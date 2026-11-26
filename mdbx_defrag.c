@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -70,9 +70,12 @@ static inline void tool_break_setup(void) {
 
 #endif /* IS_WINDOWS */
 
-/* Returns true if `-h` or `--help` was requested anywhere in the command
- * line, while honoring the options that consume an argument (per `optstring`),
- * so e.g. `-s --help` is NOT treated as a help request. */
+/* Returns true if `-h` or `--help` was requested in the command line before
+ * the first positional argument, while honoring the options that consume an
+ * argument (per `optstring`), so e.g. `-s --help` is NOT treated as a help
+ * request. The scan stops at the first positional like getopt() does: a `-h`
+ * after a positional is an extra operand for getopt to reject, not a help
+ * request (chk-interrupt-exit-code). */
 static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
   bool consume_next = false;
   for (int i = 1; i < argc; ++i) {
@@ -82,7 +85,7 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
     }
     const char *const arg = argv[i];
     if (arg[0] != '-' || arg[1] == '\0')
-      continue; /* positional argument */
+      break; /* the first positional: getopt stops here, so must the scan */
     if (strcmp(arg, "--") == 0)
       break; /* end of options */
     if (strcmp(arg, "--help") == 0)
@@ -158,6 +161,8 @@ MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level,
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -272,24 +277,32 @@ static void defrag_report_progress(const MDBX_defrag_result_t *progress, unsigne
   }
 }
 
-static const char *stop_reason(const MDBX_defrag_result_t *progress) {
-  if (progress->stopping_reasons & MDBX_defrag_error)
-    return "error";
-  if (progress->stopping_reasons & MDBX_defrag_aborted)
-    return "aborted by user";
-  if (progress->stopping_reasons & MDBX_defrag_discontinued)
-    return "discontinued by user";
-  if (progress->stopping_reasons & MDBX_defrag_enough_threshold)
-    return "enough threshold";
-  if (progress->stopping_reasons & MDBX_defrag_time_limit)
-    return "time limit reached";
-  if (progress->stopping_reasons & MDBX_defrag_laggard_reader)
-    return "laggard reader";
-  if (progress->stopping_reasons & MDBX_defrag_large_chunk)
-    return "large chunk";
-  if (progress->stopping_reasons & MDBX_defrag_step_size)
-    return "step size";
-  return "done";
+static const char *stop_reasons_list(const MDBX_defrag_result_t *progress, char *buf, size_t size) {
+  static const struct {
+    unsigned bit;
+    const char *name;
+  } reasons[] = {
+      {MDBX_defrag_error, "error"},
+      {MDBX_defrag_aborted, "aborted by user"},
+      {MDBX_defrag_discontinued, "discontinued by user"},
+      {MDBX_defrag_enough_threshold, "enough threshold"},
+      {MDBX_defrag_time_limit, "time limit reached"},
+      {MDBX_defrag_laggard_reader, "laggard reader"},
+      {MDBX_defrag_large_chunk, "large chunk"},
+      {MDBX_defrag_step_size, "step size"},
+  };
+  size_t off = 0;
+  for (unsigned i = 0; i < ARRAY_LENGTH(reasons); ++i) {
+    if (progress->stopping_reasons & reasons[i].bit) {
+      const int written = snprintf(buf + off, size - off, "%s%s", off ? ", " : "", reasons[i].name);
+      if (written < 0 || (size_t)written >= size - off)
+        break;
+      off += (size_t)written;
+    }
+  }
+  if (!off)
+    snprintf(buf, size, "done");
+  return buf;
 }
 
 static int defrag_notify(void *ctx, const MDBX_defrag_result_t *progress) {
@@ -300,11 +313,12 @@ static int defrag_notify(void *ctx, const MDBX_defrag_result_t *progress) {
     bool tick = progress->spent_time_dot16 - last_report_spenttime > 65536 / 8;
     if (!ctx || last_progress.cycles != progress->cycles) {
       if (progress_dots) {
+        char reasons[128];
         if (last_progress.cycles == progress->cycles)
           last_progress.stopping_reasons = progress->stopping_reasons;
         defrag_report_progress(&last_progress, progress_dots);
         progress_dots = 0;
-        printf(" %s%s\n", stop_reason(&last_progress), is_console ? "\033[K" : "");
+        printf(" %s%s\n", stop_reasons_list(&last_progress, reasons, sizeof(reasons)), is_console ? "\033[K" : "");
         fflush(nullptr);
       }
       tick = true;
@@ -457,13 +471,7 @@ int main(int argc, char *argv[]) {
   rc = mdbx_env_create(&env);
   if (rc == MDBX_SUCCESS)
     rc = mdbx_env_open(env, db_pathname, env_flags, 0);
-  if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY ||
-#if IS_WINDOWS
-                                       rc == ERROR_LOCK_VIOLATION || rc == ERROR_SHARING_VIOLATION
-#else
-                                       rc == EBUSY || rc == EAGAIN
-#endif
-                                       )) {
+  if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY || osal_is_sharing_violation_error(rc))) {
     env_flags = (env_flags & ~MDBX_EXCLUSIVE) | MDBX_ACCEDE;
     rc = mdbx_env_open(env, db_pathname, env_flags, 0);
   }
@@ -487,8 +495,10 @@ int main(int argc, char *argv[]) {
 
   MDBX_gc_info_t info_gc;
   memset(&info_gc, 0, sizeof(info_gc)); /* zap `uninitialized` warning */
-  if (rc == MDBX_SUCCESS)
+  if (rc == MDBX_SUCCESS) {
     rc = mdbx_gc_info(txn, &info_gc, sizeof(info_gc), nullptr, nullptr);
+    rc = (rc == MDBX_NOTFOUND) ? MDBX_SUCCESS : rc;
+  }
 
   char ratio_buffer[42];
   if (rc == MDBX_SUCCESS) {
@@ -539,14 +549,19 @@ int main(int argc, char *argv[]) {
 
     if (!MDBX_IS_ERROR(rc)) {
       if (!quiet) {
+        char reasons[128];
+        if (result.stopping_reasons & MDBX_defrag_large_chunk) {
+          printf(" = large chunk: the remaining fragmentation is caused by large/overflow pages.\n");
+          printf("   use mdbx_copy -c for a complete compaction.\n");
+        }
         printf("Defragmentation%s: shrink %zi pages, %u passes, moved %zu pages",
                (rc == MDBX_SUCCESS) ? " done" : " incomplete", result.pages_shrinked, result.cycles,
                result.pages_moved);
         if (result.stopping_reasons)
-          printf(", stopping reasons bits 0x%x", result.stopping_reasons);
-        printf(", took %s seconds, %s\n",
-               mdbx_ratio2digits(result.spent_time_dot16, 65536, 3, ratio_buffer, sizeof(ratio_buffer)),
-               stop_reason(&result));
+          printf(", stopping reasons: %s (0x%x)", stop_reasons_list(&result, reasons, sizeof(reasons)),
+                 result.stopping_reasons);
+        printf(", took %s seconds.\n",
+               mdbx_ratio2digits(result.spent_time_dot16, 65536, 3, ratio_buffer, sizeof(ratio_buffer)));
       }
       rc = MDBX_SUCCESS;
     }

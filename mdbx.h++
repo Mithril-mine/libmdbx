@@ -1,4 +1,4 @@
-﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+﻿/// This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
 /// \file mdbx.h++
 /// \brief The libmdbx C++ API header file.
 ///
@@ -65,6 +65,15 @@
 #if __has_include(<version>)
 #include <version>
 #endif /* <version> */
+
+/* The <compare> header is C++20-only and is not always pulled transitively
+ * (Bionic's libc++ requires it explicitly), while the C++20-comparing
+ * operations below need std::strong_ordering and the like. */
+#if defined(__cpp_impl_three_way_comparison) && __cpp_impl_three_way_comparison >= 201907L
+#if __has_include(<compare>)
+#include <compare>
+#endif /* <compare> */
+#endif /* C++20 three-way comparison */
 
 /* Disable min/max macros from C' headers */
 #ifndef NOMINMAX
@@ -985,11 +994,6 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
     return slice(&pod, sizeof(pod));
   }
 
-  /// \brief Assigns the slice to reference [0,bytes-1] of memory pointed by ptr.
-  /// \param ptr    The address of the data to be referenced.
-  /// \param bytes  The number of bytes to be referenced.
-  /// \returns A reference to this instance.
-  inline slice &assign(const void *ptr, size_t bytes);
   /// \brief Assigns the slice to reference the same data as the source slice.
   /// \param src  The source slice.
   /// \returns A reference to this instance.
@@ -1006,6 +1010,14 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param src  The source \ref MDBX_val to be moved from.
   /// \returns A reference to this instance.
   inline slice &assign(::MDBX_val &&src);
+  /// \brief Assigns the slice to reference [0,bytes-1] of memory pointed by ptr.
+  /// \param ptr    The address of the data to be referenced.
+  /// \param bytes  The number of bytes to be referenced.
+  /// \returns A reference to this instance.
+  /// \throws `std::length_error` for an oversize length and
+  /// `mdbx::bad_value_size` for a null pointer with a non-zero length;
+  /// the slice is left untouched in these cases.
+  inline slice &assign(const void *ptr, size_t bytes);
   /// \brief Assigns the slice to reference the [begin,end) memory range.
   /// \param begin  The address of the first byte to be referenced.
   /// \param end    The address just after the last byte to be referenced.
@@ -1015,7 +1027,7 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param str  The source string.
   /// \returns A reference to this instance.
   template <class CHAR, class T, class ALLOCATOR> slice &assign(const ::std::basic_string<CHAR, T, ALLOCATOR> &str) {
-    return assign(str.data(), str.size() * sizeof(CHAR));
+    return assign(slice(str));
   }
   /// \brief Assigns the slice to reference a null-terminated string.
   /// \param c_str  The source null-terminated string.
@@ -1026,7 +1038,7 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param view  The source string view.
   /// \returns A reference to this instance.
   template <class CHAR, class T> slice &assign(const ::std::basic_string_view<CHAR, T> &view) {
-    return assign(view.data(), view.size() * sizeof(CHAR));
+    return assign(slice(view));
   }
   /// \brief Takes over a temporary string view and assigns the slice to its contents.
   /// \param view  The source string view to be moved from.
@@ -1157,6 +1169,10 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \param alloc          The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, class CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> hex_decode(bool ignore_spaces = false,
                                                        const ALLOCATOR &alloc = ALLOCATOR()) const;
@@ -1166,6 +1182,10 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \param alloc          The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, class CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> base58_decode(bool ignore_spaces = false,
                                                           const ALLOCATOR &alloc = ALLOCATOR()) const;
@@ -1175,6 +1195,10 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \param alloc          The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, class CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> base64_decode(bool ignore_spaces = false,
                                                           const ALLOCATOR &alloc = ALLOCATOR()) const;
@@ -1183,7 +1207,8 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param [in] disable_utf8 By default if `disable_utf8` is `false` function
   /// checks that content bytes are printable ASCII-7 characters or a valid UTF8
   /// sequences. Otherwise, if `disable_utf8` is `true` function checks that
-  /// content bytes are printable extended 8-bit ASCII codes.
+  /// content bytes are printable extended 8-bit ASCII codes, but never the
+  /// UTF8 lead bytes (C2..DF, E0..EF and F0..F4).
   /// \returns `true` if the content is printable.
   MDBX_NOTHROW_PURE_FUNCTION bool is_printable(bool disable_utf8 = false) const noexcept;
 
@@ -1191,7 +1216,9 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param [in] ignore_spaces If `true` function will skips spaces surrounding
   /// (before, between and after) a encoded bytes. However, spaces should not
   /// break a pair of characters encoding a single byte.
-  /// \returns `true` if the content is a valid hexadecimal dump.
+  /// \returns `true` if the content is a valid hexadecimal dump, i.e. encodes
+  /// at least one byte; `false` for an empty (or spaces-only, when spaces
+  /// are ignored) content, since a dump of zero bytes is not a dump.
   MDBX_NOTHROW_PURE_FUNCTION inline bool is_hex(bool ignore_spaces = false) const noexcept;
 
   /// \brief Checks whether the content of the slice is a
@@ -1199,7 +1226,9 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param [in] ignore_spaces If `true` function will skips spaces surrounding
   /// (before, between and after) a encoded bytes. However, spaces should not
   /// break a code group of characters.
-  /// \returns `true` if the content is a valid Base58 dump.
+  /// \returns `true` if the content is a valid Base58 dump, i.e. encodes
+  /// at least one byte; `false` for an empty (or spaces-only, when spaces
+  /// are ignored) content, since a dump of zero bytes is not a dump.
   MDBX_NOTHROW_PURE_FUNCTION inline bool is_base58(bool ignore_spaces = false) const noexcept;
 
   /// \brief Checks whether the content of the slice is a
@@ -1207,7 +1236,9 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \param [in] ignore_spaces If `true` function will skips spaces surrounding
   /// (before, between and after) a encoded bytes. However, spaces should not
   /// break a code group of characters.
-  /// \returns `true` if the content is a valid Base64 dump.
+  /// \returns `true` if the content is a valid Base64 dump, i.e. encodes
+  /// at least one byte; `false` for an empty (or spaces-only, when spaces
+  /// are ignored) content, since a dump of zero bytes is not a dump.
   MDBX_NOTHROW_PURE_FUNCTION inline bool is_base64(bool ignore_spaces = false) const noexcept;
 
 #if defined(DOXYGEN) || (defined(__cpp_lib_string_view) && __cpp_lib_string_view >= 201606L)
@@ -1549,8 +1580,11 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \returns `true` if the slice is valid.
   MDBX_CXX11_CONSTEXPR bool is_valid() const noexcept { return !(iov_base == nullptr && iov_len != 0); }
 
-  /// \brief Builds an invalid slice that has a non-zero length and refers to
-  /// a null address.
+  /// \brief Builds an invalid slice that refers to a null address and has
+  /// the maximal length. The deliberately corrupted state flows through all
+  /// the assignment/copy/move paths without exceptions and assert-failures:
+  /// the length fits the maximal data size, so the internal unchecked
+  /// primitives accept it as a legit "null + length" blank-like state.
   /// \returns The invalid slice instance.
   MDBX_CXX14_CONSTEXPR static slice invalid() noexcept {
     return slice(/* using special constructor without length checking */ ~size_t(0));
@@ -1565,7 +1599,7 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// fills in on return from `txn::insert_reserve()`,
   /// `txn::upsert_reserve()` and friends.
   /// \details Since a null pointer with a non-zero length is rejected by the
-  /// ordinary \ref slice() constructor and `assign()` (issue #142), this
+  /// ordinary \ref slice() constructor and `assign()`, this
   /// explicit factory is the only way to spell the reserve form; it builds the
   /// blank via the special private constructor (like \ref invalid()) but still
   /// validates `length` against \ref MDBX_MAXDATASIZE, so an oversize request
@@ -1597,7 +1631,7 @@ struct LIBMDBX_API_TYPE slice : public ::MDBX_val {
   /// \brief Non-throwing counterpart of `as_pod()`: returns `std::nullopt`
   /// when the slice length does not exactly match `sizeof(POD)`.
   /// \note The returned object is a copy of the referenced bytes, so the slice
-  /// need not outlive the result (issue #144).
+  /// need not outlive the result.
   /// \returns The object of type `POD` or `std::nullopt` on a size mismatch.
   template <typename POD> MDBX_CXX14_CONSTEXPR ::std::optional<POD> try_as_pod() const {
     static_assert(::std::is_standard_layout<POD>::value && !::std::is_pointer<POD>::value,
@@ -1696,6 +1730,16 @@ protected:
   /// and \ref blank_for_put_reserve().
   /// \param invalid_length  The length to be set with a null data pointer.
   MDBX_CXX11_CONSTEXPR slice(size_t invalid_length) noexcept : ::MDBX_val({nullptr, invalid_length}) {}
+
+  /// \brief The unchecked low-level assignment primitive: binds the given data
+  /// pointer and length as-is, without any validation or rejection. Only the
+  /// checked `assign()` overloads and the \ref buffer internals may call it,
+  /// and they must ensure the validity of arguments, i.e. that the expression
+  /// `ptr ? check_length(bytes) : check_nullptr_length(bytes)` would pass.
+  /// \param ptr    The address of the data to be referenced.
+  /// \param bytes  The number of bytes to be referenced.
+  /// \returns A reference to this instance.
+  MDBX_CXX14_CONSTEXPR slice &assign_unchecked(const void *ptr, size_t bytes) noexcept;
 };
 
 /// \brief Combines data slice with boolean flag to represent result of certain operations.
@@ -1965,11 +2009,19 @@ struct LIBMDBX_API to_hex {
   /// dump of a passed slice.
   /// \returns The required buffer size in bytes.
   MDBX_CXX11_CONSTEXPR size_t envisage_result_length() const noexcept {
-    const size_t bytes = source.length() << 1;
-    return wrap_width ? bytes + bytes / wrap_width : bytes;
+    /* The math is done in 64 bits to avoid a 32-bit size_t overflow: the
+     * source length is limited by MDBX_MAXDATASIZE, so on 64-bit targets the
+     * result always fits in size_t, while on 32-bit ones only a small
+     * wrap_width could make it exceed size_t. Such demand is unsatisfiable
+     * in practice (it would require an absurd wrap_width for a 2 Gb source),
+     * so the maximal size_t value is returned instead of a wrapped estimate. */
+    const uint64_t bytes = uint64_t(source.length()) << 1;
+    const uint64_t whole = wrap_width ? bytes + bytes / wrap_width : bytes;
+    return whole < SIZE_MAX ? size_t(whole) : SIZE_MAX;
   }
 
   /// \brief Fills the buffer by hexadecimal dump of a passed slice.
+  /// \note An empty source produces an empty output.
   /// \param dest       The destination buffer to be filled.
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
@@ -2024,11 +2076,15 @@ struct LIBMDBX_API to_base58 {
   /// [Base58](https://en.wikipedia.org/wiki/Base58) dump of passed slice.
   /// \returns The required buffer size in bytes.
   MDBX_CXX11_CONSTEXPR size_t envisage_result_length() const noexcept {
-    const size_t bytes = (source.length() * 11 + 7) / 8;
-    return wrap_width ? bytes + bytes / wrap_width : bytes;
+    /* The math is done in 64 bits to avoid a 32-bit size_t overflow, see
+     * the same-named method of to_hex for the details. */
+    const uint64_t bytes = (uint64_t(source.length()) * 11 + 7) / 8;
+    const uint64_t whole = wrap_width ? bytes + bytes / wrap_width : bytes;
+    return whole < SIZE_MAX ? size_t(whole) : SIZE_MAX;
   }
 
   /// \brief Fills the buffer by [Base58](https://en.wikipedia.org/wiki/Base58) dump of passed slice.
+  /// \note An empty source produces an empty output.
   /// \param dest       The destination buffer to be filled.
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
@@ -2088,6 +2144,7 @@ struct LIBMDBX_API to_base64 {
 
   /// \brief Fills the buffer by [Base64](https://en.wikipedia.org/wiki/Base64)
   /// dump of passed slice.
+  /// \note An empty source produces an empty output.
   /// \param dest       The destination buffer to be filled.
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
@@ -2127,12 +2184,20 @@ struct LIBMDBX_API from_hex {
   /// \brief Decodes hexadecimal dump from a passed slice to returned string.
   /// \param alloc  The allocator for the resulting string.
   /// \returns The string with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator>
   inline string<ALLOCATOR> as_string(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
   /// \brief Decodes hexadecimal dump from a passed slice to returned buffer.
   /// \param alloc  The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, typename CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> as_buffer(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
@@ -2146,6 +2211,10 @@ struct LIBMDBX_API from_hex {
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
   /// \throws std::length_error if given buffer is too small.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   char *write_bytes(char *dest, size_t dest_size) const;
 
   /// \brief Checks whether a passed slice is empty, and therefore there will be no output bytes.
@@ -2153,7 +2222,9 @@ struct LIBMDBX_API from_hex {
   bool is_empty() const noexcept { return source.empty(); }
 
   /// \brief Checks whether the content of a passed slice is a valid hexadecimal
-  /// dump, and therefore can be decoded without errors.
+  /// dump, and therefore can be decoded without errors. An empty (or
+  /// spaces-only, when spaces are ignored) source is NOT a valid dump,
+  /// since a dump of zero bytes is not a dump.
   /// \returns `true` if the source slice is NOT a valid hexadecimal dump.
   bool is_erroneous() const noexcept;
 };
@@ -2175,6 +2246,10 @@ struct LIBMDBX_API from_base58 {
   /// passed slice to returned string.
   /// \param alloc  The allocator for the resulting string.
   /// \returns The string with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator>
   inline string<ALLOCATOR> as_string(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
@@ -2182,6 +2257,10 @@ struct LIBMDBX_API from_base58 {
   /// passed slice to returned buffer.
   /// \param alloc  The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, typename CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> as_buffer(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
@@ -2198,6 +2277,10 @@ struct LIBMDBX_API from_base58 {
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
   /// \throws std::length_error if given buffer is too small.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   char *write_bytes(char *dest, size_t dest_size) const;
 
   /// \brief Checks whether a passed slice is empty, and therefore there will be no output bytes.
@@ -2206,7 +2289,9 @@ struct LIBMDBX_API from_base58 {
 
   /// \brief Checks whether the content of a passed slice is a valid
   /// [Base58](https://en.wikipedia.org/wiki/Base58) dump, and therefore can be
-  /// decoded without errors.
+  /// decoded without errors. An empty (or spaces-only, when spaces are
+  /// ignored) source is NOT a valid dump, since a dump of zero bytes
+  /// is not a dump.
   /// \returns `true` if the source slice is NOT a valid Base58 dump.
   bool is_erroneous() const noexcept;
 };
@@ -2228,6 +2313,10 @@ struct LIBMDBX_API from_base64 {
   /// passed slice to returned string.
   /// \param alloc  The allocator for the resulting string.
   /// \returns The string with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator>
   inline string<ALLOCATOR> as_string(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
@@ -2235,6 +2324,10 @@ struct LIBMDBX_API from_base64 {
   /// passed slice to returned buffer.
   /// \param alloc  The allocator for the resulting buffer.
   /// \returns The buffer with the decoded data.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   template <class ALLOCATOR = default_allocator, typename CAPACITY_POLICY = default_capacity_policy>
   inline buffer<ALLOCATOR, CAPACITY_POLICY> as_buffer(const ALLOCATOR &alloc = ALLOCATOR()) const;
 
@@ -2249,6 +2342,10 @@ struct LIBMDBX_API from_base64 {
   /// \param dest_size  The size of the destination buffer.
   /// \returns The pointer just after the last written byte.
   /// \throws std::length_error if given buffer is too small.
+  /// \throws std::domain_error if the content is malformed (not decodable).
+  /// An empty (or spaces-only) content is not an error: it decodes to an
+  /// empty result, but such a zero-byte dump is not a valid dump for the
+  /// dump predicates.
   char *write_bytes(char *dest, size_t dest_size) const;
 
   /// \brief Checks whether a passed slice is empty,
@@ -2258,7 +2355,9 @@ struct LIBMDBX_API from_base64 {
 
   /// \brief Checks whether the content of a passed slice is a valid
   /// [Base64](https://en.wikipedia.org/wiki/Base64) dump, and therefore can be
-  /// decoded without errors.
+  /// decoded without errors. An empty (or spaces-only, when spaces are
+  /// ignored) source is NOT a valid dump, since a dump of zero bytes
+  /// is not a dump.
   /// \returns `true` if the source slice is NOT a valid Base64 dump.
   bool is_erroneous() const noexcept;
 };
@@ -3450,8 +3549,11 @@ public:
   /// \param bytes  The number of bytes of the source data.
   /// \returns A reference to this instance.
   buffer &assign_reference(const void *ptr, size_t bytes) {
+    /* the length is checked before any change, so a rejected input leaves
+     * the buffer untouched */
+    const size_t checked = MDBX_LIKELY(ptr) ? check_length(bytes) : check_nullptr_length(bytes);
     silo_.clear();
-    inherited::assign(ptr, bytes);
+    inherited::assign_unchecked(ptr, checked);
     return *this;
   }
 
@@ -3460,7 +3562,8 @@ public:
   /// \param bytes  The number of bytes of the source data.
   /// \returns A reference to this instance.
   buffer &assign_freestanding(const void *ptr, size_t bytes) {
-    inherited::assign(silo_.assign(static_cast<const typename silo::value_type *>(ptr), check_length(bytes)), bytes);
+    inherited::assign_unchecked(silo_.assign(static_cast<const typename silo::value_type *>(ptr), check_length(bytes)),
+                                bytes);
     return *this;
   }
 
@@ -3578,7 +3681,7 @@ public:
   /// \returns A reference to this instance.
   buffer &assign(const void *ptr, size_t bytes, bool make_reference = false) {
     /* assign_freestanding() would memcpy from `ptr` before any slice guard can
-     * fire, so reject a null pointer with a non-zero length up front (issue #142). */
+     * fire, so reject a null pointer with a non-zero length up front. */
     if (MDBX_UNLIKELY(ptr == nullptr))
       MDBX_CXX20_UNLIKELY check_nullptr_length(bytes);
     return make_reference ? assign_reference(ptr, bytes) : assign_freestanding(ptr, bytes);
@@ -3714,7 +3817,7 @@ public:
   /// \returns A reference to this instance.
   template <class CHAR, class T> buffer &operator=(const ::std::basic_string_view<CHAR, T> &view) {
     /* assigning a string_view copies the bytes into owned storage, so this
-     * allocates and must be allowed to throw on out-of-memory (issue #78) */
+     * allocates and must be allowed to throw on out-of-memory */
     return assign(inherited(view));
   }
 
@@ -3741,13 +3844,16 @@ public:
   }
 
   /// \brief Clears the contents and storage.
-  void clear() noexcept { inherited::assign(silo_.clear(), size_t(0)); }
+  void clear() noexcept { inherited::assign_unchecked(silo_.clear(), size_t(0)); }
 
   /// \brief Clears the contents and reserve storage.
   /// \param whole_capacity  The whole capacity to reserve.
   /// \param headroom  The number of bytes to reserve in front of the data.
   void clear_and_reserve(size_t whole_capacity, size_t headroom = 0) {
-    inherited::assign(silo_.clear_and_reserve(whole_capacity, headroom), size_t(0));
+    check_length(whole_capacity);
+    if (MDBX_UNLIKELY(headroom > whole_capacity))
+      throw_bad_value_size();
+    inherited::assign_unchecked(silo_.clear_and_reserve(whole_capacity, headroom), size_t(0));
   }
 
   /// \brief Reduces memory usage by freeing unused storage space.
@@ -3920,6 +4026,9 @@ public:
   /// \param data           The hexadecimal dump to be decoded.
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \returns A reference to this instance.
+  /// \throws std::domain_error if the given dump is malformed (not
+  /// decodable). An empty (or spaces-only) dump is not an error: nothing
+  /// is appended.
   buffer &append_decoded_hex(const struct slice &data, bool ignore_spaces = false) {
     if (MDBX_UNLIKELY(reaches_tailroom(data)))
       return append_decoded_hex(buffer(data, get_allocator()), ignore_spaces);
@@ -3930,6 +4039,9 @@ public:
   /// \param data           The Base58 dump to be decoded.
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \returns A reference to this instance.
+  /// \throws std::domain_error if the given dump is malformed (not
+  /// decodable). An empty (or spaces-only) dump is not an error: nothing
+  /// is appended.
   buffer &append_decoded_base58(const struct slice &data, bool ignore_spaces = false) {
     if (MDBX_UNLIKELY(reaches_tailroom(data)))
       return append_decoded_base58(buffer(data, get_allocator()), ignore_spaces);
@@ -3940,6 +4052,9 @@ public:
   /// \param data           The Base64 dump to be decoded.
   /// \param ignore_spaces  Skip whitespaces while decoding.
   /// \returns A reference to this instance.
+  /// \throws std::domain_error if the given dump is malformed (not
+  /// decodable). An empty (or spaces-only) dump is not an error: nothing
+  /// is appended.
   buffer &append_decoded_base64(const struct slice &data, bool ignore_spaces = false) {
     if (MDBX_UNLIKELY(reaches_tailroom(data)))
       return append_decoded_base64(buffer(data, get_allocator()), ignore_spaces);
@@ -4188,7 +4303,8 @@ template <typename ALLOCATOR, typename CAPACITY_POLICY> struct buffer_pair_spec 
   /// \brief Constructs an empty pair with the given allocator.
   /// \param alloc  The allocator for both buffers.
   MDBX_CXX20_CONSTEXPR
-  buffer_pair_spec(const allocator_type &alloc) noexcept : key(alloc), value(alloc) {}
+  buffer_pair_spec(const allocator_type &alloc) noexcept(::std::is_nothrow_copy_constructible<allocator_type>::value)
+      : key(alloc), value(alloc) {}
 
   /// \brief Constructs the pair from the given key and value buffers.
   /// \param key    The key buffer.
@@ -4696,7 +4812,7 @@ public:
   /// since the environment is non-owning.
   inline ~env() noexcept;
   /* Slicing an owning env_managed temporary into the base handle would drop
-   * ownership and never close the environment (issue #77), so these exact-match
+   * ownership and never close the environment, so these exact-match
    * overloads turn `mdbx::env e = mdbx::env_managed(...);` into a compile error,
    * while a non-owning view of an env_managed lvalue is still allowed. */
   env(env_managed &&) = delete;
@@ -4843,7 +4959,7 @@ public:
     /// resulting geometry is applied via \ref env::set_geometry(), which
     /// throws \ref mdbx::error on any invalid/inapplicable value (e.g. a size
     /// below the current file size or a late call after open), so configuration
-    /// errors are never silently swallowed (issue #143).
+    /// errors are never silently swallowed.
     /// \param size_lower  The `size_lower` argument.
     /// \param size_now  The `size_now` argument.
     /// \param size_upper  The `size_upper` argument.
@@ -6399,8 +6515,8 @@ public:
   inline ~txn() noexcept;
   /* The base handle must never be move-initialized from the owning
    * txn_managed: the move would silently drop ownership, so the transaction
-   * (and for a writer, the environment's writer lock) would never be released
-   * (issue #77). The exact-match deleted overloads win over the base upcast
+   * (and for a writer, the environment's writer lock) would never be released.
+   * The exact-match deleted overloads win over the base upcast
    * and turn `mdbx::txn t = env.start_write();` into a compile error.
    * Copying from an lvalue txn_managed stays allowed: the copy is a
    * non-owning view and does not change the source's ownership. */
@@ -6579,7 +6695,7 @@ public:
   // списки курсоров.
   // \brief Close all cursors.
   // Опасный API: освобождает C-хендлы курсоров, которыми могут ещё
-  // владеть живые mdbx::cursor_managed (issue #91).
+  // владеть живые mdbx::cursor_managed.
   // inline size_t close_all_cursors() const { return release_all_cursors(false); }
 
   /// \brief Unbind all cursors.
@@ -6593,7 +6709,7 @@ public:
   ///   To keep using a cursor after this call, re-bind it explicitly via
   ///   \ref cursor::bind() / \ref cursor::renew() (the cursor's `unbind()`
   ///   makes the detachment explicit and is the recommended way to invalidate
-  ///   a wrapper you intend to re-use) (issue #146).
+  ///   a wrapper you intend to re-use).
   /// \returns The number of unbound cursors.
   inline size_t unbind_all_cursors() const { return release_all_cursors(true); }
 
@@ -7078,6 +7194,19 @@ public:
   inline bool erase(map_handle map, const slice &key, const slice &value);
 
   /// \brief Replaces the particular multi-value of the key with a new value.
+  ///
+  /// On input the `old_value` argument selects the particular multi-value
+  /// to be replaced, as for `mdbx_replace_ex()` with the
+  /// `MDBX_CURRENT | MDBX_NOOVERWRITE` combination.
+  ///
+  /// \note Unlike the template \ref replace() overloads, there is no way to
+  /// preserve the old value's content when it resides on a dirty page which
+  /// will be overwritten by the update: the core does not invoke a
+  /// preservation callback in this selection mode, and the returned data
+  /// would refer to the transaction-owned page with no owner to keep a
+  /// private copy. Use the template `replace()`/`extract()` overloads to
+  /// reliably obtain the old value.
+  ///
   /// \param map  The table (map) handle.
   /// \param key  The key.
   /// \param old_value  The `old_value` argument.
@@ -7334,7 +7463,7 @@ public:
   /// since the cursor is non-owning.
   inline ~cursor() noexcept;
   /* Slicing an owning cursor_managed temporary into the base handle would drop
-   * ownership and leak the cursor (issue #77), so these exact-match overloads
+   * ownership and leak the cursor, so these exact-match overloads
    * turn `mdbx::cursor c = txn.open_cursor(map);` into a compile error, while
    * a non-owning view of a cursor_managed lvalue is still allowed. */
   cursor(cursor_managed &&) = delete;
@@ -7993,16 +8122,20 @@ public:
   /// \returns `true` if the cursor is not positioned on any item.
   inline bool eof() const;
   /// \brief Checks whether the cursor is on the first item of the table.
-  /// \returns `true` if the cursor is on the first item.
+  /// \returns `true` if the cursor is on the first item or not positioned at
+  /// all, i.e. there is no sense to move it backward.
   inline bool on_first() const;
   /// \brief Checks whether the cursor is on the last item of the table.
-  /// \returns `true` if the cursor is on the last item.
+  /// \returns `true` if the cursor is on the last item or not positioned at
+  /// all, i.e. there is no sense to move it forward.
   inline bool on_last() const;
   /// \brief Checks whether the cursor is on the first multi-value of the current key.
-  /// \returns `true` if the cursor is on the first multi-value.
+  /// \returns `true` if the cursor is on the first multi-value or there is no
+  /// sense to move it backward within the current key's multi-values.
   inline bool on_first_multival() const;
   /// \brief Checks whether the cursor is on the last multi-value of the current key.
-  /// \returns `true` if the cursor is on the last multi-value.
+  /// \returns `true` if the cursor is on the last multi-value or there is no
+  /// sense to move it forward within the current key's multi-values.
   inline bool on_last_multival() const;
   /// \brief Estimates the number of items between the current position and the given key-value pair.
   /// \param key    The boundary key.
@@ -8105,7 +8238,7 @@ public:
   /// \brief Bind/renew a cursor with a new transaction and specified key-value map handle.
   /// \param txn          The new transaction to attach the cursor to.
   /// \param map_handle   The key-value map (table) handle.
-  /// \throws mdbx::error on failure (issue #146).
+  /// \throws mdbx::error on failure.
   inline void bind(::mdbx::txn &txn, ::mdbx::map_handle map_handle);
 
   /// \brief Unbind cursor from a transaction.
@@ -8113,7 +8246,7 @@ public:
   ///   underlying C object: the wrapper keeps the handle and the destructor
   ///   still closes it. While unbound, any seek/move/read operation fails with
   ///   \ref MDBX_EBADSIGN or \ref MDBX_EINVAL; call \ref renew() / \ref bind()
-  ///   to attach the cursor to a transaction again (issue #146).
+  ///   to attach the cursor to a transaction again.
   inline void unbind();
 
   /// \brief Returns the cursor's transaction.
@@ -8454,11 +8587,42 @@ MDBX_CXX11_CONSTEXPR map_handle::info::info(map_handle::flags flags, map_handle:
     : flags(flags), state(state) {}
 
 MDBX_CXX11_CONSTEXPR_ENUM mdbx::key_mode map_handle::info::key_mode() const noexcept {
-  return ::mdbx::key_mode(flags & (MDBX_REVERSEKEY | MDBX_INTEGERKEY));
+  /* Only the combinations accepted by the core (see check_table_flags()) are
+   * the declared members; the both-bits combination is rejected by the core
+   * and mapped to the ordinal fallback to never produce an undeclared value.
+   * The mask is switched as an integer to avoid -Wswitch on the combined
+   * cases which are not declared enumerators of MDBX_db_flags_t. */
+  switch (unsigned(flags) & unsigned(MDBX_REVERSEKEY | MDBX_INTEGERKEY)) {
+  case unsigned(MDBX_REVERSEKEY):
+    return mdbx::key_mode::reverse;
+  default /* MDBX_DB_DEFAULTS, MDBX_INTEGERKEY, or the rejected both-bits combination */:
+    return (flags & MDBX_INTEGERKEY) ? mdbx::key_mode::ordinal : mdbx::key_mode::usual;
+  }
 }
 
 MDBX_CXX11_CONSTEXPR_ENUM mdbx::value_mode map_handle::info::value_mode() const noexcept {
-  return ::mdbx::value_mode(flags & (MDBX_DUPSORT | MDBX_REVERSEDUP | MDBX_DUPFIXED | MDBX_INTEGERDUP));
+  /* Only the combinations accepted by the core (see check_table_flags()) are
+   * the declared members, except the reversed-ordinal one which has no
+   * dedicated member; any other combination is invalid and mapped to the
+   * closest defined mode to never produce an undeclared value. The mask is
+   * switched as an integer to avoid -Wswitch on the combined cases which
+   * are not declared enumerators of MDBX_db_flags_t. */
+  switch (unsigned(flags) & unsigned(MDBX_DUPSORT | MDBX_REVERSEDUP | MDBX_DUPFIXED | MDBX_INTEGERDUP)) {
+  case unsigned(MDBX_DUPSORT):
+    return mdbx::value_mode::multi;
+  case unsigned(MDBX_DUPSORT | MDBX_REVERSEDUP):
+    return mdbx::value_mode::multi_reverse;
+  case unsigned(MDBX_DUPSORT | MDBX_DUPFIXED):
+    return mdbx::value_mode::multi_samelength;
+  case unsigned(MDBX_DUPSORT | MDBX_DUPFIXED | MDBX_REVERSEDUP):
+    return mdbx::value_mode::multi_reverse_samelength;
+  case unsigned(MDBX_DUPSORT | MDBX_DUPFIXED | MDBX_INTEGERDUP):
+  case unsigned(MDBX_DUPSORT | MDBX_DUPFIXED | MDBX_INTEGERDUP | MDBX_REVERSEDUP):
+    return mdbx::value_mode::multi_ordinal;
+  default /* invalid combinations: duplicate-related flags are meaningless
+             without MDBX_DUPSORT, MDBX_INTEGERDUP requires MDBX_DUPFIXED */:
+    return (flags & MDBX_DUPSORT) ? mdbx::value_mode::multi : mdbx::value_mode::single;
+  }
 }
 
 inline bool exception_thunk::is_clean() const noexcept { return !captured_; }
@@ -8579,19 +8743,20 @@ MDBX_CXX14_CONSTEXPR slice::slice(MDBX_val &&src) : slice(src) { src.iov_base = 
 
 MDBX_CXX14_CONSTEXPR slice::slice(slice &&src) noexcept : slice(src) { src.invalidate(); }
 
-inline slice &slice::assign(const void *ptr, size_t bytes) {
+MDBX_CXX14_CONSTEXPR slice &slice::assign_unchecked(const void *ptr, size_t bytes) noexcept {
+  MDBX_CONSTEXPR_ASSERT(bytes <= size_t(MDBX_MAXDATASIZE) || (!ptr && bytes == ~size_t(0)));
   iov_base = const_cast<void *>(ptr);
-  iov_len = ptr ? check_length(bytes) : check_nullptr_length(bytes);
+  iov_len = bytes;
   return *this;
 }
 
-inline slice &slice::assign(const slice &src) noexcept {
-  iov_base = src.iov_base;
-  iov_len = src.iov_len;
-  return *this;
+inline slice &slice::assign(const void *ptr, size_t bytes) {
+  return assign_unchecked(ptr, MDBX_LIKELY(ptr) ? check_length(bytes) : check_nullptr_length(bytes));
 }
 
-inline slice &slice::assign(const ::MDBX_val &src) { return assign(src.iov_base, src.iov_len); }
+inline slice &slice::assign(const slice &src) noexcept { return assign_unchecked(src.iov_base, src.length()); }
+
+inline slice &slice::assign(const ::MDBX_val &src) { return assign(slice(src)); }
 
 slice &slice::assign(slice &&src) noexcept {
   assign(src);
@@ -8599,17 +8764,11 @@ slice &slice::assign(slice &&src) noexcept {
   return *this;
 }
 
-inline slice &slice::assign(::MDBX_val &&src) {
-  assign(src.iov_base, src.iov_len);
-  src.iov_base = nullptr;
-  return *this;
-}
+inline slice &slice::assign(::MDBX_val &&src) { return assign(slice(::std::move(src))); }
 
-inline slice &slice::assign(const void *begin, const void *end) {
-  return assign(begin, static_cast<const byte *>(end) - static_cast<const byte *>(begin));
-}
+inline slice &slice::assign(const void *begin, const void *end) { return assign(slice(begin, end)); }
 
-inline slice &slice::assign(const char *c_str) { return assign(c_str, strlen(c_str)); }
+inline slice &slice::assign(const char *c_str) { return assign(slice(c_str)); }
 
 inline slice &slice::operator=(slice &&src) noexcept { return assign(::std::move(src)); }
 

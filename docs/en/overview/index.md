@@ -2,6 +2,7 @@
 
 > Related: [Installation and building](../getting-started/install-build.md) ·
 > [First steps](../getting-started/first-steps.md) · [Restrictions and gotchas](restrictions.md) ·
+> [Comparison with other databases](comparison.md) ·
 > [Architecture](../deep-dive/architecture.md) ·
 > [Textbook: Volume I "Fundamentals"](../textbook/01-tom-i-osnovy.md) ·
 > [Improvements](../deep-dive/improvements.md)

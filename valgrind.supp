@@ -534,3 +534,120 @@
    ...
    fun:iov_write*
 }
+
+# msync() flushes whole pages of the mapped datafile, including the gaps
+# between nodes inside the touched pages, which are never written/initialized.
+# Such gaps are never read back, so the valgrind's complaint about the
+# uninitialised msync() argument is a false positive.
+{
+   msync-uninit-page-holes
+   Memcheck:Param
+   msync(start)
+   ...
+   fun:osal_msync*
+}
+
+# The shell-scripted tests (the tools' golden-runners and friends) are
+# executed by bash, which is instrumented by valgrind as a traced child.
+# Bash leaks some of its own parse/execute structures at exit - not our
+# business, but such reports would fail the test.
+{
+   bash-self-leaks
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:*alloc
+   obj:/usr/bin/bash*
+   ...
+}
+
+# The shadow-pages parked in the env's shadow_reserve (an interior-pointers
+# chain) at the exit of a faulted actor, which leaves its environment open.
+{
+   faulted-actor-shadow-pages
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   fun:page_shadow_alloc*
+   ...
+}
+
+# The same shadow-pages, but for the LTO builds where the malloc() frame is
+# merged into page_shadow_alloc itself (the suppression matcher walks the
+# stack top-down, so the allocator's own frame must be pinned here).
+{
+   faulted-actor-shadow-pages-lto
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:*page_shadow_alloc*
+   ...
+}
+
+# A fork()ed child that dies by design - the crash/durability scenarios kill
+# the child while it holds an open environment, and the fork-vs-locks
+# scenarios (gh0329/gh0324) leave the child with an environment inherited
+# from the multi-threaded parent - exits while its env's basal pools are
+# still anchored: the mappings and the lck region keep interior pointers,
+# but nothing will ever run mdbx_env_close() in that process. This is the
+# scenario itself, not a leak (the same reason the smoke_fault framework
+# substitutes txn_abort for SIGKILL under Valgrind, see
+# tests/framework/test.c++). Valgrind classifies such blocks as "possibly
+# lost"; the "definitely lost" ones stay reported (and failing) as they
+# should. Two variants for the LTO/non-LTO stack shapes.
+# Accepted risk: the pattern anchors on the allocation path, not on the
+# fork context, so a hypothetical parent-side "possibly lost" leak of the
+# basal pools after mdbx_env_open() would be hidden too - the definite
+# kinds remain reported (and failing) either way.
+{
+   fork-child-drowned-env-pools
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:*alloc
+   fun:*pnl_alloc*
+   fun:txn_basal_create*
+   fun:mdbx_env_open*
+   ...
+}
+{
+   fork-child-drowned-env-pools-lto
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:*pnl_alloc*
+   fun:txn_basal_create*
+   fun:mdbx_env_open*
+   ...
+}
+
+# A fork() of a multi-threaded process inherits the live threads'
+# TLS/DTV blocks; glibc releases them only when the threads themselves
+# exit, and there are no threads in the forked child. A foreign-code
+# artifact in the bash-self-leaks sense, not our allocation. The leading
+# wildcard absorbs the allocator wrapper frames (glibc's rtld-malloc.h
+# calloc and the like) that LTO inlining adds between them.
+{
+   fork-child-inherited-tls-dtv
+   Memcheck:Leak
+   match-leak-kinds: possible
+   ...
+   fun:allocate_dtv
+   fun:_dl_allocate_tls
+   fun:allocate_stack
+   fun:pthread_create*
+}
+
+# A fork() of a multi-threaded parent racing its own churn thread (the
+# gh0329 scenario) can inherit a transiently-unanchored allocation: e.g. the
+# DBI-name clone between its malloc() (dbi.c) and the hook into
+# env->kvs[].name a few statements later. The parent owns and frees that
+# block correctly; only the fork-made copy is stranded in the dying child,
+# and a child cannot release its parent's mid-flight allocation safely.
+# This is the fork contract, not a leak. The false-negative risk (a real
+# leak of such a clone inside a forked child would be hidden) is accepted
+# for this alloc path alone.
+{
+   gh0329-fork-inherited-dbi-name-clone
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:*alloc
+   fun:*dbi_open_locked*
+   ...
+}

@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00),
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z),
  * it is the template for libmdbx's config.h
  ******************************************************************************/
 
@@ -22,6 +22,7 @@
 /* allowing override MDBX_BUILD_CXX=OFF to build the C++ API in "private" mode only for tests */
 #if !defined(MDBX_BUILD_TEST) && !defined(MDBX_BUILD_CXX)
 #cmakedefine01 MDBX_BUILD_CXX /* using MDBX_BUILD_CXX CMake's option */
+
 #endif
 
 #cmakedefine MDBX_DEBUG @MDBX_DEBUG@
@@ -109,6 +110,3 @@
 #cmakedefine MDBX_BUILD_METADATA "@MDBX_BUILD_METADATA@"
 #endif
 #cmakedefine MDBX_BUILD_SOURCERY @MDBX_BUILD_SOURCERY@
-
-/* *INDENT-ON* */
-/* clang-format on */

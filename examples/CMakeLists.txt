@@ -64,6 +64,14 @@ else()
   if(MDBX_BUILD_CXX)
     add_test(NAME c++_api COMMAND mdbx_modern_example)
   endif()
+  # Explicit ctest timeouts, ~3x the runtime in the slowest configuration
+  # (the nightly full-scope CI cells; see tests/AGENTS.md, "Test timeouts").
+  # This file also ships within the amalgamated dist (without tests/), so the
+  # values are spelled here instead of the tests/test-timeouts.cmake manifest.
+  set_tests_properties(c_api PROPERTIES TIMEOUT 30)
+  if(MDBX_BUILD_CXX)
+    set_tests_properties(c++_api PROPERTIES TIMEOUT 660)
+  endif()
 endif()
 
 #-------------------------------------------------------------------------------
@@ -90,6 +98,9 @@ function(mdbx_textbook_add_c target source)
   endif()
   if(MDBX_EXAMPLES_RUN_TESTS)
     add_test(NAME ${target} COMMAND ${target})
+    # The textbook scenarios run in well under a second on the slowest CI
+    # runner; per-example overrides follow the registrations below (~3x rule).
+    set_tests_properties(${target} PROPERTIES TIMEOUT 30)
   endif()
 endfunction()
 
@@ -109,6 +120,9 @@ function(mdbx_textbook_add_cxx target source)
   endif()
   if(MDBX_EXAMPLES_RUN_TESTS)
     add_test(NAME ${target} COMMAND ${target})
+    # The textbook scenarios run in well under a second on the slowest CI
+    # runner; per-example overrides follow the registrations below (~3x rule).
+    set_tests_properties(${target} PROPERTIES TIMEOUT 30)
   endif()
 endfunction()
 
@@ -185,7 +199,7 @@ if(MDBX_TEXTBOOK_CXX_AVAILABLE)
   # and the libmdbx include dirs (via a PRIVATE link). It is created only when
   # the textbook examples are enabled: on C++11/14 or in dist builds there is
   # nothing to precompile.
-  set(MDBX_EXAMPLES_PCH_ANCHOR_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/common/pch_anchor.cxx")
+  set(MDBX_EXAMPLES_PCH_ANCHOR_SOURCE "${CMAKE_CURRENT_SOURCE_DIR}/common/pch-anchor.c++")
   set(MDBX_EXAMPLES_PCH_HEADER "${CMAKE_CURRENT_SOURCE_DIR}/common/pch.h++")
   mdbx_add_pch_anchor(mdbx_examples_pch "${MDBX_EXAMPLES_PCH_HEADER}" "${MDBX_EXAMPLES_PCH_ANCHOR_SOURCE}"
                       CXX_STANDARD ${MDBX_CXX_STANDARD}
@@ -196,6 +210,24 @@ if(MDBX_TEXTBOOK_CXX_AVAILABLE)
     get_filename_component(name "${source}" NAME_WE)
     mdbx_textbook_add_cxx("eg_${name}" "c++/${source}")
   endforeach()
+
+  # eg_28 is the heaviest textbook scenario (~55s on the slowest CI runner,
+  # the win-cxx ARM64 debug cell): ~3x here, the helper's default 30s is not
+  # enough (see tests/AGENTS.md, "Test timeouts"). Guarded: on cross-compiled
+  # builds without an emulator (e.g. Android) the test is not registered, so
+  # the same MDBX_EXAMPLES_RUN_TESTS condition as the registrations above.
+  if(MDBX_EXAMPLES_RUN_TESTS)
+    set_tests_properties(eg_28-waf-batching PROPERTIES TIMEOUT 180)
+  endif()
+
+  # eg_26/eg_27 fork a child process, which - under Valgrind - runs as its
+  # own instrumented instance: the whole scenario there takes ~20 minutes
+  # under a loaded machine, exceeding the 30s x42 scaling. Native runtime
+  # is milliseconds, so 60s is ample (~3x).
+  if(MDBX_EXAMPLES_RUN_TESTS)
+    set_tests_properties(eg_26-two-processes PROPERTIES TIMEOUT 60)
+    set_tests_properties(eg_27-recovery PROPERTIES TIMEOUT 60)
+  endif()
 
   # Сквозной проект config-store: срезы 02–12 (C++17).
   set(MDBX_TEXTBOOK_CONFIG_STORE
@@ -226,4 +258,11 @@ endif() # NOT MDBX_AMALGAMATED_SOURCE (textbook examples not shipped in dist)
 if(UNIX)
   add_executable(pcrf_simulator c/pcrf/pcrf_simulator.c)
   target_link_libraries(pcrf_simulator ${MDBX_LIBRARY})
+endif()
+
+# Scale the examples' TIMEOUTs by the platform/configuration factor and, when
+# the memcheck runs are enabled, by the valgrind factor (see cmake/utils.cmake;
+# guarded because this file also ships within the amalgamated dist).
+if(COMMAND mdbx_scale_dir_test_timeouts)
+  mdbx_scale_dir_test_timeouts()
 endif()

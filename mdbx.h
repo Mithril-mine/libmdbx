@@ -1,4 +1,4 @@
-/** This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/** This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
 
 \file mdbx.h
 \brief The libmdbx C API header file.
@@ -116,7 +116,7 @@ are only a few cases of changing data.
 |Key exist → Delete by key                    |\ref mdbx_del() with the parameter `data = NULL`|Deletion|
 |Key exist → Delete by key with data matching check|\ref mdbx_del() with the parameter `data` filled with the value which should be match for deletion|Deletion or \ref MDBX_NOTFOUND if the value does not match|
 |Delete at the current cursor position        |\ref mdbx_cursor_del() with \ref MDBX_CURRENT flag|Deletion|
-|Extract (read & delete) value by the key     |\ref mdbx_replace() with zero flag and parameter `new_data = NULL`|Returning a deleted value|
+|Extract (read & delete) value by the key     |\ref mdbx_replace() with \ref MDBX_CURRENT and parameter `new_data = NULL`|Returning a deleted value|
 | _APPENDING_|||
 |Key is absent and new key is greater than all existing ones|\ref MDBX_APPEND|Insertion at the tail|
 |Key is absent but the new key is not greater than the last existing one|\ref MDBX_APPEND|Error \ref MDBX_EKEYMISMATCH|
@@ -139,7 +139,7 @@ as a duplicates or as like a multiple values corresponds to keys.
 |  _UPDATING_|||
 |Key is absent → Error since no such key      |\ref MDBX_CURRENT    |Error \ref MDBX_NOTFOUND|
 |Key exist, Single value → Update             |\ref MDBX_CURRENT    |Update single value    |
-|Key exist, Multiple values → Replace all values with a new one|\ref MDBX_CURRENT + \ref MDBX_ALLDUPS|Overwrite by single new value|
+|Key exist, Multiple values → Replace all values with a new one|\ref mdbx_put() with \ref MDBX_CURRENT + \ref MDBX_ALLDUPS|Overwrite by single new value|
 |Key exist, Multiple values → Error since it is unclear which of the values should be updated|\ref mdbx_put() with \ref MDBX_CURRENT|Error \ref MDBX_EMULTIVAL|
 |Key exist, Multiple values → Update particular entry of multi-value|\ref mdbx_replace() with \ref MDBX_CURRENT + \ref MDBX_NOOVERWRITE and the parameter `old_value` filled with the value that wanna to update|Update one multi-value entry|
 |Key exist, Multiple values → Update the current entry of multi-value|\ref mdbx_cursor_put() with \ref MDBX_CURRENT|Update one multi-value entry|
@@ -230,7 +230,7 @@ typedef mode_t mdbx_mode_t;
 
 /** \brief Transparent adding string literal `L` for wchar_t pathnames on Windows. */
 #if defined(_WIN32) || defined(_WIN64) || defined(_WINDOWS)
-#define MDBX_PATHNAME_T(path) L ## path
+#define MDBX_PATHNAME_T(path) L##path
 #else
 #define MDBX_PATHNAME_T(path) path
 #endif /* MDBX_PATHNAME_T */
@@ -368,10 +368,11 @@ typedef mode_t mdbx_mode_t;
 #ifndef MDBX_DEPRECATED
 #ifdef __deprecated
 #define MDBX_DEPRECATED __deprecated
-#elif defined(DOXYGEN) || ((!defined(__GNUC__) || (defined(__clang__) && __clang__ > 19) || __GNUC__ > 5) &&           \
-                           ((defined(__cplusplus) && __cplusplus >= 201403L && __has_cpp_attribute(deprecated) &&      \
-                             __has_cpp_attribute(deprecated) >= 201309L) ||                                            \
-                            (!defined(__cplusplus) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202304L)))
+#elif defined(DOXYGEN) ||                                                                                              \
+    ((!defined(__GNUC__) || (defined(__clang__) && __clang__ > 19) || __GNUC__ > 5) &&                                 \
+     ((defined(__cplusplus) && __cplusplus >= 201403L && __has_cpp_attribute(deprecated) &&                            \
+       __has_cpp_attribute(deprecated) >= 201309L) ||                                                                  \
+      (!defined(__cplusplus) && !defined(_MSC_VER) && defined(__STDC_VERSION__) && __STDC_VERSION__ >= 202304L)))
 #define MDBX_DEPRECATED [[deprecated]]
 #elif (defined(__GNUC__) && __GNUC__ > 5) ||                                                                           \
     (__has_attribute(__deprecated__) && (!defined(__GNUC__) || defined(__clang__) || __GNUC__ > 5))
@@ -1172,9 +1173,11 @@ typedef enum MDBX_env_flags {
    *
    * - with `MDBX_RDONLY` = open environment in read-only mode.
    *   MDBX supports pure read-only mode (i.e. without opening LCK-file) only
-   *   when environment directory and/or both files are not writable (and the
-   *   LCK-file may be missing). In such case allowing file(s) to be placed
-   *   on a network read-only share.
+   *   when the filesystem with the database files is mounted read-only
+   *   (and the LCK-file may be missing). A non-writable directory or files
+   *   on a writable filesystem don't give the pure read-only mode: opening
+   *   such an environment requires the LCK-file to be writable.
+   *   In such case allowing file(s) to be placed on a network read-only share.
    *
    * - without `MDBX_RDONLY` = open environment in read-write mode.
    *
@@ -1733,7 +1736,8 @@ typedef enum MDBX_put_flags {
 
   /** Has effect only for \ref MDBX_DUPSORT tables.
    * For deletion: remove all multi-values (aka duplicates) for given key.
-   * For upsertion: replace all multi-values for given key with a new one. */
+   * For upsertion: replace all multi-values for given key with a new one.
+   * Not applicable to \ref mdbx_replace() which rejects it. */
   MDBX_ALLDUPS = UINT32_C(0x80),
 
   /** For upsertion: Just reserve space for data, don't copy it.
@@ -1773,15 +1777,20 @@ typedef enum MDBX_copy_flags {
   MDBX_CP_DONT_FLUSH = 4u,
 
   /** Use read transaction parking during copying MVCC-snapshot
-   * \see mdbx_txn_park() */
+   * \see mdbx_txn_park(). In without-lck mode (e.g. for a database opened
+   * from read-only files) the parking is impossible and the throttling
+   * silently skipped. */
   MDBX_CP_THROTTLE_MVCC = 8u,
 
   /** Abort/dispose passed transaction after copy
    * \see mdbx_txn_copy2fd() \see mdbx_txn_copy2pathname() */
   MDBX_CP_DISPOSE_TXN = 16u,
 
-  /** Enable renew/restart read transaction in case it use outdated
-   * MVCC snapshot, otherwise the \ref MDBX_MVCC_RETARDED will be returned
+  /** Restart the read transaction of a copy with \ref MDBX_CP_THROTTLE_MVCC
+   * if it was ousted while parked before any data is copied; the copy then
+   * reflects the recent MVCC snapshot, and a caller's transaction is moved
+   * to it as by \ref mdbx_txn_renew(). Without this flag, or when the
+   * transaction is ousted later, \ref MDBX_OUSTED is returned.
    * \see mdbx_txn_copy2fd() \see mdbx_txn_copy2pathname() */
   MDBX_CP_RENEW_TXN = 32u,
 
@@ -1795,7 +1804,18 @@ MDBX_DEFINE_ENUM_FLAG_OPERATORS(MDBX_copy_flags)
 /** \brief Cursor operations
  * \ingroup c_cursors
  * This is the set of all operations for retrieving data using a cursor.
- * \see mdbx_cursor_get() */
+ *
+ * Every operation is accepted by \ref mdbx_cursor_get(); subsets are
+ * accepted as the `start_op`/`turn_op` arguments of \ref mdbx_cursor_scan()
+ * and the `from_op` argument of \ref mdbx_cursor_scan_from() (see the
+ * corresponding parameter docs for the acceptable values), while
+ * \ref mdbx_cursor_get_batch() supports only \ref MDBX_FIRST and
+ * \ref MDBX_NEXT.
+ *
+ * \see mdbx_cursor_get()
+ * \see mdbx_cursor_scan()
+ * \see mdbx_cursor_scan_from()
+ * \see mdbx_cursor_get_batch() */
 typedef enum MDBX_cursor_op {
   /** Position at first key/data item */
   MDBX_FIRST,
@@ -1803,19 +1823,28 @@ typedef enum MDBX_cursor_op {
   /** \ref MDBX_DUPSORT -only: Position at first data item of current key. */
   MDBX_FIRST_DUP,
 
-  /** \ref MDBX_DUPSORT -only: Position at key/data pair. */
+  /** \ref MDBX_DUPSORT -only: Position at key/data pair. Both the `key`
+   * and `data` arguments must carry the sought values, and \ref MDBX_NOTFOUND
+   * is returned when no such pair exists. */
   MDBX_GET_BOTH,
 
   /** \ref MDBX_DUPSORT -only: Position at given key and at first data greater
-   * than or equal to specified data. */
+   * than or equal to specified data. The `data` argument is updated with the
+   * value found; \ref MDBX_NOTFOUND is returned when the key is absent or
+   * has no such duplicates. */
   MDBX_GET_BOTH_RANGE,
 
-  /** Return key/data at current cursor position */
+  /** Return key/data at current cursor position, without any movement.
+   * Returns \ref MDBX_ENODATA when the cursor has no position at all
+   * (fresh or reset), and \ref MDBX_NOTFOUND when it points past the last
+   * item. Usable as the start operation of \ref mdbx_cursor_scan()
+   * to scan from the current position. */
   MDBX_GET_CURRENT,
 
-  /** \ref MDBX_DUPFIXED -only: Return up to a page of duplicate data items
-   * from current cursor position. Move cursor to prepare
-   * for \ref MDBX_NEXT_MULTIPLE. \see MDBX_SEEK_AND_GET_MULTIPLE */
+  /** \ref MDBX_DUPFIXED -only: Return a batch of up to a page of duplicate
+   * data items of the current key, from the page containing the current
+   * cursor position. Move cursor to prepare for \ref MDBX_NEXT_MULTIPLE.
+   * \see MDBX_SEEK_AND_GET_MULTIPLE */
   MDBX_GET_MULTIPLE,
 
   /** Position at last key/data item */
@@ -1847,13 +1876,18 @@ typedef enum MDBX_cursor_op {
   /** Position at last data item of previous key */
   MDBX_PREV_NODUP,
 
-  /** Position at specified key */
+  /** Position at specified key. On success the `key`/`data` arguments
+   * receive the found pair; \ref MDBX_NOTFOUND is returned when the key
+   * is absent. */
   MDBX_SET,
 
-  /** Position at specified key, return both key and data */
+  /** Position at specified key, return both key and data.
+   * \ref MDBX_NOTFOUND is returned when the key is absent. */
   MDBX_SET_KEY,
 
-  /** Position at first key greater than or equal to specified key. */
+  /** Position at first key greater than or equal to specified key.
+   * The `key` argument is updated with the key found; \ref MDBX_NOTFOUND
+   * is returned when there is no such key. */
   MDBX_SET_RANGE,
 
   /** \ref MDBX_DUPFIXED -only: Position at previous page and return up to
@@ -1889,7 +1923,11 @@ typedef enum MDBX_cursor_op {
    * \ref MDBX_NOTFOUND otherwise. */
   MDBX_SET_UPPERBOUND,
 
-  /** Doubtless cursor positioning at a specified key. */
+  /** Doubtless cursor positioning at a specified key: the cursor lands at
+   * the nearest key satisfying the requested bound (the `key`/`data`
+   * arguments receive the found pair), and these operations never fail
+   * on a missing key. \ref MDBX_NOTFOUND is returned only when no key
+   * satisfies the bound at all. */
   MDBX_TO_KEY_LESSER_THAN,
   MDBX_TO_KEY_LESSER_OR_EQUAL /** \copydoc MDBX_TO_KEY_LESSER_THAN */,
   MDBX_TO_KEY_EQUAL /** \copydoc MDBX_TO_KEY_LESSER_THAN */,
@@ -1897,7 +1935,11 @@ typedef enum MDBX_cursor_op {
   MDBX_TO_KEY_GREATER_THAN /** \copydoc MDBX_TO_KEY_LESSER_THAN */,
 
   /** Doubtless cursor positioning at a specified key-value pair
-   * for dupsort/multi-value hives. */
+   * for dupsort/multi-value hives: the exact key match is required and
+   * the `data` argument positions among the key's duplicates, then the
+   * requested bound is applied within them. As with the
+   * \ref MDBX_TO_KEY_LESSER_THAN family, \ref MDBX_NOTFOUND is returned
+   * only when no pair satisfies the bound. */
   MDBX_TO_EXACT_KEY_VALUE_LESSER_THAN,
   MDBX_TO_EXACT_KEY_VALUE_LESSER_OR_EQUAL /** \copydoc MDBX_TO_EXACT_KEY_VALUE_LESSER_THAN */,
   MDBX_TO_EXACT_KEY_VALUE_EQUAL /** \copydoc MDBX_TO_EXACT_KEY_VALUE_LESSER_THAN */,
@@ -1905,15 +1947,18 @@ typedef enum MDBX_cursor_op {
   MDBX_TO_EXACT_KEY_VALUE_GREATER_THAN /** \copydoc MDBX_TO_EXACT_KEY_VALUE_LESSER_THAN */,
 
   /** Doubtless cursor positioning at a specified key-value pair
-   * for dupsort/multi-value hives. */
+   * for dupsort/multi-value hives: unlike the
+   * \ref MDBX_TO_EXACT_KEY_VALUE_LESSER_THAN family the exact key match
+   * is not required - the bound is applied over pairs with the `data`
+   * value participating in the comparison. */
   MDBX_TO_PAIR_LESSER_THAN,
   MDBX_TO_PAIR_LESSER_OR_EQUAL /** \copydoc MDBX_TO_PAIR_LESSER_THAN */,
   MDBX_TO_PAIR_EQUAL /** \copydoc MDBX_TO_PAIR_LESSER_THAN */,
   MDBX_TO_PAIR_GREATER_OR_EQUAL /** \copydoc MDBX_TO_PAIR_LESSER_THAN */,
   MDBX_TO_PAIR_GREATER_THAN /** \copydoc MDBX_TO_PAIR_LESSER_THAN */,
 
-  /** \ref MDBX_DUPFIXED -only: Seek to given key and return up to a page of
-   * duplicate data items from current cursor position. Move cursor to prepare
+  /** \ref MDBX_DUPFIXED -only: Seek to given key and return a batch of up to
+   * a page of the duplicate data items of this key. Move cursor to prepare
    * for \ref MDBX_NEXT_MULTIPLE. \see MDBX_GET_MULTIPLE */
   MDBX_SEEK_AND_GET_MULTIPLE
 } MDBX_cursor_op;
@@ -2661,6 +2706,16 @@ LIBMDBX_API int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t opt
  *       You can try to combine the \ref MDBX_ACCEDE flag to opend a database/environment which is already
  *       used by another process(es) with unknown mode/flags.
  *
+ * \note Known limitation: do not rename/replace or restore the LCK-file of a live environment, since such
+ *       manipulation may split the coordination domain and, in a two-opener restart race, lead to two independent
+ *       environments over the same data file with concurrent write transactions (known limitation, see
+ *       [issue #485](https://github.com/Mithril-mine/libmdbx-devel/issues/485)).
+ *
+ * \note Known limitation on Windows: with \ref MDBX_RDONLY the mapping extent is fixed by the data file size
+ *       at the opening moment. If the database is grown beyond this extent, starting a read transaction may
+ *       fail with \ref MDBX_EPERM until the environment is re-opened (known limitation, see
+ *       [issue #485](https://github.com/Mithril-mine/libmdbx-devel/issues/485)).
+ *
  * If the database is already exist and parameters specified early by \ref mdbx_env_set_geometry() are incompatible
  * (i.e. for instance, different page size) then \ref mdbx_env_open() will return \ref MDBX_INCOMPATIBLE or \ref
  * MDBX_TOO_LARGE error.
@@ -2680,7 +2735,8 @@ LIBMDBX_API int mdbx_env_get_option(const MDBX_env *env, const MDBX_option_t opt
  * \retval MDBX_BUSY          The \ref MDBX_EXCLUSIVE flag was specified and the
  *                            environment is in use by another process,
  *                            or the current process tries to open environment
- *                            more than once.
+ *                            more than once, or another process holds the
+ *                            database file in the without-lck mode.
  * \retval MDBX_INCOMPATIBLE  Environment is already opened by another process,
  *                            but with different set of \ref MDBX_SAFE_NOSYNC,
  *                            \ref MDBX_UTTERLY_NOSYNC flags.
@@ -2827,6 +2883,8 @@ LIBMDBX_API int mdbx_env_deleteW(const wchar_t *pathname, MDBX_env_delete_mode_t
  *      allows copy the database without interfering with write
  *      transactions and a threat of database overflow, but at the cost
  *      that copying will be aborted to prevent such conditions.
+ *      \ref mdbx_env_copy() always applies \ref MDBX_CP_RENEW_TXN, so its
+ *      transaction ousted before any data is copied is restarted instead.
  *      \see mdbx_txn_park()
  *
  * \returns A non-zero error value on failure and 0 on success. */
@@ -2882,6 +2940,8 @@ LIBMDBX_API int mdbx_env_copy(MDBX_env *env, const char *dest, MDBX_copy_flags_t
  *      allows copy the database without interfering with write
  *      transactions and a threat of database overflow, but at the cost
  *      that copying will be aborted to prevent such conditions.
+ *      With \ref MDBX_CP_RENEW_TXN a transaction ousted before any data is
+ *      copied is restarted instead, and the recent MVCC snapshot is copied.
  *      \see mdbx_txn_park()
  *
  * \returns A non-zero error value on failure and 0 on success. */
@@ -3118,6 +3178,14 @@ typedef struct MDBX_envinfo MDBX_envinfo;
  * Otherwise, if txn is null, then stat will be populated by a snapshot from
  * the last committed write transaction, and at next time, other information
  * can be returned.
+ *
+ * For a not-yet-opened environment (i.e. \ref mdbx_env_open() has not been
+ * called or has failed) the call succeeds and reports only what is known
+ * before the open: the geometry (`mi_geo`, the limits set via
+ * \ref mdbx_env_set_geometry()), `mi_maxreaders` and `mi_dxb_pagesize`
+ * (zero if not yet determined). Everything else - including `mi_recent_txnid`,
+ * the meta-pages troika fields, `mi_bootid` and the `mi_sys_*` system
+ * information - is zeroed rather than filled with guesses.
  *
  * Legacy \ref mdbx_env_info() correspond to calling \ref mdbx_env_info_ex()
  * with the null `txn` argument.
@@ -3382,6 +3450,12 @@ LIBMDBX_INLINE_API(int, mdbx_env_close, (MDBX_env * env)) { return mdbx_env_clos
  * \note This function is not available in the Windows OS family due to the lack of process forking functionality in the
  * operating system API.
  *
+ * \note `fork()` waits (retrying) while another thread of the process opens, closes, renames or drops a table handle,
+ * resizes or pre-syncs an environment, or runs a libmdbx callback while holding a lock of one of these, so that the
+ * child does not inherit them half-done. Therefore `fork()` must not be called from any libmdbx callback (logger,
+ * panic, handle-slow-readers), and no libmdbx callback may wait for a thread that may call `fork()`: such a `fork()`
+ * keeps retrying forever.
+ *
  * Forking does not affect the state of the MDBX environment in the parent process. All transactions that were in the
  * parent process at the moment of forking will continue to be performed without interference after forking in the
  * parent process. However, in a child process, all relevant transactions are no longer valid, and an attempt to use
@@ -3525,6 +3599,19 @@ LIBMDBX_API int mdbx_env_warmup(const MDBX_env *env, const MDBX_txn *txn, MDBX_w
  * transaction running by other thread, or \ref MDBX_BUSY will be returned if
  * function called within a write transaction.
  *
+ * \note For an environment with a lock file, a runtime change of the flags
+ * defining the sync/durability mode is checked against the mode recorded
+ * in the lock file, in the same way as at \ref mdbx_env_open(). If such a
+ * change would create the mode mixing refused at \ref mdbx_env_open()
+ * and other processes are working with the database, \ref MDBX_INCOMPATIBLE
+ * is returned. Otherwise the change is applied and the recorded mode is
+ * updated, so that the open-time check of later processes accounts for
+ * runtime durability changes.
+ * Please also note, that the durable i/o paths (e.g. the write-through
+ * handles) are established at \ref mdbx_env_open() depending on the initial
+ * flags, so making an environment more durable at runtime is correct
+ * but may be less optimized than opening it with the durable flags.
+ *
  * \param [in] env      An environment handle returned
  *                      by \ref mdbx_env_create().
  * \param [in] flags    The \ref env_flags to change, bitwise OR'ed together.
@@ -3532,7 +3619,13 @@ LIBMDBX_API int mdbx_env_warmup(const MDBX_env *env, const MDBX_txn *txn, MDBX_w
  *
  * \returns A non-zero error value on failure and 0 on success,
  *          some possible errors are:
- * \retval MDBX_EINVAL  An invalid parameter was specified. */
+ * \retval MDBX_EINVAL     An invalid parameter was specified.
+ * \retval MDBX_EPERM      The specified flags cannot be changed at runtime.
+ * \retval MDBX_EACCESS    The environment is open in read-only mode.
+ * \retval MDBX_INCOMPATIBLE The requested change of the sync/durability mode
+ *                          would create the mode mixing refused at
+ *                          \ref mdbx_env_open(), while other processes
+ *                          are working with the database. */
 LIBMDBX_API int mdbx_env_set_flags(MDBX_env *env, MDBX_env_flags_t flags, bool onoff);
 
 /** \brief Get environment flags.
@@ -3706,6 +3799,9 @@ LIBMDBX_API int mdbx_env_get_fd(const MDBX_env *env, mdbx_filehandle_t *fd);
  * \ref MDBX_UNABLE_EXTEND_MAPSIZE if the new mapping size could not be applied
  * for the current process, in particular:
  *  - the address space for the larger mapping is busy;
+ *  - for \ref mdbx_env_set_geometry() only, the mapping cannot grow in place and
+ *    must not move, since a transaction of this process (a parked one included)
+ *    holds pointers into it;
  *  - on Windows, a read transaction of this process currently holds the
  *    remap-lock shared, so the mapping cannot be re-created right now. In this
  *    case the operation should simply be retried once the read transactions
@@ -3771,6 +3867,15 @@ LIBMDBX_API int mdbx_env_get_fd(const MDBX_env *env, mdbx_filehandle_t *fd);
  *                               "minimal acceptable", and negative means
  *                               "keep current or use default".
  *
+ * \note The shrinking of the database file is platform-specific: on POSIX
+ *       the file is truncated in place with the mapping kept at the same
+ *       base address, but on Windows the OS kernel is unable to shrink a
+ *       file while it is mapped (a mapped section cannot be truncated).
+ *       Therefore on Windows a shrink requires to suspend the local threads,
+ *       un-map and re-create the mapping, is deferred while readers exist,
+ *       and reports \ref MDBX_EPERM when un-mapping is not permitted
+ *       (e.g. the \ref MDBX_NOSTICKYTHREADS mode is used).
+ *
  * \returns A non-zero error value on failure and 0 on success,
  *          some possible errors are:
  * \retval MDBX_EINVAL    An invalid parameter was specified,
@@ -3788,10 +3893,12 @@ LIBMDBX_API int mdbx_env_get_fd(const MDBX_env *env, mdbx_filehandle_t *fd);
  *                        The requested geometry change needs the mapping to be
  *                        re-created, but it could not be applied right now:
  *                        either the address space for the new mapping is busy,
- *                        or a read transaction of this process holds the
- *                        remap-lock shared (Windows). Retry once the read
- *                        transactions are closed, or close and reopen the
- *                        environment.
+ *                        or the mapping cannot grow in place and must not move
+ *                        while a transaction of this process (a parked one
+ *                        included) is running, or a read transaction of this
+ *                        process holds the remap-lock shared (Windows). Retry
+ *                        once the transactions are closed, or close and reopen
+ *                        the environment.
  * \retval MDBX_EACCESS   The environment opened in read-only.
  * \retval MDBX_MAP_FULL  Specified size smaller than the space already
  *                        consumed by the environment.
@@ -4933,6 +5040,13 @@ LIBMDBX_API int mdbx_txn_reset(MDBX_txn *txn);
  * A parked transaction without "un-parking" can be aborted, reset, or restarted at any time by using
  * \ref mdbx_txn_abort(), \ref mdbx_txn_reset(), and \ref mdbx_txn_renew(), respectively.
  *
+ * \note Parking a read transaction requires the reader slot, which is created and tracked via the
+ * lock file. When the environment runs in without-lck mode (e.g. opened from read-only files), such
+ * a slot does not exist and there is nowhere to store the transaction's MVCC snapshot in a way
+ * visible outside the transaction, so parking is impossible in principle. In such a case
+ * \ref mdbx_txn_park() returns \ref MDBX_EPERM and leaves the transaction in its current working
+ * state, and \ref mdbx_txn_unpark() returns \ref MDBX_EPERM too.
+ *
  * \see mdbx_txn_unpark()
  * \see mdbx_txn_flags()
  * \see mdbx_env_set_hsr()
@@ -4944,7 +5058,9 @@ LIBMDBX_API int mdbx_txn_reset(MDBX_txn *txn);
  * \param [in] autounpark   Allows you to enable automatic un-parking/restoring of a transaction
  * when calling API functions that involve reading data.
  *
- * \returns A non-zero error value on failure and 0 on success. */
+ * \returns A non-zero error value on failure and 0 on success.
+ * \retval MDBX_EPERM  The environment runs in without-lck mode and the read transaction has no
+ *                      reader slot, so parking is impossible. */
 LIBMDBX_API int mdbx_txn_park(MDBX_txn *txn, bool autounpark);
 
 /** \brief Unparks a previously parked reading transaction.
@@ -4953,6 +5069,13 @@ LIBMDBX_API int mdbx_txn_park(MDBX_txn *txn, bool autounpark);
  * The function tries to restore a previously parked transaction. If a parked transaction has been ousted in order to
  * recycle old MVCC snapshots, then depending on the `restart_if_ousted` argument, it is restarted in the same way as
  * \ref mdbx_txn_renew(), either the transaction is reset and the error code \ref MDBX_OUSTED is returned.
+ *
+ * \note Unparking applies only to a transaction that was actually parked.
+ * When the environment runs in without-lck mode (e.g. opened from read-only
+ * files), the reader slot does not exist, parking is impossible in principle
+ * and \ref mdbx_txn_park() refuses with \ref MDBX_EPERM.
+ * \ref mdbx_txn_unpark() for a non-parked transaction is a quiet no-op and
+ * returns \ref MDBX_SUCCESS.
  *
  * \see mdbx_txn_park()
  * \see mdbx_txn_flags()
@@ -4978,7 +5101,12 @@ LIBMDBX_API int mdbx_txn_park(MDBX_txn *txn, bool autounpark);
  *                           MVCC-snapshot, since `restart_if_ousted` was set to `true`.
  *
  * \retval MDBX_BAD_TXN      The transaction has already been finished either it has not been started,
- *                           or it is not a reading transaction. */
+ *                           or it is not a reading transaction.
+ *
+ * \retval MDBX_EPERM        The environment runs in without-lck mode and the read transaction
+ *                           has no reader slot, so unparking is impossible (only possible for
+ *                           internal/legacy paths; the public API returns MDBX_SUCCESS for a
+ *                           non-parked transaction). */
 LIBMDBX_API int mdbx_txn_unpark(MDBX_txn *txn, bool restart_if_ousted);
 
 /** \brief Renew a read-only transaction.
@@ -5232,6 +5360,7 @@ MDBX_DEPRECATED LIBMDBX_API int mdbx_dbi_open_ex2(MDBX_txn *txn, const MDBX_val 
  * \ingroup c_dbi
  *
  * Renames the user's named table associated with the given DBI descriptor.
+ * Renaming to the same name is a no-op and \ref MDBX_SUCCESS is returned.
  *
  * \param [in,out] txn   A writing transaction started by \ref mdbx_txn_begin().
  *
@@ -5354,28 +5483,50 @@ MDBX_NOTHROW_CONST_FUNCTION LIBMDBX_INLINE_API(uint32_t, mdbx_key_from_int32, (c
  * \brief Key-to-Value functions to
  * \ref avoid_custom_comparators "avoid using custom comparators"
  * \see value2key
+ *
+ * \warning There is a Undefined behavior if one of arguments is invalid.
+ * In particular, each function of this group reads as many bytes from
+ * `key.iov_base` as the resulting type needs (4 or 8), and only
+ * assertion-enabled builds check that `key.iov_len` matches the key size
+ * made by the corresponding \ref value2key function.
+ *
  * @{ */
 /** \brief Get a `int64_t` JSON-number value from a 8-byte key.
+ * \warning There is a Undefined behavior if the key is invalid, i.e. its
+ * length is not the expected 8 bytes, since the conversion reads a fixed
+ * number of bytes regardless of the key's actual `iov_len`.
  * \param [in] key  The key made by \ref mdbx_key_from_jsonInteger().
  * \returns The original `int64_t` value. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int64_t mdbx_jsonInteger_from_key(const MDBX_val key);
 
 /** \brief Get a `double` value from a 8-byte key.
+ * \warning There is a Undefined behavior if the key is invalid, i.e. its
+ * length is not the expected 8 bytes, since the conversion reads a fixed
+ * number of bytes regardless of the key's actual `iov_len`.
  * \param [in] key  The key made by \ref mdbx_key_from_double().
  * \returns The original `double` value. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API double mdbx_double_from_key(const MDBX_val key);
 
 /** \brief Get a `float` value from a 4-byte key.
+ * \warning There is a Undefined behavior if the key is invalid, i.e. its
+ * length is not the expected 4 bytes, since the conversion reads a fixed
+ * number of bytes regardless of the key's actual `iov_len`.
  * \param [in] key  The key made by \ref mdbx_key_from_float().
  * \returns The original `float` value. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API float mdbx_float_from_key(const MDBX_val key);
 
 /** \brief Get a `int32_t` value from a 4-byte key.
+ * \warning There is a Undefined behavior if the key is invalid, i.e. its
+ * length is not the expected 4 bytes, since the conversion reads a fixed
+ * number of bytes regardless of the key's actual `iov_len`.
  * \param [in] key  The key made by \ref mdbx_key_from_int32().
  * \returns The original `int32_t` value. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int32_t mdbx_int32_from_key(const MDBX_val key);
 
 /** \brief Get a `int64_t` value from a 8-byte key.
+ * \warning There is a Undefined behavior if the key is invalid, i.e. its
+ * length is not the expected 8 bytes, since the conversion reads a fixed
+ * number of bytes regardless of the key's actual `iov_len`.
  * \param [in] key  The key made by \ref mdbx_key_from_int64().
  * \returns The original `int64_t` value. */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int64_t mdbx_int64_from_key(const MDBX_val key);
@@ -5897,6 +6048,12 @@ LIBMDBX_API int mdbx_put(MDBX_txn *txn, MDBX_dbi dbi, const MDBX_val *key, MDBX_
  *                           (\ref MDBX_CURRENT | \ref MDBX_NOOVERWRITE)
  *                           combination for selection particular item from
  *                           multi-value/duplicates.
+ *                           The flags are a subset of those of \ref mdbx_put():
+ *                           \ref MDBX_ALLDUPS is not applicable here and rejected
+ *                           with \ref MDBX_EINVAL, as well as \ref MDBX_APPEND
+ *                           and \ref MDBX_APPENDDUP together with
+ *                           \ref MDBX_CURRENT; the deletion (new_data = NULL)
+ *                           requires \ref MDBX_CURRENT and forbids the rest.
  *
  * \see mdbx_replace_ex()
  * \see \ref c_crud_hints "Quick reference for Insert/Update/Delete operations"
@@ -5953,6 +6110,12 @@ typedef int (*MDBX_preserve_func)(void *context, MDBX_val *target, const void *s
  *                           (\ref MDBX_CURRENT | \ref MDBX_NOOVERWRITE)
  *                           combination for selection particular item from
  *                           multi-value/duplicates.
+ *                           The flags are a subset of those of \ref mdbx_put():
+ *                           \ref MDBX_ALLDUPS is not applicable here and rejected
+ *                           with \ref MDBX_EINVAL, as well as \ref MDBX_APPEND
+ *                           and \ref MDBX_APPENDDUP together with
+ *                           \ref MDBX_CURRENT; the deletion (new_data = NULL)
+ *                           requires \ref MDBX_CURRENT and forbids the rest.
  * \param [in] preserver     The callback to preserve an original data in case
  *                           it is on a dirty page and could be overwritten.
  * \param [in] preserver_context The optional context pointer for use within the preserving callback.
@@ -6194,7 +6357,7 @@ LIBMDBX_API int mdbx_cursor_close2(MDBX_cursor *cursor);
  *
  * \warning These functions must NOT be used when the transaction is used
  * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
- * behind the wrapper's back leaves it owning a freed handle (issue #91).
+ * behind the wrapper's back leaves it owning a freed handle.
  *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()
@@ -6222,7 +6385,7 @@ LIBMDBX_API int mdbx_txn_release_all_cursors_ex(const MDBX_txn *txn, bool unbind
  *
  * \warning These functions must NOT be used when the transaction is used
  * through the C++ \ref mdbx::cursor_managed wrappers: releasing a cursor
- * behind the wrapper's back leaves it owning a freed handle (issue #91).
+ * behind the wrapper's back leaves it owning a freed handle.
  *
  * \see mdbx_cursor_unbind()
  * \see mdbx_cursor_close()
@@ -6332,6 +6495,17 @@ LIBMDBX_API int mdbx_cursor_compare(const MDBX_cursor *left, const MDBX_cursor *
  * transaction are located on a "dirty" (modified and pending to commit) pages,
  * such modification will silently accepted and likely will lead to DB and/or
  * data corruption.
+ *
+ * \note In a read-write transaction the returned values point to the pages of
+ * the database and remain valid only until the next modification of the
+ * database within this transaction: \ref mdbx_cursor_del(),
+ * \ref mdbx_cursor_put(), \ref mdbx_put(), or an update through another
+ * cursor may rewrite the underlying pages (CoW-copying, node packing and
+ * rebalancing). So the caller MUST re-retrieve or copy the values if they
+ * are needed after such modifications. For instance, reusing a \ref MDBX_val
+ * key returned by \ref mdbx_cursor_get() as the key argument of a following
+ * \ref MDBX_SET or \ref MDBX_GET_BOTH after a deletion searches for a
+ * clobbered bytes instead of the intended key.
  *
  * \param [in] cursor    A cursor handle returned by \ref mdbx_cursor_open().
  * \param [in,out] key   The key for a retrieved item.
@@ -6564,10 +6738,16 @@ LIBMDBX_API int mdbx_cursor_scan_from(MDBX_cursor *cursor, MDBX_predicate_func p
  *          some possible errors are:
  * \retval MDBX_THREAD_MISMATCH  Given transaction is not owned
  *                               by current thread.
- * \retval MDBX_NOTFOUND         No any key-value pairs are available.
- * \retval MDBX_ENODATA          The cursor is already at the end of data.
+ * \retval MDBX_SUCCESS          A chunk of key-value pairs has been returned,
+ *                               and more pairs may be available.
  * \retval MDBX_RESULT_TRUE      The returned chunk is the last one,
  *                               and there are no pairs left.
+ * \retval MDBX_NOTFOUND         No any key-value pairs are available: the
+ *                               table is empty (MDBX_FIRST), or there are no
+ *                               pairs after the cursor position (MDBX_NEXT).
+ * \retval MDBX_ENODATA          The cursor has no position to continue from,
+ *                               i.e. it has never been positioned or was reset
+ *                               (MDBX_NEXT).
  * \retval MDBX_EINVAL           An invalid parameter was specified. */
 LIBMDBX_API int mdbx_cursor_get_batch(MDBX_cursor *cursor, size_t *count, MDBX_val *pairs, size_t limit,
                                       MDBX_cursor_op op);
@@ -6661,6 +6841,14 @@ LIBMDBX_API int mdbx_cursor_put(MDBX_cursor *cursor, const MDBX_val *key, MDBX_v
  * does not invalidate the cursor, so operations such as \ref MDBX_NEXT can
  * still be used on it. Both \ref MDBX_NEXT and \ref MDBX_GET_CURRENT will
  * return the same record after this operation.
+ *
+ * \note The deletion rewrites the underlying pages (CoW-copying, node
+ * packing and rebalancing), therefore pointers to the database previously
+ * returned by \ref mdbx_cursor_get() (for this cursor or for any other
+ * cursor of the same write transaction) become stale and must not be used
+ * afterwards. In particular, an \ref MDBX_val key returned by
+ * \ref mdbx_cursor_get() must not be reused as a positioning argument
+ * without re-filling it from an application-owned buffer.
  *
  * \param [in] cursor  A cursor handle returned by mdbx_cursor_open().
  *
@@ -6928,12 +7116,21 @@ MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_eof(const MDBX_cursor *cu
  * or not.
  * \ingroup c_cursors
  *
+ * In fact, the function tells whether it makes sense to move the cursor
+ * backward: \ref MDBX_RESULT_FALSE means that there are items before the
+ * current position and moving backward is reasonable, otherwise there is
+ * no such sense.
+ *
  * \param [in] cursor    A cursor handle returned by \ref mdbx_cursor_open().
  *
  * \returns A MDBX_RESULT_TRUE or MDBX_RESULT_FALSE value,
  *          otherwise the error code.
- * \retval MDBX_RESULT_TRUE   Cursor positioned to the first key-value pair
- * \retval MDBX_RESULT_FALSE  Cursor NOT positioned to the first key-value pair
+ * \retval MDBX_RESULT_TRUE   Cursor positioned to the first key-value pair,
+ *                           or not positioned at all (e.g. the table is empty
+ *                           or the cursor has been reset), i.e. there is no
+ *                           sense to move it backward.
+ * \retval MDBX_RESULT_FALSE  Cursor NOT positioned to the first key-value
+ *                           pair, i.e. moving backward makes sense.
  * \retval OTHERWISE the error code */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_first(const MDBX_cursor *cursor);
 
@@ -6941,13 +7138,24 @@ MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_first(const MDBX_curso
  *
  * \ingroup c_cursors
  *
+ * In fact, the function tells whether it makes sense to move the cursor
+ * backward within the current key's multi-values: \ref MDBX_RESULT_FALSE
+ * means that there are multi-values before the current one and moving
+ * backward (\ref MDBX_PREV_DUP) is reasonable, otherwise there is no such
+ * sense. Always \ref MDBX_RESULT_TRUE for a table without \ref MDBX_DUPSORT.
+ *
  * \param [in] cursor    A cursor handle returned by \ref mdbx_cursor_open().
  *
  * \returns A \ref MDBX_RESULT_TRUE or \ref MDBX_RESULT_FALSE value, otherwise the error code.
  *
- * \retval MDBX_RESULT_TRUE   The cursor is positioned to the first or single multi-value corresponding to the key.
+ * \retval MDBX_RESULT_TRUE   The cursor is positioned to the first or single
+ *                           multi-value corresponding to the key, or not
+ *                           positioned at all, i.e. there is no sense to move
+ *                           it backward.
  *
- * \retval MDBX_RESULT_FALSE  The cursor is NOT positioned to the first or single multi-value corresponding to the key.
+ * \retval MDBX_RESULT_FALSE  The cursor is NOT positioned to the first or
+ *                           single multi-value corresponding to the key, i.e.
+ *                           moving backward makes sense.
  *
  * \retval OTHERWISE the error code */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_first_dup(const MDBX_cursor *cursor);
@@ -6955,24 +7163,44 @@ MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_first_dup(const MDBX_c
 /** \brief Determines whether the cursor is pointed to the last key-value pair or not.
  * \ingroup c_cursors
  *
+ * In fact, the function tells whether it makes sense to move the cursor
+ * forward: \ref MDBX_RESULT_FALSE means that there are items after the
+ * current position and moving forward is reasonable, otherwise there is
+ * no such sense.
+ *
  * \param [in] cursor    A cursor handle returned by \ref mdbx_cursor_open().
  *
  * \returns A \ref MDBX_RESULT_TRUE or \ref MDBX_RESULT_FALSE value, otherwise the error code.
- * \retval MDBX_RESULT_TRUE   Cursor positioned to the last key-value pair
- * \retval MDBX_RESULT_FALSE  Cursor NOT positioned to the last key-value pair
+ * \retval MDBX_RESULT_TRUE   Cursor positioned to the last key-value pair,
+ *                           or not positioned at all (e.g. the table is empty
+ *                           or the cursor has been reset), i.e. there is no
+ *                           sense to move it forward.
+ * \retval MDBX_RESULT_FALSE  Cursor NOT positioned to the last key-value
+ *                           pair, i.e. moving forward makes sense.
  * \retval OTHERWISE the error code */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_last(const MDBX_cursor *cursor);
 
 /** \brief Determines whether the cursor is on the last or single multi-value corresponding to the key.
  * \ingroup c_cursors
  *
+ * In fact, the function tells whether it makes sense to move the cursor
+ * forward within the current key's multi-values: \ref MDBX_RESULT_FALSE
+ * means that there are multi-values after the current one and moving
+ * forward (\ref MDBX_NEXT_DUP) is reasonable, otherwise there is no such
+ * sense. Always \ref MDBX_RESULT_TRUE for a table without \ref MDBX_DUPSORT.
+ *
  * \param [in] cursor    A cursor handle returned by \ref mdbx_cursor_open().
  *
  * \returns A \ref MDBX_RESULT_TRUE or \ref MDBX_RESULT_FALSE value, otherwise the error code.
  *
- * \retval MDBX_RESULT_TRUE   The cursor is positioned to the last or single multi-value corresponding to the key.
+ * \retval MDBX_RESULT_TRUE   The cursor is positioned to the last or single
+ *                           multi-value corresponding to the key, or not
+ *                           positioned at all, i.e. there is no sense to move
+ *                           it forward.
  *
- * \retval MDBX_RESULT_FALSE  The cursor is NOT positioned to the last or single multi-value corresponding to the key.
+ * \retval MDBX_RESULT_FALSE  The cursor is NOT positioned to the last or
+ *                           single multi-value corresponding to the key, i.e.
+ *                           moving forward makes sense.
  *
  * \retval OTHERWISE the error code */
 MDBX_NOTHROW_PURE_FUNCTION LIBMDBX_API int mdbx_cursor_on_last_dup(const MDBX_cursor *cursor);
@@ -7325,6 +7553,17 @@ LIBMDBX_API int mdbx_thread_unregister(const MDBX_env *env);
  * terminate a process or thread that is performing a long read, or perform
  * some other action. In doing so it is important that the returned code always
  * corresponds to the performed action.
+ *
+ * The callback is invoked with the write transaction lock held by the calling
+ * thread. Therefore, the callback must not call mdbx functions on the same
+ * environment (in particular, must not start or end a write transaction),
+ * otherwise:
+ *  - on POSIX.1-2001/2008 systems the recursive acquisition of the write
+ *    transaction lock fails safely with \ref MDBX_EDEADLK error;
+ *  - on POSIX.1-1988/SysV systems with semaphore-based locking such a call
+ *    hangs waiting for itself;
+ *  - on Windows the recursive acquisition likely succeeds and results in
+ *    a re-entrant entry into libmdbx.
  *
  * \param [in] env     An environment handle returned by \ref mdbx_env_create().
  * \param [in] txn     The current write transaction which internally at
@@ -7839,7 +8078,9 @@ typedef struct MDBX_chk_callbacks {
    * \returns Non-zero to break the checking. */
   bool (*check_break)(MDBX_chk_context_t *ctx);
   /** \brief Called when a new nested scope is pushed.
-   * \returns Zero on success, otherwise an error code that will be propagated. */
+   * \returns Zero on success, \ref MDBX_RESULT_TRUE to decline entering the
+   * scope (counted as a problem, the corresponding checks of the stage are
+   * skipped), otherwise an error code that will be propagated. */
   int (*scope_push)(MDBX_chk_context_t *ctx, MDBX_chk_scope_t *outer, MDBX_chk_scope_t *inner, const char *fmt,
                     va_list args);
   /** \brief Called when a nested scope is concluded before popping.
@@ -8085,7 +8326,8 @@ typedef struct MDBX_defrag_result {
   size_t pages_whole;
 
   /** The number of the page where the defragmentation stumbled,
-   *  according to the reasons given in the `stopping_reasons` field. */
+   *  according to the reasons given in the `stopping_reasons` field,
+   *  or the page that the structure of the trees keeps in place. */
   size_t obstructed_pgno;
 
   /** The length of the large/overflow-page span where the defragmentation stumbled,
@@ -8168,6 +8410,30 @@ typedef int (*MDBX_defrag_notify_func)(void *ctx, const MDBX_defrag_result_t *pr
  * committed and can be interrupted in any way while ensuring the durability of the database specified when it was
  * opened.
  *
+ * \note If a write transaction is already started by the caller for the given environment, it is adopted and the
+ * defragmentation proceeds within it. In this case each cycle ends with a checkpoint of this transaction, i.e. the
+ * caller's pending changes are committed in the middle of the defragmentation and will survive a subsequent
+ * \ref mdbx_txn_abort(). The caller's cursors are detached at such intermediate commits and a further use of ones
+ * safely returns \ref MDBX_EINVAL.
+ *
+ * Defragmentation is an alternative to making a copy of the database with compaction (mdbx_env_copy() with
+ * \ref MDBX_CP_COMPACT, mdbx_copy -c), for cases where creating a copy is unacceptable, for instance due to
+ * insufficient space. A partial defragmentation of a few cycles is relatively quick, while the complete one almost
+ * always requires more page movements and I/O operations, like sorting without using additional memory. Moreover,
+ * when large/overflow pages are present (long values stored as runs of adjacent pages), the complete defragmentation
+ * may be unattainable at a reasonable cost: relocating such a run requires preliminary forming of an adjacent free
+ * run of the same size. In such cases the defragmentation stops after a few unproductive cycles with
+ * \ref MDBX_defrag_large_chunk among the stopping_reasons, while the database stays consistent since every cycle
+ * is committed transactionally.
+ *
+ * The defragmentation may also stop because no page can be moved any more. A moving page needs a free page for itself
+ * and for a copy of each of its parents that has no new place yet, and a large page needs a run of adjacent free pages
+ * of its own length; when the free pages do not suffice for that, the structure of the trees is the limit. This is not
+ * an error: \ref MDBX_RESULT_TRUE is returned, \ref MDBX_defrag_error is not set, no reason is given in the
+ * `stopping_reasons` field (except \ref MDBX_defrag_large_chunk for large pages) and the page is named in the
+ * `obstructed_pgno` field. A copy of the database with compaction is the way to reclaim the remaining pages in this
+ * case too.
+ *
  * \param [in] env                   A pointer to an instance of environment.
  *
  * \param [in] defrag_atleast        The required at least number of pages by which the database
@@ -8191,11 +8457,17 @@ typedef int (*MDBX_defrag_notify_func)(void *ctx, const MDBX_defrag_result_t *pr
  *                                   defragment. When the specified limit is reached, defragmentation will not
  *                                   continue, but the stage of writing the moved pages that has already begun
  *                                   will be completed. Must be greater or equal to `time_atleast_dot16`.
+ *                                   The limit stops scheduling new movements; the moving phase of the current cycle
+ *                                   completes within the auto-sized batch, and the intermediate result is saved by
+ *                                   the cycle's checkpoint.
  *                                   Specify zero if in doubt or not known, this will mean no limit.
  *
  * \param [in] acceptable_backlash   Defragmentation stops if a next cycle will unable to shrink database by the
  *                                   number of pages more than the specified value. This avoids the last few
  *                                   defragmentation cycles, which do not significantly reduce the size of the database.
+ *                                   Values greater than `maxgc_large1page` (the maximum number of page-numbers that
+ *                                   fits a single GC record) are silently reduced to it, since the residual slack
+ *                                   below this threshold cannot be reclaimed by moving individual pages.
  *                                   Specify `-1` if in doubt or not known, this will mean autopilot.
  *
  * \param [in] preferred_batch       The preferred maximum number of pages to be moved per defragmentation cycle.

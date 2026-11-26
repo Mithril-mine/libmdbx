@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -70,9 +70,12 @@ static inline void tool_break_setup(void) {
 
 #endif /* IS_WINDOWS */
 
-/* Returns true if `-h` or `--help` was requested anywhere in the command
- * line, while honoring the options that consume an argument (per `optstring`),
- * so e.g. `-s --help` is NOT treated as a help request. */
+/* Returns true if `-h` or `--help` was requested in the command line before
+ * the first positional argument, while honoring the options that consume an
+ * argument (per `optstring`), so e.g. `-s --help` is NOT treated as a help
+ * request. The scan stops at the first positional like getopt() does: a `-h`
+ * after a positional is an extra operand for getopt to reject, not a help
+ * request (chk-interrupt-exit-code). */
 static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
   bool consume_next = false;
   for (int i = 1; i < argc; ++i) {
@@ -82,7 +85,7 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
     }
     const char *const arg = argv[i];
     if (arg[0] != '-' || arg[1] == '\0')
-      continue; /* positional argument */
+      break; /* the first positional: getopt stops here, so must the scan */
     if (strcmp(arg, "--") == 0)
       break; /* end of options */
     if (strcmp(arg, "--help") == 0)
@@ -158,6 +161,8 @@ MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level,
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -325,20 +330,23 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
   enum MDBX_chk_severity severity = prio + kind;
   FILE *out = prefix(severity);
   if (out) {
-    vfprintf(out, fmt, args);
-    const size_t fmt_len = strlen(fmt);
-    const bool have_lf = (fmt_len > 0 && fmt[fmt_len - 1] == '\n');
-    if (level == MDBX_LOG_FATAL && function && line) {
-      if (have_lf)
-        for (size_t i = 0; i < line_struct.scope_depth; ++i)
-          fputs("   ", out);
-      fprintf(out, have_lf ? "          %s(), %u" : " (%s:%u)", function + (strncmp(function, "mdbx_", 5) ? 0 : 5),
-              line);
-      lf();
-    } else if (have_lf) {
-      line_struct.empty = true;
-      line_struct.severity = LINE_SEVERITY_NONE;
-      line_count += 1;
+    if (fmt) {
+      vfprintf(out, fmt, args);
+      const size_t fmt_len = strlen(fmt);
+      const bool have_lf = (fmt_len > 0 && fmt[fmt_len - 1] == '\n');
+      if (level == MDBX_LOG_FATAL && function && line) {
+        if (have_lf)
+          for (size_t i = 0; i < line_struct.scope_depth; ++i)
+            fputs("   ", out);
+        fprintf(out, have_lf ? "          %s(), %u" : " (%s:%u)", function + (strncmp(function, "mdbx_", 5) ? 0 : 5),
+                line);
+        lf();
+      } else if (have_lf) {
+        line_struct.empty = true;
+        line_struct.severity = LINE_SEVERITY_NONE;
+        line_count += 1;
+      } else
+        lf();
     } else
       lf();
   }
@@ -399,14 +407,19 @@ static void scope_pop(MDBX_chk_context_t *ctx, MDBX_chk_scope_t *scope, MDBX_chk
   flush();
 }
 
+static bool table_matched;
+
 static MDBX_chk_user_table_cookie_t *table_filter(MDBX_chk_context_t *ctx, const MDBX_val *name,
                                                   MDBX_db_flags_t flags) {
   (void)ctx;
   (void)flags;
-  return (!only_table.iov_base ||
-          (only_table.iov_len == name->iov_len && memcmp(only_table.iov_base, name->iov_base, name->iov_len) == 0))
-             ? (void *)(intptr_t)-1
-             : nullptr;
+  if (!only_table.iov_base)
+    return (void *)(intptr_t)-1;
+  const bool match =
+      (only_table.iov_len == name->iov_len && memcmp_checklen(only_table.iov_base, name->iov_base, name->iov_len) == 0);
+  /* an unknown -s target must not silently pass as success */
+  table_matched |= match;
+  return match ? (void *)(intptr_t)-1 : nullptr;
 }
 
 static int stage_begin(MDBX_chk_context_t *ctx, enum MDBX_chk_stage stage) {
@@ -721,13 +734,7 @@ int main(int argc, char *argv[]) {
     rc = mdbx_env_open_for_recovery(env, db_pathname, stuck_meta, (env_flags & MDBX_RDONLY) ? false : true);
   } else {
     rc = mdbx_env_open(env, db_pathname, env_flags, 0);
-    if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY ||
-#if IS_WINDOWS
-                                         rc == ERROR_LOCK_VIOLATION || rc == ERROR_SHARING_VIOLATION
-#else
-                                         rc == EBUSY || rc == EAGAIN
-#endif
-                                         )) {
+    if ((env_flags & MDBX_EXCLUSIVE) && (rc == MDBX_BUSY || osal_is_sharing_violation_error(rc))) {
       const size_t cookie = print(MDBX_chk_resolution, "Try open in non-exclusive mode...");
       env_flags = (env_flags & ~MDBX_EXCLUSIVE) | MDBX_ACCEDE;
       rc = mdbx_env_open(env, db_pathname, env_flags, 0);
@@ -762,6 +769,12 @@ int main(int argc, char *argv[]) {
       rc = 0;
   }
 
+  if (only_table.iov_base && !table_matched) {
+    /* a mistyped -s target must not silently "check nothing" */
+    error_fmt("table `%.*s` is not found.", (int)only_table.iov_len, (char *)only_table.iov_base);
+    rc = MDBX_NOTFOUND;
+  }
+
 bailout:
   if (env) {
     const bool dont_sync = rc != 0 || chk.result.total_problems || (chk_flags & MDBX_CHK_READWRITE) == 0;
@@ -769,8 +782,13 @@ bailout:
   }
   flush();
   if (rc) {
+    /* an interruption must win over the error-code mapping: every mdbx
+     * error is negative, so MDBX_EINTR from a signal used to fall through
+     * to EXIT_FAILURE_MDBX and EXIT_INTERRUPTED was unreachable (chk-interrupt-exit-code) */
+    if (user_break)
+      return EXIT_INTERRUPTED;
     if (rc > 0)
-      return user_break ? EXIT_INTERRUPTED : EXIT_FAILURE_SYS;
+      return EXIT_FAILURE_SYS;
     return EXIT_FAILURE_MDBX;
   }
 

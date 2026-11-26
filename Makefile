@@ -8,7 +8,7 @@ libmdbx mdbx mdbx_chk mdbx_copy mdbx_drop mdbx_dump mdbx_load mdbx_stat mdbx_def
 check dist memcheck cross-gcc cross-qemu gcc-analyzer reformat docsite test-doxygen books \
 release-assets tags build-test mdbx_test \
 smoke smoke-fault smoke-singleprocess smoke-assertion smoke-memcheck \
-test test-assertion test-long test-long-assertion test-ci test-ci-extra \
+test test-assertion test-assertions test-long test-long-assertion test-ci test-ci-extra \
 test-asan test-leak test-singleprocess test-ubsan test-memcheck:
 	@CC=$(CC) \
 	CXX=`if test -n "$(CXX)" && which "$(CXX)" > /dev/null; then echo "$(CXX)"; elif test -n "$(CCC)" && which "$(CCC)" > /dev/null; then echo "$(CCC)"; else echo "c++"; fi` \

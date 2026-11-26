@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -70,9 +70,12 @@ static inline void tool_break_setup(void) {
 
 #endif /* IS_WINDOWS */
 
-/* Returns true if `-h` or `--help` was requested anywhere in the command
- * line, while honoring the options that consume an argument (per `optstring`),
- * so e.g. `-s --help` is NOT treated as a help request. */
+/* Returns true if `-h` or `--help` was requested in the command line before
+ * the first positional argument, while honoring the options that consume an
+ * argument (per `optstring`), so e.g. `-s --help` is NOT treated as a help
+ * request. The scan stops at the first positional like getopt() does: a `-h`
+ * after a positional is an extra operand for getopt to reject, not a help
+ * request (chk-interrupt-exit-code). */
 static inline bool tool_help_requested(int argc, char *const argv[], const char *optstring) {
   bool consume_next = false;
   for (int i = 1; i < argc; ++i) {
@@ -82,7 +85,7 @@ static inline bool tool_help_requested(int argc, char *const argv[], const char 
     }
     const char *const arg = argv[i];
     if (arg[0] != '-' || arg[1] == '\0')
-      continue; /* positional argument */
+      break; /* the first positional: getopt stops here, so must the scan */
     if (strcmp(arg, "--") == 0)
       break; /* end of options */
     if (strcmp(arg, "--help") == 0)
@@ -158,6 +161,8 @@ MDBX_MAYBE_UNUSED static inline void tool_logger_default(MDBX_log_level_t level,
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -487,6 +492,10 @@ int main(int argc, char *argv[]) {
       } else
         printf("  No stale readers.\n");
     }
+    if (rc == MDBX_RESULT_TRUE)
+      /* "Reader Table is absent"/"Now Reader Table is empty" are informational
+       * outcomes, not failures: RESULT_TRUE must not reach the exit code (stat-readers-lckless-exit-codes) */
+      rc = MDBX_SUCCESS;
     if (!(table || alltbl || show_gc))
       goto txn_abort;
   }
@@ -498,6 +507,9 @@ int main(int argc, char *argv[]) {
     rc = mdbx_gc_info(txn, &info, sizeof(info), gc_list_func, nullptr);
 
     switch (rc) {
+    case MDBX_NOTFOUND /* the GC is empty, the info is filled */:
+      rc = MDBX_SUCCESS;
+      break;
     case MDBX_SUCCESS:
       break;
     case MDBX_EINTR:

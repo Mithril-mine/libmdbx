@@ -2,6 +2,7 @@
 
 > Смежные материалы: [Установка и сборка](../getting-started/install-build.md) ·
 > [Первые шаги](../getting-started/first-steps.md) · [Ограничения и подводные камни](restrictions.md) ·
+> [Сравнение с другими СУБД](comparison.md) ·
 > [Архитектура](../deep-dive/architecture.md) ·
 > [Учебник: Том I «Основы»](../textbook/01-tom-i-osnovy.md) ·
 > [Improvements](../deep-dive/improvements.md)

@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.15.0-334-gb8f2dad5 at 2026-10-29T00:17:01+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.15.0-722-g1b4977460 at 2026-11-26T20:29:48Z).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -25,6 +25,19 @@
 /*----------------------------------------------------------------------------*/
 
 #include "mdbx-internals.h"
+
+#if IS_WINDOWS
+/* The POSIX errno/E*-macros poison (the dev-tree tripwire against using
+ * POSIX codes outside OSAL) is pushed HERE, in the library-internal entry
+ * header, and NOT in essentials.h: essentials is also included by the
+ * library's consumers (tests, tools, examples) together with the STL and
+ * other non-library headers, which the poison would break. Everything
+ * that includes internals.h is library code, for which the poison is
+ * intended; a consumer-side unit (e.g. the C++ API in mdbx.c++ or a
+ * white-box test) pops the macros right before its non-library headers.
+ * The amalgamated (dist) sources carry no poison at all: the dist rules
+ * strip the push/pop include lines. */
+#endif /* Windows */
 
 #ifdef _MSC_VER
 #pragma warning(push, 1)
@@ -328,134 +341,6 @@ MDBX_MAYBE_UNUSED static inline void poke_pgno(void *const __restrict ptr, const
     memcpy(ptr, &pgno, sizeof(pgno));
 }
 
-#if IS_WINDOWS
-
-typedef union osal_srwlock {
-  __anonymous_struct_extension__ struct {
-    long volatile readerCount;
-    long volatile writerCount;
-  };
-  RTL_SRWLOCK native;
-} osal_srwlock_t;
-
-typedef void(WINAPI *osal_srwlock_t_function)(osal_srwlock_t *);
-typedef BOOLEAN(WINAPI *osal_srwlock_t_try_function)(osal_srwlock_t *);
-
-#if _WIN32_WINNT < 0x0600 /* prior to Windows Vista */
-typedef enum _FILE_INFO_BY_HANDLE_CLASS {
-  FileBasicInfo,
-  FileStandardInfo,
-  FileNameInfo,
-  FileRenameInfo,
-  FileDispositionInfo,
-  FileAllocationInfo,
-  FileEndOfFileInfo,
-  FileStreamInfo,
-  FileCompressionInfo,
-  FileAttributeTagInfo,
-  FileIdBothDirectoryInfo,
-  FileIdBothDirectoryRestartInfo,
-  FileIoPriorityHintInfo,
-  FileRemoteProtocolInfo,
-  MaximumFileInfoByHandleClass
-} FILE_INFO_BY_HANDLE_CLASS,
-    *PFILE_INFO_BY_HANDLE_CLASS;
-
-typedef struct _FILE_END_OF_FILE_INFO {
-  LARGE_INTEGER EndOfFile;
-} FILE_END_OF_FILE_INFO, *PFILE_END_OF_FILE_INFO;
-
-#define REMOTE_PROTOCOL_INFO_FLAG_LOOPBACK 0x00000001
-#define REMOTE_PROTOCOL_INFO_FLAG_OFFLINE 0x00000002
-
-typedef struct _FILE_REMOTE_PROTOCOL_INFO {
-  USHORT StructureVersion;
-  USHORT StructureSize;
-  DWORD Protocol;
-  USHORT ProtocolMajorVersion;
-  USHORT ProtocolMinorVersion;
-  USHORT ProtocolRevision;
-  USHORT Reserved;
-  DWORD Flags;
-  struct {
-    DWORD Reserved[8];
-  } GenericReserved;
-  struct {
-    DWORD Reserved[16];
-  } ProtocolSpecificReserved;
-} FILE_REMOTE_PROTOCOL_INFO, *PFILE_REMOTE_PROTOCOL_INFO;
-
-#endif /* _WIN32_WINNT < 0x0600 (prior to Windows Vista) */
-
-typedef BOOL(WINAPI *MDBX_GetFileInformationByHandleEx)(_In_ HANDLE hFile,
-                                                        _In_ FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
-                                                        _Out_ LPVOID lpFileInformation, _In_ DWORD dwBufferSize);
-
-typedef BOOL(WINAPI *MDBX_GetVolumeInformationByHandleW)(
-    _In_ HANDLE hFile, _Out_opt_ LPWSTR lpVolumeNameBuffer, _In_ DWORD nVolumeNameSize,
-    _Out_opt_ LPDWORD lpVolumeSerialNumber, _Out_opt_ LPDWORD lpMaximumComponentLength,
-    _Out_opt_ LPDWORD lpFileSystemFlags, _Out_opt_ LPWSTR lpFileSystemNameBuffer, _In_ DWORD nFileSystemNameSize);
-
-typedef DWORD(WINAPI *MDBX_GetFinalPathNameByHandleW)(_In_ HANDLE hFile, _Out_ LPWSTR lpszFilePath,
-                                                      _In_ DWORD cchFilePath, _In_ DWORD dwFlags);
-
-typedef BOOL(WINAPI *MDBX_SetFileInformationByHandle)(_In_ HANDLE hFile,
-                                                      _In_ FILE_INFO_BY_HANDLE_CLASS FileInformationClass,
-                                                      _Out_ LPVOID lpFileInformation, _In_ DWORD dwBufferSize);
-
-typedef NTSTATUS(NTAPI *MDBX_NtFsControlFile)(IN HANDLE FileHandle, IN OUT HANDLE Event,
-                                              IN OUT PVOID /* PIO_APC_ROUTINE */ ApcRoutine, IN OUT PVOID ApcContext,
-                                              OUT PIO_STATUS_BLOCK IoStatusBlock, IN ULONG FsControlCode,
-                                              IN OUT PVOID InputBuffer, IN ULONG InputBufferLength,
-                                              OUT OPTIONAL PVOID OutputBuffer, IN ULONG OutputBufferLength);
-
-typedef uint64_t(WINAPI *MDBX_GetTickCount64)(void);
-
-#if !defined(_WIN32_WINNT_WIN8) || _WIN32_WINNT < _WIN32_WINNT_WIN8
-typedef struct _WIN32_MEMORY_RANGE_ENTRY {
-  PVOID VirtualAddress;
-  SIZE_T NumberOfBytes;
-} WIN32_MEMORY_RANGE_ENTRY, *PWIN32_MEMORY_RANGE_ENTRY;
-#endif /* Windows 8.x */
-
-typedef BOOL(WINAPI *MDBX_PrefetchVirtualMemory)(HANDLE hProcess, ULONG_PTR NumberOfEntries,
-                                                 PWIN32_MEMORY_RANGE_ENTRY VirtualAddresses, ULONG Flags);
-
-typedef enum _SECTION_INHERIT { ViewShare = 1, ViewUnmap = 2 } SECTION_INHERIT;
-
-typedef NTSTATUS(NTAPI *MDBX_NtExtendSection)(IN HANDLE SectionHandle, IN PLARGE_INTEGER NewSectionSize);
-
-typedef LSTATUS(WINAPI *MDBX_RegGetValueA)(HKEY hkey, LPCSTR lpSubKey, LPCSTR lpValue, DWORD dwFlags, LPDWORD pdwType,
-                                           PVOID pvData, LPDWORD pcbData);
-
-typedef long(WINAPI *MDBX_CoCreateGuid)(bin128_t *guid);
-
-NTSYSAPI ULONG RtlRandomEx(PULONG Seed);
-
-typedef BOOL(WINAPI *MDBX_SetFileIoOverlappedRange)(HANDLE FileHandle, PUCHAR OverlappedRangeStart, ULONG Length);
-
-struct libmdbx_imports {
-  osal_srwlock_t_function srwl_Init;
-  osal_srwlock_t_function srwl_AcquireShared;
-  osal_srwlock_t_function srwl_ReleaseShared;
-  osal_srwlock_t_function srwl_AcquireExclusive;
-  osal_srwlock_t_function srwl_ReleaseExclusive;
-  osal_srwlock_t_try_function srwl_TryAcquireExclusive;
-  MDBX_NtExtendSection NtExtendSection;
-  MDBX_GetFileInformationByHandleEx GetFileInformationByHandleEx;
-  MDBX_GetVolumeInformationByHandleW GetVolumeInformationByHandleW;
-  MDBX_GetFinalPathNameByHandleW GetFinalPathNameByHandleW;
-  MDBX_SetFileInformationByHandle SetFileInformationByHandle;
-  MDBX_NtFsControlFile NtFsControlFile;
-  MDBX_PrefetchVirtualMemory PrefetchVirtualMemory;
-  MDBX_GetTickCount64 GetTickCount64;
-  MDBX_RegGetValueA RegGetValueA;
-  MDBX_SetFileIoOverlappedRange SetFileIoOverlappedRange;
-  MDBX_CoCreateGuid CoCreateGuid;
-};
-
-#endif /* Windows */
-
 enum signatures {
   env_signature = INT32_C(0x1A899641),
   txn_signature = INT32_C(0x13D53A31),
@@ -572,21 +457,28 @@ enum dbi_state {
 
 enum txn_flags {
   txn_ro_flat = MDBX_TXN_RDONLY,
-  txn_ro_nested = UINT32_C(0x0800),
+  txn_parked = MDBX_TXN_PARKED,
+  txn_shrink_allowed = UINT32_C(0x200),
+  txn_unmap_allowed = UINT32_C(0x400),
+  txn_mapmove_allowed = UINT32_C(0x800),
+  /* The transaction may unmap/remap the database mapping (possibly with an
+   * address change) for resize; see dxb_resize()/osal_mresize(). */
+  txn_unmap_or_move_allowed = txn_unmap_allowed | txn_mapmove_allowed,
+  txn_ro_nested = UINT32_C(0x1000),
   txn_ro_both = txn_ro_flat | txn_ro_nested,
+  txn_gc_drained = UINT32_C(0x02000000) /* GC was depleted up to oldest reader */,
+  txn_nipped = UINT32_C(0x04000000),
+  txn_may_have_cursors = UINT32_C(0x08000000),
+  txn_remap_locked = UINT32_C(0x20000000),
   txn_ro_begin_flags = MDBX_TXN_RDONLY | MDBX_TXN_RDONLY_PREPARE,
   txn_rw_begin_flags = MDBX_TXN_NOMETASYNC | MDBX_TXN_NOSYNC | MDBX_TXN_TRY,
   txn_rw_already_locked = MDBX_TXN_RDONLY_PREPARE & ~MDBX_TXN_RDONLY,
-  txn_nipped = UINT32_C(0x1000),
-  /* The transaction may unmap/remap the database mapping (possibly with an
-   * address change) for resize; see dxb_resize()/osal_mresize(). */
-  txn_unmap_allowed = UINT32_C(0x40000000),
-  txn_parked = MDBX_TXN_PARKED,
-  txn_gc_drained = 0x100 /* GC was depleted up to oldest reader */,
-  txn_may_have_cursors = 0x400,
+  txn_mresize_flags = txn_shrink_allowed | txn_unmap_allowed | txn_mapmove_allowed | txn_remap_locked,
   txn_state_flags = MDBX_TXN_FINISHED | MDBX_TXN_ERROR | MDBX_TXN_DIRTY | MDBX_TXN_SPILLS | MDBX_TXN_HAS_CHILD |
                     MDBX_TXN_INVALID | txn_gc_drained
 };
+
+struct dbi_rename_undo;
 
 /* A database transaction.
  * Every operation requires a transaction handle. */
@@ -625,6 +517,10 @@ struct MDBX_txn {
   /* Массив с головами односвязных списков отслеживания курсоров. */
   MDBX_cursor **cursors;
 
+  /* Отложенный undo переименований таблиц, выполненных в этой транзакции
+     (см. dbi_rename_undo_t в dbi.c). */
+  struct dbi_rename_undo *dbi_rename_undo;
+
   /* "Канареечные" маркеры/счетчики */
   MDBX_canary canary;
 
@@ -640,6 +536,12 @@ struct MDBX_txn {
     struct {
       /* For read txns: This thread/txn's slot table slot, or nullptr. */
       reader_slot_t *slot;
+      /* The mapped database body base as seen by this transaction: saved at
+       * start, checked at unpark to detect a mapping move while parked, when
+       * the held pointers become stale. The per-transaction
+       * base for forming page addresses is the subject of the refactoring
+       *. */
+      void *base;
     } ro;
     struct {
       troika_t troika;
@@ -651,7 +553,12 @@ struct MDBX_txn {
         rkl_t comeback;    /* The list of ids of records returned into GC during commit, etc */
       } gc;
       bool prefault_write_activated;
-      pgno_t loose_refund_wl /* FIXME: describe */;
+      /* Loose-refund waterline: the topmost extent of the loose pages list
+       * (max loose pgno + 2) since the last refund. A waterline above
+       * the first_unallocated edge means there are loose pages at/near
+       * the edge which refund_loose() may return to shrink the geometry.
+       * Consulted by txn_refund() and gc_alloc_single(). */
+      pgno_t loose_refund_wl;
       /* a sequence to spilling dirty page with LRU policy */
       unsigned dirtylru;
       /* dirtylist room: Dirty array size - dirty pages visible to this txn.
@@ -824,7 +731,12 @@ enum env_flags {
   ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS,
   /* A flag for checking any non-synchronous mode. The MDBX_SAFE_NOSYNC bit is sufficient here,
    * since it is included in MDBX_UTTERLY_NOSYNC. */
-  ENV_UNSYNC = MDBX_SAFE_NOSYNC
+  ENV_UNSYNC = MDBX_SAFE_NOSYNC,
+  /* The (non-)durability mode flags recorded in lck->envmode. */
+  ENV_DURABILITY_FLAGS = MDBX_SAFE_NOSYNC | MDBX_UTTERLY_NOSYNC | MDBX_NOMETASYNC,
+  /* The mode flags recorded in lck->envmode by the first process
+   * that opened the database for writing. */
+  ENV_MODE_FLAGS = ENV_DURABILITY_FLAGS | MDBX_LIFORECLAIM | MDBX_NORDAHEAD | MDBX_RDONLY | MDBX_WRITEMAP
 };
 
 /* The database environment. */
@@ -842,6 +754,9 @@ struct MDBX_env {
 #endif                  /* Windows */
   osal_mmap_t lck_mmap; /* The lock file */
   lck_t *lck;
+  /* The cached identities of the opened files: used by the
+   * neighbors-check in lck_setup(), which requires no opening of the lck-file. */
+  osal_fileid_t lck_fileid, dxb_fileid;
 
   uint16_t leaf_nodemax;   /* max size of a leaf-node */
   uint16_t branch_nodemax; /* max size of a branch-node */
@@ -887,7 +802,7 @@ struct MDBX_env {
     uint16_t split_reserve_dot16;
     /* Minimal period between attempts to shrink the datafile, in monotonic
      * units (see osal_monotime()); zero means no throttling. Affects the
-     * current process only (issue #170). */
+     * current process only. */
     uint64_t shrink_retry_period;
 #if !IS_WINDOWS
     unsigned writethrough_threshold;
@@ -966,12 +881,12 @@ struct MDBX_env {
 
 #if IS_WINDOWS
   /* Monotonic timestamp of the last datafile-shrink attempt, for the
-   * per-process throttling of shrink-through-un-map (issue #170). Kept here
+   * per-process throttling of shrink-through-un-map. Kept here
    * (a per-process field) rather than in the shared lck_t, so no lock-file
    * format/version change is required. */
   uint64_t shrink_last_attempt;
   osal_srwlock_t remap_lock;
-  /* Leaf lock serializing concurrent resizers (issue #154). remap_lock is now
+  /* Leaf lock serializing concurrent resizers. remap_lock is now
    * taken shared for a plain grow, so two growers (a read txn noticing the file
    * grew by another process, and the writer growing it) could otherwise mutate
    * env->dxb_mmap and call NtExtendSection() concurrently. This mutex makes
@@ -1031,8 +946,18 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 
   STATIC_ASSERT_MSG((txn_state_flags & (txn_rw_begin_flags | txn_ro_begin_flags)) == 0,
                     "Oops, some txn flags overlapped or wrong");
-  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_unmap_allowed) == 0,
-                    "Oops, some txn flags overlapped or wrong");
+  /* The mresize request bits travel within the txn-flags space and are mixed with the env-flags when passed to
+   * dxb_resize()/osal_mresize(), so any overlap would corrupt one flags-domain through another (historically
+   * txn_unmap_allowed collided with MDBX_ACCEDE this way). The explicit (unsigned) casts keep MSVC happy with
+   * the mixed signed/unsigned enum arithmetics. */
+  STATIC_ASSERT_MSG(
+      ((unsigned)txn_mresize_flags &
+       (unsigned)(txn_state_flags | txn_rw_begin_flags | txn_ro_begin_flags | txn_ro_nested | txn_may_have_cursors |
+                  txn_nipped | txn_parked | MDBX_TXN_AUTOUNPARK | MDBX_TXN_OUSTED | MDBX_TXN_TRY)) == 0,
+      "Oops, the mresize request bits overlap another txn-flags domain");
+  STATIC_ASSERT_MSG(((unsigned)txn_mresize_flags &
+                     (unsigned)(MDBX_RDONLY | MDBX_WRITEMAP | MDBX_UTTERLY_NOSYNC | MDBX_NOSTICKYTHREADS)) == 0,
+                    "Oops, the mresize request bits overlap the env-flags mixed into mresize_flags");
 
   STATIC_ASSERT(sizeof(reader_slot_t) == 32);
 #if MDBX_LOCKING > 0
@@ -1058,8 +983,6 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 }
 #endif /* Disabled for MSVC 19.0 (VisualStudio 2015) */
 
-/******************************************************************************/
-
 #ifdef _MSC_VER
 #pragma warning(pop)
 #endif /* MSVC */
@@ -1077,6 +1000,9 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 #define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING
 #endif /* #define _SILENCE_EXPERIMENTAL_FILESYSTEM_DEPRECATION_WARNING */
 #endif /* _MSC_VER */
+
+#if IS_WINDOWS
+#endif /* Windows */
 
 #include "mdbx.h++"
 
@@ -1485,10 +1411,13 @@ __cold void error::throw_exception() const {
 //------------------------------------------------------------------------------
 
 bool slice::is_printable(bool disable_utf8) const noexcept {
+  /* The tag respacing keeps the ASCII-mode test `((P_ | X_) & map[c]) == 0`
+   * exact: the length-lead tags (2..4) << LS occupy bits 5 and above, whereas
+   * P_ and X_ sit at bits 4 and 3, i.e. never alias the lead tags. */
   enum : byte {
-    LS = 4,                // shift for UTF8 sequence length
-    P_ = 1 << LS,          // printable ASCII flag
-    X_ = 1 << (LS - 1),    // printable extended ASCII flag
+    LS = 5,                // shift for UTF8 sequence length
+    P_ = 1 << (LS - 1),    // printable ASCII flag
+    X_ = 1 << (LS - 2),    // printable extended ASCII flag
     N_ = 0,                // non-printable ASCII
     r80_BF = 0,            // flag for UTF8 2nd byte range
     rA0_BF = 1,            // flag for UTF8 2nd byte range
@@ -1511,6 +1440,14 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
     F1 = 4 << LS | r80_BF, // U+040000..U+0FFFFF | F1..F3 | 80..BF | 80..BF |...
     F4 = 4 << LS | r80_8F, // U+100000..U+10FFFF | F4     | 80..8F | 80..BF |...
   };
+
+  /* the ASCII-mode mask must not alias any of the UTF8 length-lead tags,
+   * including their second-byte range flags, and vice versa the dispatch
+   * below separates N_, X_ and P_ by the shift (LS - 2) */
+  static_assert(((P_ | X_) & (2 << LS | 3 << LS | 4 << LS)) == 0 && ((P_ | X_) & second_range_mask) == 0 &&
+                    (P_ >> (LS - 2)) == 2 && (X_ >> (LS - 2)) == 1 && ((2 << LS) >> (LS - 2)) == 2 * 4 &&
+                    ((3 << LS) >> (LS - 2)) == 3 * 4 && ((4 << LS) >> (LS - 2)) == 4 * 4 && F4 <= 255,
+                "is_printable() tag encoding is broken");
 
   static const byte range_from[] = {0x80, 0xA0, 0x80, 0x90, 0x80};
   static const byte range_to[] = {0xBF, 0xBF, 0x9F, 0xBF, 0x8F};
@@ -1552,20 +1489,20 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
     const auto bits = map[*src];
     const auto second_from = range_from[bits & second_range_mask];
     const auto second_to = range_to[bits & second_range_mask];
-    switch (bits >> LS) {
+    switch (bits >> (LS - 2)) {
     default:
       MDBX_CXX20_UNLIKELY return false;
-    case 1:
+    case P_ >> (LS - 2): /* single-byte printable ASCII */
       src += 1;
       continue;
-    case 2:
+    case 2 << 2: /* 2-byte sequence lead, C2..DF */
       if (MDBX_UNLIKELY(src + 1 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
         MDBX_CXX20_UNLIKELY return false;
       src += 2;
       continue;
-    case 3:
+    case 3 << 2: /* 3-byte sequence lead, E0..EF */
       if (MDBX_UNLIKELY(src + 2 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
@@ -1574,7 +1511,7 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
         MDBX_CXX20_UNLIKELY return false;
       src += 3;
       continue;
-    case 4:
+    case 4 << 2: /* 4-byte sequence lead, F0..F4 */
       if (MDBX_UNLIKELY(src + 3 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
@@ -2012,20 +1949,23 @@ char *from_base58::write_bytes(char *__restrict const dest, size_t dest_size) co
   }
 
   b58_buffer buf(end - begin, 47, 64);
-  auto slice = b58_decode(buf, begin, end, ignore_spaces);
-  memcpy(ptr, slice.data(), slice.length());
-  return ptr + slice.length();
+  const auto decoded = b58_decode(buf, begin, end, ignore_spaces);
+  memcpy(ptr, decoded.data(), decoded.length());
+  ptr += decoded.length();
+  return ptr;
 }
 
 bool from_base58::is_erroneous() const noexcept {
+  bool got = false;
   auto begin = source.byte_ptr();
   auto const end = source.end_byte_ptr();
   while (begin < end) {
-    if (MDBX_UNLIKELY(b58_map[*begin] < 0 && !(ignore_spaces && isspace(*begin))))
-      return true;
-    ++begin;
+    const auto value = b58_map[*begin++];
+    got |= value >= 0;
+    if (MDBX_UNLIKELY(value < 0 && !(ignore_spaces && isspace(begin[-1]))))
+      MDBX_CXX20_UNLIKELY return true;
   }
-  return false;
+  return !got;
 }
 
 //------------------------------------------------------------------------------
@@ -2318,7 +2258,7 @@ env::reclaiming_options::reclaiming_options(MDBX_env_flags_t flags) noexcept
     : lifo((flags & MDBX_LIFORECLAIM) ? true : false) {}
 
 env::operate_options::operate_options(MDBX_env_flags_t flags) noexcept
-    : no_sticky_threads(((flags & (MDBX_NOSTICKYTHREADS | MDBX_EXCLUSIVE)) == MDBX_NOSTICKYTHREADS) ? true : false),
+    : no_sticky_threads((flags & MDBX_NOSTICKYTHREADS) ? true : false),
       nested_transactions((flags & (MDBX_WRITEMAP | MDBX_RDONLY)) ? false : true),
       exclusive((flags & MDBX_EXCLUSIVE) ? true : false), disable_readahead((flags & MDBX_NORDAHEAD) ? true : false),
       disable_clear_memory((flags & MDBX_NOMEMINIT) ? true : false),
@@ -2418,7 +2358,7 @@ env_managed &env_managed::operator=(env_managed &&other) noexcept {
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
         /* best-effort release: never throw from a noexcept move-assignment
-         * (issue #60) */
+         * */
         (void)::mdbx_env_close(handle_);
       }
     inherited::operator=(static_cast<env &&>(std::move(other)));
@@ -2428,7 +2368,7 @@ env_managed &env_managed::operator=(env_managed &&other) noexcept {
 
 __cold env_managed::~env_managed() {
   if (MDBX_UNLIKELY(handle_))
-    /* best-effort release: never throw from a destructor (issue #60) */
+    /* best-effort release: never throw from a destructor */
     (void)::mdbx_env_close(handle_);
 }
 
@@ -2441,7 +2381,7 @@ __cold void env_managed::close(bool dont_sync) {
     return;
   case MDBX_BUSY:
     /* the environment is not released on MDBX_BUSY: keep the handle valid
-     * so a retry from the owner thread is possible (issue #60) */
+     * so a retry from the owner thread is possible */
     MDBX_CXX20_UNLIKELY rc.throw_exception();
     return;
   case MDBX_SUCCESS:
@@ -2451,7 +2391,7 @@ __cold void env_managed::close(bool dont_sync) {
     /* mdbx_env_close_ex() releases the environment on every path after the
      * signature CAS, including error returns from sync/fstat or env_close():
      * null the handle before throwing to keep the destructor from re-entering
-     * the freed object (issue #60) */
+     * the freed object */
     MDBX_CXX20_UNLIKELY handle_ = nullptr;
     MDBX_CXX20_UNLIKELY rc.throw_exception();
   }
@@ -2589,7 +2529,7 @@ cursor_managed &cursor_managed::operator=(cursor_managed &&other) noexcept {
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
         /* best-effort release: never throw from a noexcept move-assignment
-         * (issue #60) */
+         * */
         (void)::mdbx_cursor_close2(handle_);
       }
     inherited::operator=(static_cast<cursor &&>(std::move(other)));
@@ -2599,7 +2539,7 @@ cursor_managed &cursor_managed::operator=(cursor_managed &&other) noexcept {
 
 cursor_managed::~cursor_managed() {
   if (handle_)
-    /* best-effort release: never throw from a destructor (issue #60) */
+    /* best-effort release: never throw from a destructor */
     (void)::mdbx_cursor_close2(handle_);
 }
 
@@ -2622,7 +2562,7 @@ txn_managed &txn_managed::operator=(txn_managed &&other) noexcept {
       MDBX_CXX20_UNLIKELY {
         assert(handle_ != other.handle_);
         /* best-effort release: never throw from a noexcept move-assignment
-         * (issue #60) */
+         * */
         (void)::mdbx_txn_abort(handle_);
       }
     inherited::operator=(static_cast<txn &&>(std::move(other)));
@@ -2632,7 +2572,7 @@ txn_managed &txn_managed::operator=(txn_managed &&other) noexcept {
 
 txn_managed::~txn_managed() {
   if (MDBX_UNLIKELY(handle_))
-    /* best-effort release: never throw from a destructor (issue #60) */
+    /* best-effort release: never throw from a destructor */
     (void)::mdbx_txn_abort(handle_);
 }
 

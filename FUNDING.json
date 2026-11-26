@@ -1,0 +1,13 @@
+{
+  "drips": {
+    "ethereum": {
+      "ownedBy": "0xD104d8f8B2dC312aaD74899F83EBf3EEBDC1EA3A"
+    },
+    "bitcoin": {
+      "ownedBy": "bc1qzvl9uegf2ea6cwlytnanrscyv8snwsvrc0xfsu"
+    },
+    "solana": {
+      "ownedBy": "FTCTgbHajoLVZGr8aEFWMzx3NDMyS5wXJgfeMTmJznRi"
+    }
+  }
+}
