@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -153,6 +153,8 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -386,6 +388,10 @@ int main(int argc, char *argv[]) {
       } else
         printf("  No stale readers.\n");
     }
+    if (rc == MDBX_RESULT_TRUE)
+      /* "Reader Table is absent"/"Now Reader Table is empty" are informational
+       * outcomes, not failures: RESULT_TRUE must not reach the exit code */
+      rc = MDBX_SUCCESS;
     if (!(table || alltbl || show_gc))
       goto txn_abort;
   }
@@ -397,6 +403,9 @@ int main(int argc, char *argv[]) {
     rc = mdbx_gc_info(txn, &info, sizeof(info), gc_list_func, nullptr);
 
     switch (rc) {
+    case MDBX_NOTFOUND /* the GC is empty, the info is filled */:
+      rc = MDBX_SUCCESS;
+      break;
     case MDBX_SUCCESS:
       break;
     case MDBX_EINTR:

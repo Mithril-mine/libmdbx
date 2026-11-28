@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -116,7 +116,7 @@ static void tool_print_sanitized(const void *data, size_t size) {
 }
 
 /* Dump in BDB-compatible format */
-static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
+static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name, const char *const *skip_names, const unsigned skip_count) {
   unsigned flags;
   int rc = mdbx_dbi_flags(txn, dbi, &flags);
   if (unlikely(rc != MDBX_SUCCESS)) {
@@ -206,6 +206,18 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
       rc = MDBX_EINTR;
       break;
     }
+    if (skip_names) {
+      /* the records of named tables are dumped as their own sections */
+      bool skipped = false;
+      for (unsigned i = 0; i < skip_count; ++i) {
+        if (key.iov_len == strlen(skip_names[i]) && memcmp(key.iov_base, skip_names[i], key.iov_len) == 0) {
+          skipped = true;
+          break;
+        }
+      }
+      if (skipped)
+        continue;
+    }
     dumpval(&key);
     dumpval(&data);
     if ((flags & MDBX_DUPSORT) && (mode & CONCISE)) {
@@ -221,7 +233,9 @@ static int dump_tbl(MDBX_txn *txn, MDBX_dbi dbi, char *name) {
         break;
     }
   }
-  printf("DATA=END\n");
+  /* Without the trailer `mdbx_load` reports a truncated dump; rescue mode closes a damaged table to go on. */
+  if (rc == MDBX_NOTFOUND || (rescue && rc != MDBX_EINTR))
+    printf("DATA=END\n");
   if (rc == MDBX_NOTFOUND)
     rc = MDBX_SUCCESS;
   if (unlikely(rc != MDBX_SUCCESS))
@@ -447,6 +461,10 @@ int main(int argc, char *argv[]) {
     bool have_raw = false;
     int count = 0;
     MDBX_val key;
+    /* The named tables' records are dumped as their own sections below, so
+     * the trailing main-table section must skip them (issue #385). */
+    char **table_names = nullptr;
+    unsigned n_table_names = 0;
     while (MDBX_SUCCESS == (err = mdbx_cursor_get(cursor, &key, nullptr, MDBX_NEXT_NODUP))) {
       if (user_break) {
         err = MDBX_EINTR;
@@ -478,11 +496,18 @@ int main(int argc, char *argv[]) {
           break;
       } else {
         count++;
+        char **resized = osal_realloc(table_names, (n_table_names + 1) * sizeof(char *));
+        if (!resized) {
+          err = MDBX_ENOMEM;
+          break;
+        }
+        table_names = resized;
+        table_names[n_table_names++] = osal_strdup(subname);
         if (list) {
           tool_print_sanitized(subname, strlen(subname));
           putchar('\n');
         } else {
-          err = dump_tbl(txn, sub_dbi, subname);
+          err = dump_tbl(txn, sub_dbi, subname, nullptr, 0);
           if (unlikely(err != MDBX_SUCCESS)) {
             if (!rescue)
               break;
@@ -518,15 +543,27 @@ int main(int argc, char *argv[]) {
     mdbx_cursor_close(cursor);
     cursor = nullptr;
 
-    if (have_raw && (!count /* || rescue */))
-      err = dump_tbl(txn, MAIN_DBI, nullptr);
-    else if (!count) {
+    /* The plain main-table records are dumped as a trailing section with an
+     * explicitly empty `database=` value, which names the main table (see the
+     * `database=` handling in mdbx_load); the named-table records are skipped
+     * here as they belong to the tables' own sections above (issue #385). */
+    if (!list && have_raw && (err == MDBX_SUCCESS || err == MDBX_NOTFOUND)) {
+      /* name = nullptr: the section carries no `database=` line, so mdbx_load
+       * (which resets the name at every section header) restores the records
+       * into the main table. */
+      err = dump_tbl(txn, MAIN_DBI, nullptr, (const char *const *)table_names, n_table_names);
+      if (unlikely(err != MDBX_SUCCESS))
+        error("dump_tbl", err);
+    } else if (!have_raw && !count && err == MDBX_NOTFOUND) {
       if (!quiet)
         fprintf(stderr, "%s: %s does not contain multiple databases\n", prog, envname);
       err = MDBX_NOTFOUND;
     }
+    for (i = 0; i < (int)n_table_names; ++i)
+      osal_free(table_names[i]);
+    osal_free(table_names);
   } else {
-    err = dump_tbl(txn, dbi, subname);
+    err = dump_tbl(txn, dbi, subname, nullptr, 0);
   }
 
   fflush(stdout);

@@ -56,6 +56,30 @@ Defragmentation may be interrupted by sending a signal such as
 SIGINT (Ctrl-C) to the utility. The process aborts gracefully,
 preserving the database consistency, and reports the reason of
 stopping as well as the amount of already performed work.
+.PP
+Defragmentation is an alternative to making a copy of the database
+with compaction by
+.B mdbx_copy (1)
+with the
+.I \-c
+option, for cases where creating a copy is unacceptable, for example
+due to insufficient space. A partial defragmentation of a few cycles
+is relatively quick, while the complete one almost always requires
+more page movements and I/O operations \(em similar to sorting without
+using additional memory.
+.PP
+Completion of the defragmentation may be prevented by large/overflow
+pages, i.e. long values stored as runs of adjacent pages. To relocate
+such a run, a run of adjacent free pages of the same size must be
+formed first, closer to the beginning of the database, which in turn
+may require moving other pages with their data. After a few
+unproductive cycles the utility stops and reports the reason of
+stopping, so some residual fragmentation is expected in such cases.
+Use
+.B mdbx_copy (1)
+with the
+.I \-c
+option for a complete compaction.
 .SH OPTIONS
 .TP
 .BR \-V
@@ -107,8 +131,12 @@ Exit status is zero if no errors occur.
 Errors result in a non-zero exit status and
 a diagnostic message being written to standard error.
 Successful but incomplete defragmentation (stopped due to a time
-limit, a cycles limit, a threshold or an interference with readers)
-is not considered an error, but the reason of stopping is reported.
+limit, a cycles limit, a threshold, an interference with readers or
+large/overflow pages that cannot be relocated at a reasonable cost)
+is not considered an error, but the reasons of stopping are reported
+by their names along with the resulting bit mask, and a hint is
+printed when the residual fragmentation is caused by large/overflow
+pages.
 .SH "SEE ALSO"
 .BR mdbx_chk (1),
 .BR mdbx_copy (1),

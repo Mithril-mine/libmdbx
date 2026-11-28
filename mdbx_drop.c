@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -79,6 +79,8 @@ static void logger(MDBX_log_level_t level, const char *function, int line, const
       "   ",        // 3 notice
       "   //",      // 4 verbose
   };
+  if (!fmt)
+    return;
   if (level >= 0 && level < MDBX_LOG_DEBUG) {
     if (function && line && (size_t)level < ARRAY_LENGTH(prefixes))
       fprintf(stderr, "%s", prefixes[level]);
@@ -197,11 +199,14 @@ int main(int argc, char *argv[]) {
   }
 
   rc = mdbx_txn_commit(txn);
+  /* mdbx_txn_commit() terminates the handle whatever it returns
+   * (except MDBX_THREAD_MISMATCH), so the handle must not be aborted
+   * afterwards - the failed-commit path did exactly that */
+  txn = nullptr;
   if (unlikely(rc != MDBX_SUCCESS)) {
     error("mdbx_txn_commit", rc);
     goto txn_abort;
   }
-  txn = nullptr;
 
 txn_abort:
   if (txn)

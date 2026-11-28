@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -141,6 +141,7 @@ static bool valbool(char *line, const char *item, bool *value) {
 /*----------------------------------------------------------------------------*/
 
 static char *subname = nullptr;
+static const char *forced_subname = nullptr /* `-s`, takes priority over `database=` */;
 static int dbi_flags;
 static uint64_t sequence;
 static MDBX_canary canary;
@@ -168,23 +169,114 @@ static const flagbit dbflags[] = {{MDBX_REVERSEKEY, S("reversekey")}, {MDBX_DUPS
                                   {MDBX_DUPFIXED, S("dupfix")},       {MDBX_INTEGERDUP, S("integerdup")},
                                   {MDBX_REVERSEDUP, S("reversedup")}, {0, 0, nullptr}};
 
+static int badend(void) {
+  if (!quiet)
+    fprintf(stderr, "%s: line %" PRIiSIZE ": unexpected end of input\n", prog, lineno);
+  return errno ? errno : MDBX_ENODATA;
+}
+
+/* A byte that cannot occur inside a well-formed dump line: the bytevalue
+ * format is hex only and the print format escapes everything outside
+ * isprint(), so a raw control byte is always a malformed line. */
+#define LINE_SENTINEL '\x01'
+
+/* fgets() stops at an embedded NUL byte and hides the tail of the physical
+ * line from every strlen()-based consumer, silently swallowing it:
+ * a dump line " \0JUNK" loaded as the empty value with the rest dropped,
+ * and `database=na\0me` created the table `na`. To make the exact amount
+ * read by fgets() recoverable, the untouched buffer tail is pre-filled with
+ * the sentinel byte (line_sentinel_fill()); every fetched fragment is then
+ * verified to be NUL-free and to end exactly at the terminator written by
+ * fgets() itself (line_fetched_length()). */
+static void line_sentinel_fill(char *line, size_t capacity, size_t from) {
+  memset(line + from, LINE_SENTINEL, capacity - from);
+}
+
+static int line_fetched_length(const char *line, size_t capacity, size_t *fetched) {
+  const char *const sentinel = memchr(line, LINE_SENTINEL, capacity);
+  if (unlikely(sentinel == line))
+    /* a raw control byte right at the fragment start */
+    goto badline;
+  /* no sentinel left: fgets() filled the whole buffer, the line continues */
+  const size_t len = (sentinel == nullptr) ? capacity - 1 : (size_t)(sentinel - line) - 1;
+  if (unlikely(memchr(line, 0, len) != nullptr))
+    /* an embedded NUL: fgets() stopped at it, the line tail is untrusted */
+    goto badline;
+  if (unlikely(sentinel != nullptr && line[len] != 0))
+    /* not the fgets() terminator: a raw control byte mimics the sentinel */
+    goto badline;
+  *fetched = len;
+  return MDBX_SUCCESS;
+
+badline:
+  if (!quiet)
+    fprintf(stderr, "%s: line %" PRIiSIZE ": NUL or control byte inside the line\n", prog, lineno);
+  return MDBX_ENODATA;
+}
+
 static int readhdr(void) {
   /* reset parameters */
   if (subname) {
     free(subname);
     subname = nullptr;
   }
+  if (forced_subname) {
+    subname = osal_strdup(forced_subname);
+    if (!subname) {
+      if (!quiet)
+        perror("strdup()");
+      exit(EXIT_FAILURE);
+    }
+  }
   dbi_flags = 0;
   sequence = 0;
+  const size_t lineno_at_start = lineno;
 
   while (true) {
     errno = 0;
-    if (fgets(data_buf.iov_base, (int)data_buf.iov_len, stdin) == nullptr)
+    line_sentinel_fill(data_buf.iov_base, data_buf.iov_len, 0);
+    if (fgets(data_buf.iov_base, (int)data_buf.iov_len, stdin) == nullptr) {
+      if (lineno != lineno_at_start) {
+        /* the input ended in the middle of a table's header: a truncated dump */
+        if (!quiet)
+          fprintf(stderr, "%s: line %" PRIiSIZE ": unexpected end of input (dump truncated)\n", prog, lineno);
+        return MDBX_ENODATA;
+      }
       return errno ? errno : EOF;
+    }
     if (user_break)
       return MDBX_EINTR;
 
     lineno++;
+
+    size_t len;
+    int err = line_fetched_length(data_buf.iov_base, data_buf.iov_len, &len);
+    if (unlikely(err != MDBX_SUCCESS))
+      return err;
+
+    /* A full buffer without a newline: the line is longer, e.g. a long table name. */
+    while (len + 1 == data_buf.iov_len && ((char *)data_buf.iov_base)[len - 1] != '\n') {
+      char *const line = osal_realloc(data_buf.iov_base, data_buf.iov_len * 2);
+      if (!line) {
+        if (!quiet)
+          fprintf(stderr, "%s: line %" PRIiSIZE ": out of memory, line too long\n", prog, lineno);
+        return MDBX_ENOMEM;
+      }
+      data_buf.iov_base = line;
+      data_buf.iov_len *= 2;
+      /* keep the line terminated in case the fgets() below hits EOF */
+      line[len] = 0;
+      line_sentinel_fill(line, data_buf.iov_len, len + 1);
+      errno = 0;
+      if (fgets(line + len, (int)(data_buf.iov_len - len), stdin) == nullptr)
+        break;
+      size_t more;
+      err = line_fetched_length(line + len, data_buf.iov_len - len, &more);
+      if (unlikely(err != MDBX_SUCCESS))
+        return err;
+      len += more;
+    }
+
     uint64_t u64;
 
     if (valnum(data_buf.iov_base, "VERSION", &u64)) {
@@ -228,7 +320,8 @@ static int readhdr(void) {
 
     str = valstr(data_buf.iov_base, "database");
     if (str) {
-      if (*str) {
+      /* `-s` wins over `database=`; an empty value names the table whose name is the empty string */
+      if (!forced_subname) {
         if (tool_name_has_control(str)) {
           if (!quiet)
             fprintf(stderr, "%s: line %" PRIiSIZE ": invalid database name containing control characters\n", prog,
@@ -371,12 +464,6 @@ static int readhdr(void) {
   return EOF;
 }
 
-static int badend(void) {
-  if (!quiet)
-    fprintf(stderr, "%s: line %" PRIiSIZE ": unexpected end of input\n", prog, lineno);
-  return errno ? errno : MDBX_ENODATA;
-}
-
 static inline uint8_t unhex(const char *hex) {
   int8_t hi = hex[0];
   hi = (hi | 0x20) - 'a';
@@ -423,11 +510,22 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf, bool *concise) {
   char *line = buf->iov_base;
   line[0] = (char)c;
   line[1] = 0;
-  if (c != '\n' && fgets(line + 1, (int)buf->iov_len - 1, stdin) == nullptr)
-    return errno ? errno : EOF;
+  if (c != '\n') {
+    line_sentinel_fill(line, buf->iov_len, 1);
+    errno = 0;
+    if (fgets(line + 1, (int)buf->iov_len - 1, stdin) == nullptr)
+      return errno ? errno : EOF;
+  }
   lineno++;
 
-  size_t len = strlen(line);
+  size_t len;
+  if (c == '\n') {
+    len = 1;
+  } else {
+    int err = line_fetched_length(line, buf->iov_len, &len);
+    if (unlikely(err != MDBX_SUCCESS))
+      return err;
+  }
   if (len > 0) {
     /* Is buffer too short? */
     while (line[len - 1] != '\n') {
@@ -440,12 +538,17 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf, bool *concise) {
       }
       buf->iov_base = line;
       buf->iov_len *= 2;
+      line_sentinel_fill(line, buf->iov_len, len);
 
       /* continue read line */
       errno = 0;
       if (fgets(line + len, (int)(buf->iov_len - len), stdin) == nullptr)
         return errno ? errno : EOF;
-      len += strlen(line + len);
+      size_t more;
+      const int err = line_fetched_length(line + len, buf->iov_len - len, &more);
+      if (unlikely(err != MDBX_SUCCESS))
+        return err;
+      len += more;
     }
     /* strip '\n' at the end */
     line[--len] = '\0';
@@ -459,7 +562,7 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf, bool *concise) {
         if (r[1] == '\\') {
           *w++ = '\\';
         } else {
-          if (r + 3 > end || !isxdigit(r[1]) || !isxdigit(r[2]))
+          if (r + 3 > end || !isxdigit((unsigned char)r[1]) || !isxdigit((unsigned char)r[2]))
             return badend();
           *w++ = unhex(++r);
         }
@@ -474,7 +577,7 @@ __hot static int readline(MDBX_val *out, MDBX_val *buf, bool *concise) {
     if (len & 1)
       return badend();
     while (r < end) {
-      if (!isxdigit(r[0]) || !isxdigit(r[1]))
+      if (!isxdigit((unsigned char)r[0]) || !isxdigit((unsigned char)r[1]))
         return badend();
       *w++ = unhex(r);
       r += 2;
@@ -581,6 +684,8 @@ int main(int argc, char *argv[]) {
       envflags |= MDBX_NOSUBDIR;
       break;
     case 's':
+      free(subname);
+      forced_subname = optarg;
       subname = osal_strdup(optarg);
       break;
     case 'N':
@@ -808,6 +913,76 @@ int main(int argc, char *argv[]) {
       goto bailout;
     }
 
+    /* Purge before the sequence is restored: a purge resets it. With `-s` every section loads into the same table,
+     * so it is purged only once. */
+    if (purge) {
+      if (subname) {
+        err = mdbx_drop(txn, dbi, false);
+        if (unlikely(err != MDBX_SUCCESS)) {
+          error("mdbx_drop", err);
+          goto bailout;
+        }
+      } else {
+        /* The MAIN section of a multi-table dump carries only the raw
+         * records: the named tables' descriptors are MAIN records too, so
+         * mdbx_drop() refuses MAIN while any named table exists, and a real
+         * drop would also destroy the tables loaded by the earlier sections
+         * -p failed with MDBX_INCOMPATIBLE on the trailing MAIN
+         * section of every multi-table dump, leaving a partial load).
+         * Purge the raw remainder instead: delete every MAIN record that
+         * does not name a table, using the same ACCEDE probe mdbx_dump
+         * uses to split a database into sections. */
+        /* The probes bind a dbi slot per probed key and log a NOTICE for
+         * every raw record that merely looks like a table name; raise the
+         * threshold for the scan so the purge stays silent. */
+        if (!quiet)
+          mdbx_setup_debug(MDBX_LOG_WARN, MDBX_DBG_DONTCHANGE, MDBX_LOGGER_DONTCHANGE);
+        MDBX_cursor *purge_cursor;
+        err = mdbx_cursor_open(txn, dbi, &purge_cursor);
+        if (unlikely(err != MDBX_SUCCESS)) {
+          error("mdbx_cursor_open", err);
+          goto bailout;
+        }
+        MDBX_val purge_key;
+        err = mdbx_cursor_get(purge_cursor, &purge_key, nullptr, MDBX_FIRST);
+        while (err == MDBX_SUCCESS) {
+          if (user_break) {
+            err = MDBX_EINTR;
+            break;
+          }
+          MDBX_dbi named_dbi;
+          const int probe_rc = mdbx_dbi_open_ex2(txn, &purge_key, MDBX_DB_ACCEDE, &named_dbi, nullptr, nullptr);
+          if (probe_rc != MDBX_INCOMPATIBLE) {
+            /* a table descriptor (or a probe error): never a raw record */
+            if (unlikely(probe_rc != MDBX_SUCCESS)) {
+              err = probe_rc;
+              break;
+            }
+            /* release the slot so a long MAIN section cannot exhaust maxdbs */
+            mdbx_dbi_close(env, named_dbi);
+            err = mdbx_cursor_get(purge_cursor, &purge_key, nullptr, MDBX_NEXT);
+            continue;
+          }
+          err = mdbx_cursor_del(purge_cursor, 0);
+          if (unlikely(err != MDBX_SUCCESS))
+            break;
+          err = mdbx_cursor_get(purge_cursor, &purge_key, nullptr, MDBX_NEXT);
+        }
+        if (err == MDBX_NOTFOUND)
+          err = MDBX_SUCCESS;
+        mdbx_cursor_close(purge_cursor);
+        if (!quiet)
+          mdbx_setup_debug(MDBX_LOG_NOTICE, MDBX_DBG_DONTCHANGE, MDBX_LOGGER_DONTCHANGE);
+        if (unlikely(err != MDBX_SUCCESS)) {
+          if (err != MDBX_EINTR)
+            error("purge-maindb", err);
+          goto bailout;
+        }
+      }
+      if (forced_subname)
+        purge = false;
+    }
+
     uint64_t present_sequence;
     err = mdbx_dbi_sequence(txn, dbi, &present_sequence, 0);
     if (unlikely(err != MDBX_SUCCESS)) {
@@ -825,14 +1000,6 @@ int main(int argc, char *argv[]) {
       err = mdbx_dbi_sequence(txn, dbi, nullptr, sequence - present_sequence);
       if (unlikely(err != MDBX_SUCCESS)) {
         error("mdbx_dbi_sequence", err);
-        goto bailout;
-      }
-    }
-
-    if (purge) {
-      err = mdbx_drop(txn, dbi, false);
-      if (unlikely(err != MDBX_SUCCESS)) {
-        error("mdbx_drop", err);
         goto bailout;
       }
     }
@@ -880,11 +1047,15 @@ int main(int argc, char *argv[]) {
       }
 
       err = mdbx_cursor_put(mc, &key, &data, putflags);
-      if (err == MDBX_KEYEXIST && putflags)
+      /* A skipped record must not end the loop, which runs while `err` is MDBX_SUCCESS. */
+      if (err == MDBX_KEYEXIST && putflags) {
+        err = MDBX_SUCCESS;
         continue;
+      }
       if (err == MDBX_BAD_VALSIZE && rescue) {
         if (!quiet)
           fprintf(stderr, "%s: skip line %" PRIiSIZE ": due to %s\n", prog, lineno, mdbx_strerror(err));
+        err = MDBX_SUCCESS;
         continue;
       }
       if (unlikely(err != MDBX_SUCCESS)) {
@@ -907,6 +1078,8 @@ int main(int argc, char *argv[]) {
 
       if (should_checkpoint) {
         err = mdbx_txn_checkpoint(txn, MDBX_TXN_NOMETASYNC, nullptr);
+        if (err == MDBX_RESULT_TRUE)
+          err = MDBX_SUCCESS /* the batch changed nothing */;
         if (unlikely(err != MDBX_SUCCESS)) {
           error("mdbx_txn_checkpoint", err);
           goto bailout;
@@ -956,6 +1129,9 @@ int main(int argc, char *argv[]) {
   case MDBX_EINTR:
     if (!quiet)
       fprintf(stderr, "Interrupted by signal/user\n");
+    break;
+  case MDBX_ENODATA:
+    /* readhdr() already reported the truncated dump */
     break;
   default:
     error("readline", err);

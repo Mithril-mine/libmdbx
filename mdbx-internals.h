@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -24,7 +24,7 @@
 
 #define xMDBX_ALLOY 1  /* alloyed build */
 
-#define MDBX_BUILD_SOURCERY 85ed407b20f238c9303d7c76283abfae2dfb30b70bfbce28b59e0710f0538c82_v0_14_4_110_g8d1bcf91
+#define MDBX_BUILD_SOURCERY cb545430c60a53e2a11347830b0c5530a1938fe2b3fcb9e7cccbb3edfa989abe_v0_14_4_250_gf14947695
 
 #define LIBMDBX_INTERNALS
 #define MDBX_DEPRECATED
@@ -1156,25 +1156,7 @@ typedef union bin128 {
 #include <sys/cachectl.h>
 #endif
 
-MDBX_MAYBE_UNUSED static inline void osal_compiler_barrier(void) {
-#if defined(__clang__) || defined(__GNUC__)
-  __asm__ __volatile__("" ::: "memory");
-#elif defined(_MSC_VER)
-  _ReadWriteBarrier();
-#elif defined(__INTEL_COMPILER) /* LY: Intel Compiler may mimic GCC and MSC */
-  __memory_barrier();
-#elif defined(__SUNPRO_C) || defined(__sun) || defined(sun)
-  __compiler_barrier();
-#elif (defined(_HPUX_SOURCE) || defined(__hpux) || defined(__HP_aCC)) && (defined(HP_IA64) || defined(__ia64))
-  _Asm_sched_fence(/* LY: no-arg meaning 'all expect ALU', e.g. 0x3D3D */);
-#elif defined(_AIX) || defined(__ppc__) || defined(__powerpc__) || defined(__ppc64__) || defined(__powerpc64__)
-  __fence();
-#else
-#error "Could not guess the kind of compiler, please report to us."
-#endif
-}
-
-MDBX_MAYBE_UNUSED static inline void osal_memory_barrier(void) {
+MDBX_MAYBE_UNUSED static inline void osal_fence_full(void) {
 #ifdef MDBX_HAVE_C11ATOMICS
   atomic_thread_fence(memory_order_seq_cst);
 #elif defined(__ATOMIC_SEQ_CST)
@@ -1201,6 +1183,45 @@ MDBX_MAYBE_UNUSED static inline void osal_memory_barrier(void) {
   __lwsync();
 #else
 #error "Could not guess the kind of compiler, please report to us."
+#endif
+}
+
+/* A consumer (acquire-side) fence: no later load/store may be reordered
+ * before the prior reads. Must be applied after the access being ordered. */
+MDBX_MAYBE_UNUSED static inline void osal_fence_consumer(void) {
+#ifdef MDBX_HAVE_C11ATOMICS
+  atomic_thread_fence(memory_order_acquire);
+#elif defined(__ATOMIC_ACQUIRE) && (defined(__clang__) || defined(__GNUC__))
+#ifdef __clang__
+  __c11_atomic_thread_fence(__ATOMIC_ACQUIRE);
+#else
+  __atomic_thread_fence(__ATOMIC_ACQUIRE);
+#endif
+#elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+  /* TSO: acquire ordering only requires the compiler barrier */
+  _ReadWriteBarrier();
+#else
+  osal_fence_full();
+#endif
+}
+
+/* A producer (release-side) fence: no earlier load/store may be reordered
+ * after the subsequent writes. Must be applied before the access being
+ * ordered. */
+MDBX_MAYBE_UNUSED static inline void osal_fence_producer(void) {
+#ifdef MDBX_HAVE_C11ATOMICS
+  atomic_thread_fence(memory_order_release);
+#elif defined(__ATOMIC_RELEASE) && (defined(__clang__) || defined(__GNUC__))
+#ifdef __clang__
+  __c11_atomic_thread_fence(__ATOMIC_RELEASE);
+#else
+  __atomic_thread_fence(__ATOMIC_RELEASE);
+#endif
+#elif defined(_MSC_VER) && (defined(_M_IX86) || defined(_M_X64))
+  /* TSO: release ordering only requires the compiler barrier */
+  _ReadWriteBarrier();
+#else
+  osal_fence_full();
 #endif
 }
 
@@ -1450,7 +1471,25 @@ MDBX_MAYBE_UNUSED static inline uintptr_t osal_thread_self(void) {
   return (uintptr_t)thunk;
 }
 
+/* The identity of a file: on POSIX the dev+inode pair from fstat()/stat(), on Windows the volume
+ * serial number with the file index from BY_HANDLE_FILE_INFORMATION. A zeroed structure denotes
+ * "not set/unknown". Note: this is a system-level identity of the given file, but NOT a content
+ * identity: a copy/backup of a database has another fileid, and a hardlink shares it. */
+typedef struct osal_fileid {
+  uint64_t a, b;
+} osal_fileid_t;
+
+MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool osal_fileid_eq(const osal_fileid_t *a,
+                                                                               const osal_fileid_t *b) {
+  return a->a == b->a && a->b == b->b;
+}
+MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool osal_fileid_is_set(const osal_fileid_t *id) {
+  return id->a || id->b;
+}
+
 #ifndef __cplusplus
+MDBX_INTERNAL int osal_fileid_by_path(const pathchar_t *pathname, osal_fileid_t *id);
+MDBX_INTERNAL int osal_fileid_by_fd(mdbx_filehandle_t fd, osal_fileid_t *id);
 
 /* Actually this is not ioring for now, but on the way. */
 MDBX_INTERNAL int osal_ioring_create(osal_ioring_t *
@@ -1659,6 +1698,24 @@ MDBX_INTERNAL key_t osal_ftok(int fd, const char *pathname);
 #endif /* !Windows */
 MDBX_INTERNAL int osal_removefile(const pathchar_t *pathname);
 MDBX_INTERNAL int osal_removedirectory(const pathchar_t *pathname);
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_pathname_absent_error(int err) {
+#if IS_WINDOWS
+  return err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND;
+#else
+  return err == ENOENT || err == ENOTDIR;
+#endif
+}
+
+/* A removal refused only because another process still has the file open (Windows); never on POSIX. */
+MDBX_NOTHROW_CONST_FUNCTION static inline bool osal_is_sharing_violation_error(int err) {
+#if IS_WINDOWS
+  return err == ERROR_SHARING_VIOLATION || err == ERROR_LOCK_VIOLATION;
+#else
+  /* LY: Legacy/Bogus NFS lock-managers could return EACCES in such cases.
+   * However, we need to move forward, not tinker with old, problematic systems. */
+  return err == EAGAIN || err == EBUSY || (EWOULDBLOCK != EAGAIN && err == EWOULDBLOCK) || err == EDEADLK;
+#endif
+}
 MDBX_INTERNAL int osal_is_pipe(mdbx_filehandle_t fd);
 MDBX_INTERNAL int osal_lockfile(mdbx_filehandle_t fd, bool wait);
 
@@ -1667,8 +1724,9 @@ MDBX_INTERNAL int osal_lockfile(mdbx_filehandle_t fd, bool wait);
 MDBX_INTERNAL int osal_mmap(const int flags, osal_mmap_t *map, size_t size, const size_t limit, const unsigned options,
                             const pathchar_t *pathname4logging);
 MDBX_INTERNAL void osal_munmap(osal_mmap_t *map);
-#define MDBX_MRESIZE_MAY_MOVE 0x00000100
-#define MDBX_MRESIZE_MAY_UNMAP 0x00000200
+#define MDBX_MRESIZE_MAY_MOVE txn_mapmove_allowed
+#define MDBX_MRESIZE_MAY_UNMAP txn_unmap_allowed
+#define MDBX_MRESIZE_MAY_SHRINK txn_shrink_allowed
 MDBX_INTERNAL int osal_mresize(const int flags, osal_mmap_t *map, size_t size, size_t limit);
 #if defined(_WIN32) || defined(_WIN64)
 typedef struct {
@@ -2127,26 +2185,54 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #define MDBX_LOCKING MDBX_LOCKING_WIN32FILES
 #else
 #ifndef MDBX_LOCKING
-#if defined(_POSIX_THREAD_PROCESS_SHARED) && _POSIX_THREAD_PROCESS_SHARED >= 200112L && !defined(__FreeBSD__)
-
+#if defined(_POSIX_THREAD_PROCESS_SHARED) && _POSIX_THREAD_PROCESS_SHARED >= 200112L
+#if !defined(__FreeBSD__)
 /* Some platforms define the EOWNERDEAD error code even though they
- * don't support Robust Mutexes. If doubt compile with -MDBX_LOCKING=2001. */
+ * don't support Robust Mutexes. Without robust mutexes there is no
+ * recovery from a dead lock owner: a crashed writer strands the
+ * write-lock for all other processes, and a non-robust PI mutex even
+ * makes glibc abort or hang for its new waiters. Therefore the System
+ * V semaphores are preferred as the fallback: SEM_UNDO releases them
+ * on a process death and the owner's pid stays detectable in the lock
+ * word. The POSIX-2001 mutexes remain available opt-in, for the setups
+ * where the System V IPC is unusable, but they provide no dead-writer
+ * recovery (see #565). */
 #if defined(EOWNERDEAD) && _POSIX_THREAD_PROCESS_SHARED >= 200809L &&                                                  \
     ((defined(_POSIX_THREAD_ROBUST_PRIO_INHERIT) && _POSIX_THREAD_ROBUST_PRIO_INHERIT > 0) ||                          \
      (defined(_POSIX_THREAD_ROBUST_PRIO_PROTECT) && _POSIX_THREAD_ROBUST_PRIO_PROTECT > 0) ||                          \
-     defined(PTHREAD_MUTEX_ROBUST) || defined(PTHREAD_MUTEX_ROBUST_NP)) &&                                             \
-    (!defined(__GLIBC__) || __GLIBC_PREREQ(2, 10) /* troubles with Robust mutexes before 2.10 */) &&                   \
+     defined(PTHREAD_MUTEX_ROBUST) || defined(PTHREAD_MUTEX_ROBUST_NP)) &&                                            \
+    (!defined(__GLIBC__) || __GLIBC_PREREQ(2, 10) /* troubles with Robust mutexes before 2.10 */) &&                  \
     !defined(__OHOS__) /* Harmony OS doesn't support robust mutexes at the end of 2025 */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2008
 #else
+/* Bionic declares the System V semaphore functions only since the API
+ * level 26, so below it the SYSV fallback is unbuildable and the
+ * POSIX-2001 process-shared mutexes are the only choice (without the
+ * dead-owner recovery, see #565). */
+#if !defined(__ANDROID_API__) || __ANDROID_API__ >= 26
+#define MDBX_LOCKING MDBX_LOCKING_SYSV
+#else
 #define MDBX_LOCKING MDBX_LOCKING_POSIX2001
 #endif
-#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__) ||                                  \
-    (defined(_POSIX_SEMAPHORES) && _POSIX_SEMAPHORES >= 200112L &&                                                     \
-     !defined(__OpenBSD__)) /* OpenBSD's sem_init() always fails with EPERM on pshared */
-/* Prefer POSIX shared anonymous semaphores (POSIX1988) over the legacy System V IPC
- * (SysV) whenever the platform provides process-shared semaphores, e.g. FreeBSD and
- * NetBSD where the pthread process-shared primitives are not usable but POSIX are. */
+#endif
+#else /* FreeBSD: the __GLIBC_PREREQ() macro is unavailable there, so the robust check is separate. */
+/* The process-shared robust mutexes are supported since 11.0 (2016): the kernel
+ * maintains the per-thread umtx robust lists and performs the dead-owner recovery
+ * in the shared memory by itself. Without the robust attribute the mutexes hang
+ * forever on a dead owner (issue #328), so SysV is the only safe fallback. */
+#if defined(EOWNERDEAD) && _POSIX_THREAD_PROCESS_SHARED >= 200809L &&                                                  \
+    (defined(_POSIX_THREAD_ROBUST_PRIO_INHERIT) || defined(_POSIX_THREAD_ROBUST_PRIO_PROTECT) ||                       \
+     defined(PTHREAD_MUTEX_ROBUST) || defined(PTHREAD_MUTEX_ROBUST_NP))
+#define MDBX_LOCKING MDBX_LOCKING_POSIX2008
+#else
+#define MDBX_LOCKING MDBX_LOCKING_SYSV
+#endif
+#endif
+#elif defined(__sun) || defined(__SVR4) || defined(__svr4__) || defined(__HAIKU__)
+/* POSIX shared anonymous semaphores (POSIX1988) cannot detect a dead lock owner,
+ * while System V IPC (SysV) can: SEM_UNDO releases the semaphore and the owner's
+ * pid stays in the lock word. Solaris/SVR4 and Haiku keep POSIX1988 as before,
+ * so their lock-file format does not change. */
 #define MDBX_LOCKING MDBX_LOCKING_POSIX1988
 #else
 #define MDBX_LOCKING MDBX_LOCKING_SYSV
@@ -2223,16 +2309,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline uint32_t osal_bswap32
 #endif /* MDBX_HISTOGRAM_USING_128BIT */
 
 //------------------------------------------------------------------------------
-
-#ifndef MDBX_CPU_WRITEBACK_INCOHERENT
-#if defined(__ia32__) || defined(__e2k__) || defined(__hppa) || defined(__hppa__) || defined(DOXYGEN)
-#define MDBX_CPU_WRITEBACK_INCOHERENT 0
-#else
-#define MDBX_CPU_WRITEBACK_INCOHERENT 1
-#endif
-#elif !(MDBX_CPU_WRITEBACK_INCOHERENT == 0 || MDBX_CPU_WRITEBACK_INCOHERENT == 1)
-#error MDBX_CPU_WRITEBACK_INCOHERENT must be defined as 0 or 1
-#endif /* MDBX_CPU_WRITEBACK_INCOHERENT */
 
 #ifndef MDBX_MMAP_INCOHERENT_FILE_WRITE
 #ifdef __OpenBSD__
@@ -2888,7 +2964,10 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION static inline bool is_subpage(const
 }
 
 /* The version number for a database's lockfile format. */
-#define MDBX_LOCK_VERSION 7
+/* The lockfile format version. Bumped to 8: the bait_uniqueness field was removed from
+ * the region layout after the bait/poke neighbors-check was replaced by the fileid-based
+ * one. */
+#define MDBX_LOCK_VERSION 8
 
 #if MDBX_LOCKING == MDBX_LOCKING_WIN32FILES
 
@@ -3095,9 +3174,6 @@ typedef struct shared_lck {
    * example clock_gettime(CLOCK_BOOTTIME) or clock_gettime(CLOCK_MONOTONIC).
    * Zero means timed auto-sync is disabled. */
   mdbx_atomic_uint64_t autosync_period;
-
-  /* Marker to distinguish uniqueness of DB/CLK. */
-  mdbx_atomic_uint64_t bait_uniqueness;
 
   /* Paired counter of processes that have mlock()ed part of mmapped DB.
    * The (mlcnt[0] - mlcnt[1]) > 0 means at least one process
@@ -3606,8 +3682,6 @@ MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION static inline size_t ceil_powerof2
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL size_t ceil_log2n(size_t value_uintptr);
 
-MDBX_NOTHROW_CONST_FUNCTION MDBX_INTERNAL uint64_t rrxmrrxmsx_0(uint64_t v);
-
 struct monotime_cache {
   uint64_t value;
   int expire_countdown;
@@ -4042,8 +4116,6 @@ MDBX_NOTHROW_PURE_FUNCTION MDBX_MAYBE_UNUSED static inline bool pnl_contains_spa
 }
 
 MDBX_INTERNAL size_t pnl_merge(pnl_t dst, const const_pnl_t src);
-
-MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL bool pnl_intersect(const const_pnl_t a, const const_pnl_t b);
 
 MDBX_MAYBE_UNUSED MDBX_NOTHROW_PURE_FUNCTION MDBX_INTERNAL size_t pnl_maxspan(const const_pnl_t pnl);
 

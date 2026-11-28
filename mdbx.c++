@@ -1,4 +1,4 @@
-/* This file is part of the libmdbx amalgamated source code (v0.14.4-110-g8d1bcf91 at 2026-10-29T16:30:42+03:00).
+/* This file is part of the libmdbx amalgamated source code (v0.14.4-250-gf14947695 at 2026-11-28T12:11:08+03:00).
  *
  * libmdbx (aka MDBX) is an extremely fast, compact, powerful, embeddedable, transactional key-value storage engine with
  * open-source code. MDBX has a specific set of properties and capabilities, focused on creating unique lightweight
@@ -557,21 +557,28 @@ enum dbi_state {
 
 enum txn_flags {
   txn_ro_flat = MDBX_TXN_RDONLY,
-  txn_ro_nested = UINT32_C(0x0800),
+  txn_parked = MDBX_TXN_PARKED,
+  txn_shrink_allowed = UINT32_C(0x200),
+  txn_unmap_allowed = UINT32_C(0x400),
+  txn_mapmove_allowed = UINT32_C(0x800),
+  /* The transaction may unmap/remap the database mapping (possibly with an
+   * address change) for resize; see dxb_resize()/osal_mresize(). */
+  txn_unmap_or_move_allowed = txn_unmap_allowed | txn_mapmove_allowed,
+  txn_ro_nested = UINT32_C(0x1000),
   txn_ro_both = txn_ro_flat | txn_ro_nested,
   txn_ro_begin_flags = MDBX_TXN_RDONLY | MDBX_TXN_RDONLY_PREPARE,
   txn_rw_begin_flags = MDBX_TXN_NOMETASYNC | MDBX_TXN_NOSYNC | MDBX_TXN_TRY,
   txn_rw_already_locked = MDBX_TXN_RDONLY_PREPARE & ~MDBX_TXN_RDONLY,
-  txn_nipped = UINT32_C(0x1000),
-  /* The transaction may unmap/remap the database mapping (possibly with an
-   * address change) for resize; see dxb_resize()/osal_mresize(). */
-  txn_unmap_allowed = UINT32_C(0x40000000),
-  txn_parked = MDBX_TXN_PARKED,
-  txn_gc_drained = 0x100 /* GC was depleted up to oldest reader */,
-  txn_may_have_cursors = 0x400,
+  txn_gc_drained = UINT32_C(0x02000000) /* GC was depleted up to oldest reader */,
+  txn_nipped = UINT32_C(0x04000000),
+  txn_may_have_cursors = UINT32_C(0x08000000),
+  txn_remap_locked = UINT32_C(0x20000000),
+  txn_mresize_flags = txn_shrink_allowed | txn_unmap_allowed | txn_mapmove_allowed | txn_remap_locked,
   txn_state_flags = MDBX_TXN_FINISHED | MDBX_TXN_ERROR | MDBX_TXN_DIRTY | MDBX_TXN_SPILLS | MDBX_TXN_HAS_CHILD |
                     MDBX_TXN_INVALID | txn_gc_drained
 };
+
+struct dbi_rename_undo;
 
 /* A database transaction.
  * Every operation requires a transaction handle. */
@@ -610,6 +617,10 @@ struct MDBX_txn {
   /* Массив с головами односвязных списков отслеживания курсоров. */
   MDBX_cursor **cursors;
 
+  /* Отложенный undo переименований таблиц, выполненных в этой транзакции
+     (см. dbi_rename_undo_t в dbi.c). */
+  struct dbi_rename_undo *dbi_rename_undo;
+
   /* "Канареечные" маркеры/счетчики */
   MDBX_canary canary;
 
@@ -625,6 +636,12 @@ struct MDBX_txn {
     struct {
       /* For read txns: This thread/txn's slot table slot, or nullptr. */
       reader_slot_t *slot;
+      /* The mapped database body base as seen by this transaction: saved at
+       * start, checked at unpark to detect a mapping move while parked, when
+       * the held pointers become stale (issue #315). The per-transaction
+       * base for forming page addresses is the subject of the refactoring
+       * (issue #424). */
+      void *base;
     } ro;
     struct {
       troika_t troika;
@@ -637,7 +654,12 @@ struct MDBX_txn {
       } gc;
       bool prefault_write_activated;
 #if MDBX_ENABLE_REFUND
-      pgno_t loose_refund_wl /* FIXME: describe */;
+      /* Loose-refund waterline: the topmost extent of the loose pages list
+       * (max loose pgno + 2) since the last refund. A waterline above
+       * the first_unallocated edge means there are loose pages at/near
+       * the edge which refund_loose() may return to shrink the geometry.
+       * Consulted by txn_refund() and gc_alloc_single(). */
+      pgno_t loose_refund_wl;
 #endif /* MDBX_ENABLE_REFUND */
       /* a sequence to spilling dirty page with LRU policy */
       unsigned dirtylru;
@@ -811,7 +833,12 @@ enum env_flags {
   ENV_USABLE_FLAGS = ENV_CHANGEABLE_FLAGS | ENV_CHANGELESS_FLAGS,
   /* A flag for checking any non-synchronous mode. The MDBX_SAFE_NOSYNC bit is sufficient here,
    * since it is included in MDBX_UTTERLY_NOSYNC. */
-  ENV_UNSYNC = MDBX_SAFE_NOSYNC
+  ENV_UNSYNC = MDBX_SAFE_NOSYNC,
+  /* The lazy (non-durable) mode flags recorded in lck->envmode. */
+  ENV_LAZY_MODE_FLAGS = MDBX_SAFE_NOSYNC | MDBX_UTTERLY_NOSYNC | MDBX_NOMETASYNC,
+  /* The mode flags recorded in lck->envmode by the first process
+   * that opened the database for writing. */
+  ENV_MODE_FLAGS = ENV_LAZY_MODE_FLAGS | MDBX_LIFORECLAIM | MDBX_NORDAHEAD | MDBX_RDONLY | MDBX_WRITEMAP
 };
 
 /* The database environment. */
@@ -829,6 +856,9 @@ struct MDBX_env {
 #endif                  /* Windows */
   osal_mmap_t lck_mmap; /* The lock file */
   lck_t *lck;
+  /* The cached identities of the opened files: used by the
+   * neighbors-check in lck_setup(), which requires no opening of the lck-file. */
+  osal_fileid_t lck_fileid, dxb_fileid;
 
   uint16_t leaf_nodemax;   /* max size of a leaf-node */
   uint16_t branch_nodemax; /* max size of a branch-node */
@@ -1018,8 +1048,18 @@ MDBX_MAYBE_UNUSED static void static_checks(void) {
 
   STATIC_ASSERT_MSG((txn_state_flags & (txn_rw_begin_flags | txn_ro_begin_flags)) == 0,
                     "Oops, some txn flags overlapped or wrong");
-  STATIC_ASSERT_MSG(((txn_rw_begin_flags | txn_ro_begin_flags | txn_state_flags) & txn_unmap_allowed) == 0,
-                    "Oops, some txn flags overlapped or wrong");
+  /* The mresize request bits travel within the txn-flags space and are mixed with the env-flags when passed to
+   * dxb_resize()/osal_mresize(), so any overlap would corrupt one flags-domain through another (historically
+   * txn_unmap_allowed collided with MDBX_ACCEDE this way). The explicit (unsigned) casts keep MSVC happy with
+   * the mixed signed/unsigned enum arithmetics. */
+  STATIC_ASSERT_MSG(
+      ((unsigned)txn_mresize_flags &
+       (unsigned)(txn_state_flags | txn_rw_begin_flags | txn_ro_begin_flags | txn_ro_nested | txn_may_have_cursors |
+                  txn_nipped | txn_parked | MDBX_TXN_AUTOUNPARK | MDBX_TXN_OUSTED | MDBX_TXN_TRY)) == 0,
+      "Oops, the mresize request bits overlap another txn-flags domain");
+  STATIC_ASSERT_MSG(((unsigned)txn_mresize_flags &
+                     (unsigned)(MDBX_RDONLY | MDBX_WRITEMAP | MDBX_UTTERLY_NOSYNC | MDBX_NOSTICKYTHREADS)) == 0,
+                    "Oops, the mresize request bits overlap the env-flags mixed into mresize_flags");
 
   STATIC_ASSERT(sizeof(reader_slot_t) == 32);
 #if MDBX_LOCKING > 0
@@ -1472,10 +1512,13 @@ __cold void error::throw_exception() const {
 //------------------------------------------------------------------------------
 
 bool slice::is_printable(bool disable_utf8) const noexcept {
+  /* The tag respacing keeps the ASCII-mode test `((P_ | X_) & map[c]) == 0`
+   * exact: the length-lead tags (2..4) << LS occupy bits 5 and above, whereas
+   * P_ and X_ sit at bits 4 and 3, i.e. never alias the lead tags. */
   enum : byte {
-    LS = 4,                // shift for UTF8 sequence length
-    P_ = 1 << LS,          // printable ASCII flag
-    X_ = 1 << (LS - 1),    // printable extended ASCII flag
+    LS = 5,                // shift for UTF8 sequence length
+    P_ = 1 << (LS - 1),    // printable ASCII flag
+    X_ = 1 << (LS - 2),    // printable extended ASCII flag
     N_ = 0,                // non-printable ASCII
     r80_BF = 0,            // flag for UTF8 2nd byte range
     rA0_BF = 1,            // flag for UTF8 2nd byte range
@@ -1498,6 +1541,14 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
     F1 = 4 << LS | r80_BF, // U+040000..U+0FFFFF | F1..F3 | 80..BF | 80..BF |...
     F4 = 4 << LS | r80_8F, // U+100000..U+10FFFF | F4     | 80..8F | 80..BF |...
   };
+
+  /* the ASCII-mode mask must not alias any of the UTF8 length-lead tags,
+   * including their second-byte range flags, and vice versa the dispatch
+   * below separates N_, X_ and P_ by the shift (LS - 2) */
+  static_assert(((P_ | X_) & (2 << LS | 3 << LS | 4 << LS)) == 0 && ((P_ | X_) & second_range_mask) == 0 &&
+                    (P_ >> (LS - 2)) == 2 && (X_ >> (LS - 2)) == 1 && ((2 << LS) >> (LS - 2)) == 2 * 4 &&
+                    ((3 << LS) >> (LS - 2)) == 3 * 4 && ((4 << LS) >> (LS - 2)) == 4 * 4 && F4 <= 255,
+                "is_printable() tag encoding is broken");
 
   static const byte range_from[] = {0x80, 0xA0, 0x80, 0x90, 0x80};
   static const byte range_to[] = {0xBF, 0xBF, 0x9F, 0xBF, 0x8F};
@@ -1539,20 +1590,20 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
     const auto bits = map[*src];
     const auto second_from = range_from[bits & second_range_mask];
     const auto second_to = range_to[bits & second_range_mask];
-    switch (bits >> LS) {
+    switch (bits >> (LS - 2)) {
     default:
       MDBX_CXX20_UNLIKELY return false;
-    case 1:
+    case P_ >> (LS - 2): /* single-byte printable ASCII */
       src += 1;
       continue;
-    case 2:
+    case 2 << 2: /* 2-byte sequence lead, C2..DF */
       if (MDBX_UNLIKELY(src + 1 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
         MDBX_CXX20_UNLIKELY return false;
       src += 2;
       continue;
-    case 3:
+    case 3 << 2: /* 3-byte sequence lead, E0..EF */
       if (MDBX_UNLIKELY(src + 2 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
@@ -1561,7 +1612,7 @@ bool slice::is_printable(bool disable_utf8) const noexcept {
         MDBX_CXX20_UNLIKELY return false;
       src += 3;
       continue;
-    case 4:
+    case 4 << 2: /* 4-byte sequence lead, F0..F4 */
       if (MDBX_UNLIKELY(src + 3 >= end))
         MDBX_CXX20_UNLIKELY return false;
       if (MDBX_UNLIKELY(src[1] < second_from || src[1] > second_to))
@@ -1999,20 +2050,23 @@ char *from_base58::write_bytes(char *__restrict const dest, size_t dest_size) co
   }
 
   b58_buffer buf(end - begin, 47, 64);
-  auto slice = b58_decode(buf, begin, end, ignore_spaces);
-  memcpy(ptr, slice.data(), slice.length());
-  return ptr + slice.length();
+  const auto decoded = b58_decode(buf, begin, end, ignore_spaces);
+  memcpy(ptr, decoded.data(), decoded.length());
+  ptr += decoded.length();
+  return ptr;
 }
 
 bool from_base58::is_erroneous() const noexcept {
+  bool got = false;
   auto begin = source.byte_ptr();
   auto const end = source.end_byte_ptr();
   while (begin < end) {
-    if (MDBX_UNLIKELY(b58_map[*begin] < 0 && !(ignore_spaces && isspace(*begin))))
-      return true;
-    ++begin;
+    const auto value = b58_map[*begin++];
+    got |= value >= 0;
+    if (MDBX_UNLIKELY(value < 0 && !(ignore_spaces && isspace(begin[-1]))))
+      MDBX_CXX20_UNLIKELY return true;
   }
-  return false;
+  return !got;
 }
 
 //------------------------------------------------------------------------------
@@ -2305,7 +2359,7 @@ env::reclaiming_options::reclaiming_options(MDBX_env_flags_t flags) noexcept
     : lifo((flags & MDBX_LIFORECLAIM) ? true : false) {}
 
 env::operate_options::operate_options(MDBX_env_flags_t flags) noexcept
-    : no_sticky_threads(((flags & (MDBX_NOSTICKYTHREADS | MDBX_EXCLUSIVE)) == MDBX_NOSTICKYTHREADS) ? true : false),
+    : no_sticky_threads((flags & MDBX_NOSTICKYTHREADS) ? true : false),
       nested_transactions((flags & (MDBX_WRITEMAP | MDBX_RDONLY)) ? false : true),
       exclusive((flags & MDBX_EXCLUSIVE) ? true : false), disable_readahead((flags & MDBX_NORDAHEAD) ? true : false),
       disable_clear_memory((flags & MDBX_NOMEMINIT) ? true : false),
